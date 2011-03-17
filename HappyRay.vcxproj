@@ -48,7 +48,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="CUDA 4.0.props" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 4.0.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -244,13 +244,16 @@
     <ClInclude Include="src\Core\Algebra.hpp" />
     <ClInclude Include="src\Core\SSEAlgebra.hpp" />
     <ClInclude Include="src\CUDAStdAfx.h" />
+    <ClInclude Include="src\RT\Algorithm\UGridSortBuilder.h" />
     <ClInclude Include="src\RT\Algorithm\UniformGridBuildKernels.h" />
     <ClInclude Include="src\RT\Primitive\BBox.hpp" />
     <ClInclude Include="src\RT\Primitive\LightSource.hpp" />
     <ClInclude Include="src\RT\Primitive\Primitive.hpp" />
     <ClInclude Include="src\RT\Primitive\Triangle.hpp" />
     <ClInclude Include="src\RT\RTEngine.h" />
+    <ClInclude Include="src\RT\Structure\MemoryManager.h" />
     <ClInclude Include="src\RT\Structure\PrimitiveArray.h" />
+    <ClInclude Include="src\RT\Structure\UGridMemoryManager.h" />
     <ClInclude Include="src\RT\Structure\UniformGrid.h" />
     <ClInclude Include="src\stdafx.hpp" />
     <ClInclude Include="src\targetver.h" />
@@ -285,12 +288,13 @@
     <CudaCompile Include="src\Application\CUDAApplication.cu" />
     <CudaCompile Include="src\RT\RTEngine.cu" />
     <CudaCompile Include="src\RT\Structure\PrimitiveArray.cu" />
+    <CudaCompile Include="src\RT\Structure\UGridMemoryManager.cu" />
     <CudaCompile Include="src\Utils\CUDAUtil.cu" />
     <CudaCompile Include="src\Utils\Scan.cu" />
     <CudaCompile Include="src\Utils\Sort.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="CUDA 4.0.targets" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 4.0.targets" />
   </ImportGroup>
 </Project>

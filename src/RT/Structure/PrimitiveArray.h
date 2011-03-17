@@ -8,7 +8,7 @@
 #include "CUDAStdAfx.h"
 #include "Textures.h"
 
-template<class Primitive>
+template<class tPrimitive>
 class PrimitiveArray
 {
 
@@ -32,7 +32,7 @@ public:
     uint*  normalIndicesBufferHostPtr;
     size_t normalIndicesBufferSize;
 
-
+    size_t numPrimitives;
 
     HOST PrimitiveArray():
         vertexBufferDevicePtr(NULL),
@@ -46,58 +46,45 @@ public:
         normalBufferSize(0u),
         normalIndicesBufferDevicePtr(NULL),
         normalIndicesBufferHostPtr  (NULL),
-        normalIndicesBufferSize(0u)
+        normalIndicesBufferSize(0u),
+        numPrimitives(0u)
     {}
 
     HOST ~PrimitiveArray()
     {
 #if HAPPYRAY__CUDA_ARCH__ >= 120
-        MY_CUDA_SAFE_CALL( cudaFreeHost(vertexBufferHostPtr) );
-        MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
-        MY_CUDA_SAFE_CALL( cudaFreeHost(normalBufferHostPtr) );
-        MY_CUDA_SAFE_CALL( cudaFreeHost(normalIndicesBufferHostPtr) );
+        if(vertexBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(vertexBufferHostPtr) );
+        if(indicesBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
+        if(normalBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(normalBufferHostPtr) );
+        if(normalIndicesBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(normalIndicesBufferHostPtr) );
 #else
-        MY_CUDA_SAFE_CALL( cudaFreeHost(vertexBufferHostPtr) );
-        MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
-        MY_CUDA_SAFE_CALL( cudaFreeHost(normalBufferHostPtr) );
-        MY_CUDA_SAFE_CALL( cudaFreeHost(normalIndicesBufferHostPtr) );
+        if(vertexBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(vertexBufferHostPtr) );
+        if(indicesBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
+        if(normalBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(normalBufferHostPtr) );
+        if(normalIndicesBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(normalIndicesBufferHostPtr) );
 
-        MY_CUDA_SAFE_CALL( cudaFree(vertexBufferDevicePtr) );
-        MY_CUDA_SAFE_CALL( cudaFree(indicesBufferDevicePtr) );
-        MY_CUDA_SAFE_CALL( cudaFree(normalBufferDevicePtr) );
-        MY_CUDA_SAFE_CALL( cudaFree(normalIndicesBufferDevicePtr) );
+        if(vertexBufferDevicePtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFree(vertexBufferDevicePtr) );
+        if(indicesBufferDevicePtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFree(indicesBufferDevicePtr) );
+        if(normalBufferDevicePtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFree(normalBufferDevicePtr) );
+        if(normalIndicesBufferDevicePtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFree(normalIndicesBufferDevicePtr) );
 #endif
     }
 
     HOST DEVICE size_t getMemorySize()
     {
         return vertexBufferSize + indicesBufferSize + normalBufferSize;
-    }
-
-    HOST void allocateMappedDeviceArray(void** aDevicePtr, void** aHostPtr, size_t aSize,
-        void** aOldDevicePtr, void** aOldHostPtr, size_t& aOldSize)
-    {
-        if (aOldSize < aSize)
-        {
-            aOldSize = aSize;
-            MY_CUDA_SAFE_CALL( cudaHostAlloc(aOldHostPtr,aSize, cudaHostAllocMapped) );
-        }
-
-        MY_CUDA_SAFE_CALL(cudaHostGetDevicePointer(aOldDevicePtr, *aOldHostPtr, 0));
-        *aDevicePtr = *aOldDevicePtr;
-        *aHostPtr = *aOldHostPtr;
-    }
-
-    HOST void allocateDeviceArray(void** aPtr, size_t aSize,
-        void** aOldPtr, size_t& aOldSize)
-    {
-        if (aOldSize < aSize)
-        {
-            aOldSize = aSize;
-            CUDA_SAFE_CALL( cudaMalloc(aOldPtr, aSize));
-        }
-
-        *aPtr = *aOldPtr;
     }
 
     HOST void unbindVerticesTexture()
@@ -134,45 +121,45 @@ public:
     //Device Functions
     ////////////////////////////////////////////////////////////
 
-    DEVICE Primitive operator[](uint aIndex) const
+    DEVICE tPrimitive operator[](uint aIndex) const
     {
-        uint indices[Primitive::NUM_VERTICES];
+        uint indices[tPrimitive::NUM_VERTICES];
 
-#pragma unroll Primitive::NUM_VERTICES
-        for(uint i = 0; i < Primitive::NUM_VERTICES; ++i)
+//#pragma unroll tPrimitive::NUM_VERTICES
+        for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-            float4 tmp = tex1Dfetch(texVertexIndices, aIndex * Primitive::NUM_VERTICES + i);
-            indices[i].x = tmp.x;
-            indices[i].y = tmp.y;
-            indices[i].z = tmp.z;
+            indices[i] = tex1Dfetch(texVertexIndices, aIndex * tPrimitive::NUM_VERTICES + i);
         }
 
-        Primitive result;
+        tPrimitive result;
 
-#pragma unroll Primitive::NUM_VERTICES
-        for(uint i = 0; i < Primitive::NUM_VERTICES; ++i)
+//#pragma unroll tPrimitive::NUM_VERTICES
+        for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-            result.vtx[i] = tex1Dfetch(texVertices, indices[i]);
+             float4 tmp = tex1Dfetch(texVertices, indices[i]);
+             result.vtx[i].x = tmp.x;
+             result.vtx[i].y = tmp.y;
+             result.vtx[i].z = tmp.z;
         }
 
         return result;
     }
 
     //The normals are stored in the vertex array of the returned primitive
-    DEVICE Primitive getVertexNormals(uint aIndex)
+    DEVICE tPrimitive getVertexNormals(uint aIndex)
     {
-        uint indices[Primitive::NUM_VERTICES];
+        uint indices[tPrimitive::NUM_VERTICES];
 
-#pragma unroll Primitive::NUM_VERTICES
-        for(uint i = 0; i < Primitive::NUM_VERTICES; ++i)
+//#pragma unroll tPrimitive::NUM_VERTICES
+        for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-            indices[i] = normalIndicesBufferDevicePtr[aIndex * Primitive::NUM_VERTICES + i]; 
+            indices[i] = normalIndicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i]; 
         }
 
-        Primitive result;
+        tPrimitive result;
 
-#pragma unroll Primitive::NUM_VERTICES
-        for(uint i = 0; i < Primitive::NUM_VERTICES; ++i)
+//#pragma unroll tPrimitive::NUM_VERTICES
+        for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
             result.vtx[i] = normalBufferDevicePtr[indices[i]];
         }

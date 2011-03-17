@@ -491,7 +491,7 @@ namespace detail
 				(High-Low >= 4), Stage,
 				Low+2, High,
 				Pred, JSetup
-			>::run( aPong, aPing, aCBuff, aOBuff, aParam, aB, aT, aStream );
+			>::run( aPong, aPing, aCBuff, aOBuff, aParam, aB, aT);
 		}
 
 	};
@@ -585,7 +585,7 @@ Sorter<NTA_TEMPLATE_ARGUMENTS>::sort(
 			JSetup
 		>::run(
 			aPing, aPong, countBuffer, offsetBuffer, setup.kernelParam(), 
-			cub, cut, aStream
+			cub, cut
 		);
 
 	}

@@ -159,6 +159,15 @@
     <ClInclude Include="src\Utils\Scan.h">
       <Filter>Utils</Filter>
     </ClInclude>
+    <ClInclude Include="src\RT\Structure\MemoryManager.h">
+      <Filter>RT\Structure</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Structure\UGridMemoryManager.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Algorithm\UGridSortBuilder.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\stdafx.cpp">
@@ -222,5 +231,6 @@
     <CudaCompile Include="src\Utils\Sort.cu">
       <Filter>Utils</Filter>
     </CudaCompile>
+    <CudaCompile Include="src\RT\Structure\UGridMemoryManager.cu" />
   </ItemGroup>
 </Project>

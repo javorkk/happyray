@@ -3,8 +3,6 @@
 #include "Core/Algebra.hpp"
 #include "Core/SSEAlgebra.hpp"
 
-using namespace cudastd;
-
 
 ShevtsovTriAccel::ShevtsovTriAccel(Triangle aTriangle)
 {

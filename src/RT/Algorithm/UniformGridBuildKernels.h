@@ -29,11 +29,10 @@
 #define UNIFORMGRIDBUILDKERNELS_H_974ACF4A_E8D2_4D1D_8471_7D922CF44556
 
 #include "CUDAStdAfx.h"
+#include "Core/Algebra.hpp"
 #include "RT/Primitive/Primitive.hpp"
 #include "RT/Primitive/BBox.hpp"
 
-namespace cudastd
-{
 
 template<class tPrimitive, template<class> class tPrimitiveArray, int taBlockSize>
 GLOBAL void countPairs(
@@ -49,7 +48,7 @@ GLOBAL void countPairs(
     extern SHARED uint shMem[];
     shMem[threadId1D()] = 0u;
 
-    const EPS = (aCellSizeRCP.x + aCellSizeRCP.y + aCellSizeRCP.z) * 10E-5f;
+    const float EPSILON = (aCellSizeRCP.x + aCellSizeRCP.y + aCellSizeRCP.z) * 10E-5f;
 
     for(int primitiveId = globalThreadId1D(); primitiveId < aNumPrimitives; primitiveId += numThreads())
     {
@@ -58,9 +57,9 @@ GLOBAL void countPairs(
         
         float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
         minCellIdf =
-            max(rep(0.f), (bounds.min - aBoundsMin) * aCellSizeRCP + rep(-EPS));
+            max(rep(0.f), (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP + rep(-EPSILON));
         const float3 maxCellIdf =
-            min(aGridRes - rep(1.f), (bounds.max - aBoundsMin) * aCellSizeRCP + rep(EPS));
+            min(aGridRes - rep(1.f), (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP + rep(EPSILON));
 
         const uint minCellIdX =  (uint)(minCellIdf.x);
         const uint minCellIdY =  (uint)(minCellIdf.y);
@@ -100,16 +99,16 @@ GLOBAL void countPairs(
 #endif
 }
 
-template<class tPrimitive, template<class> class tPrimitiveArray, int taBlockSize>
+template<class tPrimitive, template<class> class tPrimitiveArray>
 GLOBAL void writePairs(
                         tPrimitiveArray<tPrimitive> aPrimitiveArray,
                         uint*                       oPairs,
                         const uint                  aNumPrimitives,
                         uint*                       aStartId,
-                        const vec3f                 aGridRes,
-                        const vec3f                 aBoundsMin,
-                        const vec3f                 aCellSize,
-                        const vec3f                 aCellSizeRCP
+                        const float3                 aGridRes,
+                        const float3                 aBoundsMin,
+                        const float3                 aCellSize,
+                        const float3                 aCellSizeRCP
                               )
 {
     extern SHARED uint shMem[];
@@ -129,7 +128,7 @@ GLOBAL void writePairs(
 
 #endif
 
-    const EPS = (aCellSizeRCP.x + aCellSizeRCP.y + aCellSizeRCP.z) * 10E-5f;
+    const float EPSILON = (aCellSizeRCP.x + aCellSizeRCP.y + aCellSizeRCP.z) * 10E-5f;
 
     for(int primitiveId = globalThreadId1D(); primitiveId < aNumPrimitives; primitiveId += numThreads())
     {
@@ -138,9 +137,9 @@ GLOBAL void writePairs(
         
         float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
         minCellIdf =
-            max(rep(0.f), (bounds.min - aBoundsMin) * aCellSizeRCP + rep(-EPS));
+            max(rep(0.f), (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP + rep(-EPSILON));
         const float3 maxCellIdf =
-            min(aGridRes - rep(1.f), (bounds.max - aBoundsMin) * aCellSizeRCP + rep(EPS));
+            min(aGridRes - rep(1.f), (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP + rep(EPSILON));
 
         const uint minCellIdX =  (uint)(minCellIdf.x);
         const uint minCellIdY =  (uint)(minCellIdf.y);
@@ -150,6 +149,10 @@ GLOBAL void writePairs(
         const uint maxCellIdY =  (uint)(maxCellIdf.y);
         const uint maxCellIdZ =  (uint)(maxCellIdf.z);
 
+        const uint numCells =
+            (maxCellIdX - minCellIdX + 1u) *
+            (maxCellIdY - minCellIdY + 1u) *
+            (maxCellIdZ - minCellIdZ + 1u);
 
 #if HAPPYRAY__CUDA_ARCH__ >= 120
         uint nextSlot  = atomicAdd(&shMem[0], numCells);
@@ -175,7 +178,7 @@ GLOBAL void writePairs(
     }
 }
 
-
+template<int taBlockSize>
 GLOBAL void prepareCellRanges(
                               uint*             oPrimitiveIndices,
                               uint2*            aSortedPairs,
@@ -192,7 +195,7 @@ GLOBAL void prepareCellRanges(
     if (threadId1D() == 0)
     {
         shMem[0] = 0u;
-        shMem[blockSize()] = 0u;
+        shMem[taBlockSize] = 0u;
     }
 
     uint *padShMem = shMem + 1;
@@ -277,7 +280,7 @@ template<class tPrimitive, template<class> class tPrimitiveArray>
 GLOBAL void checkGridCells(
                     tPrimitiveArray<tPrimitive>     aPrimitives,
                     cudaPitchedPtr                  aGridCellsPtr,
-                    const vec3f                     aGridRes)
+                    const float3                     aGridRes)
 {
 
     uint2* cell = (uint2*)((char*)aGridCellsPtr.ptr
@@ -294,7 +297,5 @@ GLOBAL void checkGridCells(
     cellRange.x = aGridCellsPtr.pitch / sizeof(uint2);
 }
 
-
-};//namespace cudastd
 
 #endif // UNIFORMGRIDBUILDKERNELS_H_974ACF4A_E8D2_4D1D_8471_7D922CF44556

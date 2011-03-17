@@ -27,8 +27,6 @@
 
 #include "../Utils/ImagePNG.hpp"
 
-using namespace cudastd;
-
 SDL_Window* SDLGLApplication::mainwindow;
 
 SDL_GLContext SDLGLApplication::maincontext;

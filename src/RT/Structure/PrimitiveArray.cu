@@ -1,5 +1,6 @@
 #include "CUDAStdAfx.h"
 #include "RT/Structure/PrimitiveArray.h"
+#include "RT/Structure/MemoryManager.h"
 
 HOST void ObjUploader::uploadObjFrameVertexData(
     const WFObject& aKeyFrame1,
@@ -18,7 +19,7 @@ HOST void ObjUploader::uploadObjFrameVertexData(
     //cleanup
     ////////////////////////////////////////////////////////////
     aArray.unbindVerticesTexture();
-    aArray.allocateMappedDeviceArray(
+    MemoryManager::allocateMappedDeviceArray(
         (void**)&aArray.vertexBufferDevicePtr,
         (void**)&aArray.vertexBufferHostPtr,
         verticesNewSize,
@@ -79,7 +80,7 @@ HOST void ObjUploader::uploadObjFrameNormalData(
     ////////////////////////////////////////////////////////////
     //cleanup
     ////////////////////////////////////////////////////////////
-    aArray.allocateMappedDeviceArray(
+    MemoryManager::allocateMappedDeviceArray(
         (void**)&aArray.normalBufferDevicePtr,
         (void**)&aArray.normalBufferHostPtr,
         normalsNewSize,
@@ -113,6 +114,7 @@ HOST void ObjUploader::uploadObjFrameIndexData(
     const WFObject& aKeyFrame2,
     PrimitiveArray<Primitive<3> >& aArray)
 {
+    aArray.numPrimitives = aKeyFrame1.getNumFaces();
     const size_t numIndices1 = aKeyFrame1.getNumFaces() * 3;
     const size_t numIndices2 = aKeyFrame1.getNumFaces() * 3;
     const size_t numIndices  = numIndices2;
@@ -122,7 +124,7 @@ HOST void ObjUploader::uploadObjFrameIndexData(
     //cleanup
     ////////////////////////////////////////////////////////////
     aArray.unbindIndicesTexture();
-    aArray.allocateMappedDeviceArray(
+    MemoryManager::allocateMappedDeviceArray(
         (void**)&aArray.indicesBufferDevicePtr,
         (void**)&aArray.indicesBufferHostPtr,
         indicesNewSize,
@@ -130,7 +132,7 @@ HOST void ObjUploader::uploadObjFrameIndexData(
         (void**)&aArray.indicesBufferHostPtr,
         aArray.indicesBufferSize);
 
-    aArray.allocateMappedDeviceArray(
+    MemoryManager::allocateMappedDeviceArray(
         (void**)&aArray.normalIndicesBufferDevicePtr,
         (void**)&aArray.normalIndicesBufferHostPtr,
         indicesNewSize,

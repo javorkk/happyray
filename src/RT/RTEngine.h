@@ -9,14 +9,19 @@
 #include "RT/Primitive/LightSource.hpp"
 #include "RT/Structure/PrimitiveArray.h"
 #include "RT/Primitive/Triangle.hpp"
+#include "RT/Structure/UGridMemoryManager.h"
+#include "RT/Algorithm/UGridSortBuilder.h"
 
 #include "Application/WFObject.hpp"
 
 class StaticRTEngine
 {
 public:
-    static int                          sFrameId;
-    static PrimitiveArray<Triangle>     sTriangleArray;
+    static float                                        sGridDensity;
+    static int                                          sFrameId;
+    static PrimitiveArray<Triangle>                     sTriangleArray;
+    static UniformGridMemoryManager                     sUGridMemoryManager;
+    static UGridSortBuilder<Triangle>                   sGridBuilder;
 
     static void init(const WFObject& aScene);
 };

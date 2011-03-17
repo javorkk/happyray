@@ -42,8 +42,6 @@
 #define _PATH_SEPARATOR '/'
 #endif
 
-using namespace cudastd;
-
 const float3 WFObject::C0 = rep(0.f);
 const float3 WFObject::C1 = rep(1.f);
 const float3 WFObject::C099 = rep(0.99f);

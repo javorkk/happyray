@@ -10,8 +10,6 @@
 #include <vector_types.h> //float3
 //#include <math.h> //sqrtf
 
-namespace cudastd
-{
 
 #define _DEF_BIN_OP3(_OP)                                                      \
 DEVICE HOST float3 operator _OP (float3 aVal1, float3 aVal2)                   \
@@ -255,7 +253,5 @@ DEVICE HOST  float3 operator _OP (float aVal, float3 aVec)                     \
 #undef _DEF_UNARY_MINUS3
 #undef _DEF_SCALAR_OP3
 #undef _DEF_SCALAR_OP3_SYM
-
-};//namespace cudastd
 
 #endif // ALGEBRA_HPP_INCLUDED_08F20746_E9E9_452A_A9DE_8BEB2FB187AE
