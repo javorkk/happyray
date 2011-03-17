@@ -1,0 +1,9 @@
+*.o
+/build
+/scenes
+*.pdb
+/ipch
+*.png
+*.sdf
+*.suo
+*.user

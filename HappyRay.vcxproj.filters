@@ -1,0 +1,226 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Utils">
+      <UniqueIdentifier>{5613e191-763e-414f-9b70-d5befefbecc7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{43e2bd2a-155c-4c80-8877-ee92848b7a31}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="RT">
+      <UniqueIdentifier>{50cfcae8-8475-4ade-9fc4-40a0f9555483}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Application">
+      <UniqueIdentifier>{3d2035f2-da6a-408e-bf03-e0349d956a2b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Headers">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="RT\Algorithm">
+      <UniqueIdentifier>{9c8be966-92ea-4d88-811b-631c6615a95d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="RT\Primitive">
+      <UniqueIdentifier>{a03cbf3e-8848-4a93-8d3d-06fc259b464e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="RT\Structure">
+      <UniqueIdentifier>{ef7a3f2b-1c74-40a5-909d-3a5f6fd7edac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Utils\pp">
+      <UniqueIdentifier>{e6115147-7670-41cf-9a96-4d36c6a56a9d}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ReadMe.txt" />
+    <None Include="contrib\include\chag\pp\ext\detail\common.cu.inl">
+      <Filter>Utils\pp</Filter>
+    </None>
+    <None Include="contrib\include\chag\pp\detail\compact.cu.inl">
+      <Filter>Utils\pp</Filter>
+    </None>
+    <None Include="contrib\include\chag\pp\detail\prefix.cu.inl">
+      <Filter>Utils\pp</Filter>
+    </None>
+    <None Include="contrib\include\chag\pp\ext\detail\range.cu.inl">
+      <Filter>Utils\pp</Filter>
+    </None>
+    <None Include="contrib\include\chag\pp\detail\reduce.cu.inl">
+      <Filter>Utils\pp</Filter>
+    </None>
+    <None Include="contrib\include\chag\pp\ext\detail\setup.cu.inl">
+      <Filter>Utils\pp</Filter>
+    </None>
+    <None Include="contrib\include\chag\pp\ext\detail\shared.cu.inl">
+      <Filter>Utils\pp</Filter>
+    </None>
+    <None Include="contrib\include\chag\pp\detail\sort.cu.inl">
+      <Filter>Utils\pp</Filter>
+    </None>
+    <None Include="contrib\include\chag\pp\detail\split.cu.inl">
+      <Filter>Utils\pp</Filter>
+    </None>
+    <None Include="contrib\include\chag\pp\ext\detail\unit.cu.inl">
+      <Filter>Utils\pp</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\targetver.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\stdafx.hpp">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\CUDAStdAfx.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Utils\ImagePNG.hpp">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Utils\HemisphereSamplers.hpp">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Utils\RandomNumberGenerators.hpp">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Utils\CUDAUtil.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Application\SDLGLApplication.hpp">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Core\Algebra.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Core\SSEAlgebra.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Application\AnimationManager.hpp">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Application\CameraManager.hpp">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Application\CUDAApplication.h">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Application\LightSourceLoader.hpp">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Application\SceneConfiguration.hpp">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Application\WFObject.hpp">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Application\SceneLoader.hpp">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Primitive\LightSource.hpp">
+      <Filter>RT\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Structure\PrimitiveArray.h">
+      <Filter>RT\Structure</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Primitive\Primitive.hpp">
+      <Filter>RT\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Primitive\Triangle.hpp">
+      <Filter>RT\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="contrib\include\chag\pp\detail\nta.hpp">
+      <Filter>Utils\pp</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Primitive\BBox.hpp">
+      <Filter>RT\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\RTEngine.h">
+      <Filter>RT</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Textures.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Structure\UniformGrid.h">
+      <Filter>RT\Structure</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Algorithm\UniformGridBuildKernels.h">
+      <Filter>RT\Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Utils\Sort.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Utils\Scan.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\stdafx.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Utils\ImagePNG.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Application\SDLGLApplication.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Core\SSEAlgebra.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Application\AnimationLoader.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Application\CameraManager.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Application\LightSourceLoader.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Application\SceneConfigurationReader.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Application\WFObjectReader.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Application\SceneLoader.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
+    <ClCompile Include="src\RT\Primitive\Triangle.cpp">
+      <Filter>RT\Primitive</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Cudart_Build_Rule Include="src\Main.cu">
+      <Filter>Source Files</Filter>
+    </Cudart_Build_Rule>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="src\Utils\CUDAUtil.cu">
+      <Filter>Utils</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\RT\Structure\PrimitiveArray.cu">
+      <Filter>RT\Structure</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\Application\CUDAApplication.cu">
+      <Filter>Application</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\RT\RTEngine.cu">
+      <Filter>RT</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\Utils\Scan.cu">
+      <Filter>Utils</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\Utils\Sort.cu">
+      <Filter>Utils</Filter>
+    </CudaCompile>
+  </ItemGroup>
+</Project>
