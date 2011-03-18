@@ -56,18 +56,18 @@ void Sort::operator()(uint2 *pData0,
 			(chag::pp::SizeType*)offsets, (chag::pp::SizeType*)counts) \
 		/*ENDM*/
 
-/*	if( aNumBits < 10 ) DO_PASS_(0u,10u);
-	else if( aNumBits < 12 ) DO_PASS_(0u,12u);
-	else if( aNumBits < 14 ) DO_PASS_(0u,14u);
+	if( aNumBits < 10 ) DO_PASS_(0u,10u);
+	//else if( aNumBits < 12 ) DO_PASS_(0u,12u);
+	//else if( aNumBits < 14 ) DO_PASS_(0u,14u);
 	else if( aNumBits < 16 ) DO_PASS_(0u,16u);
-	else if( aNumBits < 18 ) DO_PASS_(0u,18u);
+	//else if( aNumBits < 18 ) DO_PASS_(0u,18u);
 	else if( aNumBits < 20 ) DO_PASS_(0u,20u);
-	else if( aNumBits < 22 ) DO_PASS_(0u,22u);
+	//else if( aNumBits < 22 ) DO_PASS_(0u,22u);
 	else if( aNumBits < 24 ) DO_PASS_(0u,24u);
-	else if( aNumBits < 26 ) DO_PASS_(0u,26u);
-	else if( aNumBits < 28 ) DO_PASS_(0u,28u);
-	else if( aNumBits < 30 ) DO_PASS_(0u,30u);
-	else*/ DO_PASS_(0u,32u);
+	//else if( aNumBits < 26 ) DO_PASS_(0u,26u);
+	//else if( aNumBits < 28 ) DO_PASS_(0u,28u);
+	//else if( aNumBits < 30 ) DO_PASS_(0u,30u);
+	else DO_PASS_(0u,32u);
 
 #	undef DO_PASS_
 }

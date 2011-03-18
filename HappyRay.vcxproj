@@ -287,7 +287,6 @@
   <ItemGroup>
     <CudaCompile Include="src\Application\CUDAApplication.cu" />
     <CudaCompile Include="src\RT\RTEngine.cu" />
-    <CudaCompile Include="src\RT\Structure\PrimitiveArray.cu" />
     <CudaCompile Include="src\RT\Structure\UGridMemoryManager.cu" />
     <CudaCompile Include="src\Utils\CUDAUtil.cu" />
     <CudaCompile Include="src\Utils\Scan.cu" />

@@ -1,11 +1,17 @@
 #include "CUDAStdAfx.h"
 #include "RT/RTEngine.h"
 
-float                                       StaticRTEngine::sGridDensity = 5.f;
-int                                         StaticRTEngine::sFrameId = 0;
-PrimitiveArray<Triangle>                    StaticRTEngine::sTriangleArray;
-UniformGridMemoryManager                    StaticRTEngine::sUGridMemoryManager;
-UGridSortBuilder<Triangle>                  StaticRTEngine::sGridBuilder;
+#include "RT/Primitive/LightSource.hpp"
+#include "RT/Structure/PrimitiveArray.h"
+#include "RT/Primitive/Triangle.hpp"
+#include "RT/Structure/UGridMemoryManager.h"
+#include "RT/Algorithm/UGridSortBuilder.h"
+
+float                       sGridDensity = 5.f;
+int                         sFrameId = 0;
+PrimitiveArray<Triangle>    sTriangleArray;
+UniformGridMemoryManager    sUGridMemoryManager;
+UGridSortBuilder<Triangle>  sGridBuilder;
 
 void StaticRTEngine::init(
     const WFObject& aScene)
@@ -25,4 +31,16 @@ void StaticRTEngine::init(
 
     sGridBuilder.init(sUGridMemoryManager, sTriangleArray.numPrimitives, sGridDensity);
     sGridBuilder.build(sUGridMemoryManager, sTriangleArray);
+}
+
+void StaticRTEngine::cleanup()
+{
+    sUGridMemoryManager.freeCellMemoryDevice();
+    sUGridMemoryManager.freeCellMemoryHost();
+    sUGridMemoryManager.freePairsBufferPair();
+    sUGridMemoryManager.freeRefCountsBuffer();
+    sUGridMemoryManager.freePrimitiveIndicesBuffer();
+    sUGridMemoryManager.cleanup();
+    
+    sTriangleArray.cleanup();
 }

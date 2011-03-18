@@ -113,7 +113,7 @@ public:
     {
         BBox result = BBox::empty();
 
-//#pragma unroll tPrimitive::NUM_VERTICES
+#pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
             result.extend(aPrimitive.vtx[i]);

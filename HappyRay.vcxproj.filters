@@ -162,11 +162,11 @@
     <ClInclude Include="src\RT\Structure\MemoryManager.h">
       <Filter>RT\Structure</Filter>
     </ClInclude>
-    <ClInclude Include="src\RT\Structure\UGridMemoryManager.h">
-      <Filter>Headers</Filter>
-    </ClInclude>
     <ClInclude Include="src\RT\Algorithm\UGridSortBuilder.h">
-      <Filter>Headers</Filter>
+      <Filter>RT\Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Structure\UGridMemoryManager.h">
+      <Filter>RT\Structure</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -216,9 +216,6 @@
     <CudaCompile Include="src\Utils\CUDAUtil.cu">
       <Filter>Utils</Filter>
     </CudaCompile>
-    <CudaCompile Include="src\RT\Structure\PrimitiveArray.cu">
-      <Filter>RT\Structure</Filter>
-    </CudaCompile>
     <CudaCompile Include="src\Application\CUDAApplication.cu">
       <Filter>Application</Filter>
     </CudaCompile>
@@ -231,6 +228,8 @@
     <CudaCompile Include="src\Utils\Sort.cu">
       <Filter>Utils</Filter>
     </CudaCompile>
-    <CudaCompile Include="src\RT\Structure\UGridMemoryManager.cu" />
+    <CudaCompile Include="src\RT\Structure\UGridMemoryManager.cu">
+      <Filter>RT\Structure</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

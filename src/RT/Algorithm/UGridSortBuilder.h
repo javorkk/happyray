@@ -101,18 +101,40 @@ public:
             aMemoryManager.refCountsBuffer);
 
         //CUT_CHECK_ERROR("Kernel Execution failed.\n");
+        
+        /////////////////////////////////////////////////////////////////////////
+        //DEBUG
+        //cudastd::logger::out << "Initial counts:";
+        //for(size_t i = 0; i <= numCounters; ++i)
+        //{
+        //    cudastd::logger::out << " " <<  aMemoryManager.refCountsBufferHost[i];
+        //}
+        //cudastd::logger::out << "\n ----------------------\n";
+        /////////////////////////////////////////////////////////////////////////
+
 
         ExclusiveScan scan;
         scan(aMemoryManager.refCountsBuffer, numCounters + 1);
 
 #if HAPPYRAY__CUDA_ARCH__ < 120
-        CUDA_SAFE_CALL( cudaMemcpy(aMemoryManager.refCountsBufferHost + numCounters, (aMemoryManager.refCountsBuffer + numCounters), sizeof(uint), cudaMemcpyDeviceToHost) );
+        MY_CUDA_SAFE_CALL( cudaMemcpy(aMemoryManager.refCountsBufferHost + numCounters, (aMemoryManager.refCountsBuffer + numCounters), sizeof(uint), cudaMemcpyDeviceToHost) );
 #endif
-        const uint numPairs = aMemoryManager.refCountsBufferHost[numCounters];
-        aMemoryManager.allocatePairsBufferPair(numPairs);
-
         cudaEventRecord(mSizeEstimation, 0);
         cudaEventSynchronize(mSizeEstimation);
+
+        /////////////////////////////////////////////////////////////////////////
+        //DEBUG
+        //cudastd::logger::out << "Scanned counts:";
+        //for(size_t i = 0; i <= numCounters; ++i)
+        //{
+        //    cudastd::logger::out << " " <<  aMemoryManager.refCountsBufferHost[i];
+        //}
+        //cudastd::logger::out << "\n ----------------------\n";
+        /////////////////////////////////////////////////////////////////////////
+        const uint& numPairs = aMemoryManager.refCountsBufferHost[numCounters];
+        aMemoryManager.allocatePairsBufferPair(numPairs);
+
+
 
         dim3 blockUnsortedGrid(sNUM_WRITE_THREADS);
         dim3 gridUnsortedGrid (sNUM_WRITE_BLOCKS);
@@ -166,9 +188,11 @@ public:
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mReduceCellIds, 0);
         cudaEventSynchronize(mReduceCellIds);
+        cudaEventRecord(mEnd, 0);
+        cudaEventSynchronize(mEnd);
         //////////////////////////////////////////////////////////////////////////
 
-        //cudastd::log::out << "Number of pairs:" << numPairs << "\n";
+        cudastd::logger::out << "Number of pairs:" << numPairs << "\n";
         outputStats();
 
         cleanup();

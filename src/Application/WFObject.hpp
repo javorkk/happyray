@@ -59,35 +59,36 @@ public:
 
     ~WFObject()
     {
-        if (mVertices != NULL)
-        {
-            delete[] mVertices;
-        }
-        if (mNormals != NULL)
-        {
-            delete[] mNormals;
-        }
-        if(mVertexIndices != NULL)
-        {
-            delete mVertexIndices;
-        }
-        if(mNormalIndices != NULL)
-        {
-            delete mNormalIndices;
-        }
+        //TODO : fix destructor
+        //if (mVertices != NULL)
+        //{
+        //    delete[] mVertices;
+        //}
+        //if (mNormals != NULL)
+        //{
+        //    delete[] mNormals;
+        //}
+        //if(mVertexIndices != NULL)
+        //{
+        //    free(mVertexIndices);
+        //}
+        //if(mNormalIndices != NULL)
+        //{
+        //    free(mNormalIndices);
+        //}
 
-        if (mFaces != NULL)
-        {
-            delete[] mFaces;
-        }
-        if (mMaterials != NULL)
-        {
-            delete[] mMaterials;
-        }
-        if (mTexCoords != NULL)
-        {
-            delete[] mTexCoords;
-        }
+        //if (mFaces != NULL)
+        //{
+        //    delete[] mFaces;
+        //}
+        //if (mMaterials != NULL)
+        //{
+        //    delete[] mMaterials;
+        //}
+        //if (mTexCoords != NULL)
+        //{
+        //    delete[] mTexCoords;
+        //}
     }
 
     //Represents a material
