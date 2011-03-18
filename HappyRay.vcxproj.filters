@@ -39,7 +39,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="ReadMe.txt" />
     <None Include="contrib\include\chag\pp\ext\detail\common.cu.inl">
       <Filter>Utils\pp</Filter>
     </None>

@@ -12,7 +12,7 @@
 
 
 #define _DEF_BIN_OP3(_OP)                                                      \
-DEVICE HOST float3 operator _OP (float3 aVal1, float3 aVal2)                   \
+DEVICE HOST float3 operator _OP (const float3& aVal1, const float3& aVal2)                   \
 {                                                                              \
     float3 result;                                                             \
     result.x = aVal1.x _OP aVal2.x;                                            \
@@ -20,7 +20,7 @@ DEVICE HOST float3 operator _OP (float3 aVal1, float3 aVal2)                   \
     result.z = aVal1.z _OP aVal2.z;                                            \
     return result;                                                             \
 }                                                                              \
-DEVICE HOST float3 operator _OP##= (float3 aVal1, const float3 aVal2)          \
+DEVICE HOST float3 operator _OP##= (float3& aVal1, const float3& aVal2)          \
 {                                                                              \
     aVal1.x = aVal1.x _OP aVal2.x;                                             \
     aVal1.y = aVal1.y _OP aVal2.y;                                             \
@@ -41,7 +41,7 @@ DEVICE HOST  float3 operator- (float3 aVal)                                    \
     /*End Macro */
 
 #define _DEF_SCALAR_OP3(_OP)                                                   \
-DEVICE HOST float3 operator _OP (float3 aVec, float aVal)                      \
+DEVICE HOST float3 operator _OP (const float3& aVec, float aVal)                      \
 {                                                                              \
     float3 result;                                                             \
     result.x = aVec.x _OP aVal;                                                \
@@ -49,14 +49,14 @@ DEVICE HOST float3 operator _OP (float3 aVec, float aVal)                      \
     result.z = aVec.z _OP aVal;                                                \
     return result;                                                             \
 }                                                                              \
-DEVICE HOST float3 operator _OP##= (float3 aVec, float aV)                     \
+DEVICE HOST float3 operator _OP##= (float3& aVec, float aV)                     \
 {                                                                              \
     aVec.x _OP##= aV; aVec.y _OP##= aV; aVec.z _OP##= aV;                      \
     return aVec;                                                               \
 }
 
 #define _DEF_SCALAR_OP3_SYM(_OP)                                               \
-DEVICE HOST  float3 operator _OP (float aVal, float3 aVec)                     \
+DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)                     \
 {                                                                              \
     float3 result;                                                             \
     result.x = aVal _OP aVec.x;                                                \

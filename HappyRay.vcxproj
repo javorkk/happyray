@@ -226,7 +226,6 @@
     <None Include="contrib\include\chag\pp\ext\detail\setup.cu.inl" />
     <None Include="contrib\include\chag\pp\ext\detail\shared.cu.inl" />
     <None Include="contrib\include\chag\pp\ext\detail\unit.cu.inl" />
-    <None Include="ReadMe.txt" />
     <Cudart_Build_Rule Include="src\Main.cu">
       <FileType>Document</FileType>
     </Cudart_Build_Rule>
