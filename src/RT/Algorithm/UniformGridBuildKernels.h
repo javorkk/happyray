@@ -135,8 +135,8 @@ GLOBAL void writePairs(
         const tPrimitive prim = aPrimitiveArray[primitiveId];
         BBox bounds = BBoxExtractor<tPrimitive>::get(prim);
         
-        float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
-        minCellIdf =
+        //float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
+        float3 minCellIdf =
             max(rep(0.f), (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP + rep(-EPSILON));
         const float3 maxCellIdf =
             min(aGridRes - rep(1.f), (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP + rep(EPSILON));

@@ -103,7 +103,6 @@ void SDLGLApplication::initScene()
     bool haveScene = CUDAApplication::sSceneLoader.loadScene(
         CONFIGURATION,
         CUDAApplication::sAnimationManager,
-        CUDAApplication::sScene,
         mInitialCamera,
         CUDAApplication::sAreaLightSource);
 

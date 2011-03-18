@@ -49,7 +49,6 @@ class CUDAApplication
 public:
     static SceneLoader      sSceneLoader;
     static AnimationManager sAnimationManager;
-    static WFObject         sScene;
     static AreaLightSource  sAreaLightSource;
 
     static void allocateHostBuffer(const int aResX, const int aResY)

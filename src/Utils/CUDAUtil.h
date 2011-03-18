@@ -349,15 +349,41 @@ namespace cudastd
 #define MY_CUDA_SAFE_CALL(call) {                                              \
     cudaError err = call;                                                      \
     if( cudaSuccess != err) {                                                  \
-    cudastd::logger::out << "CUDA error in " << __FILE__ << " line "              \
+    cudastd::logger::out << "CUDA error in " << __FILE__ << " line "           \
     << __LINE__ <<" : " << cudaGetErrorString( err) << "\n";                   \
             /*exit(1);*/                                                       \
     } }                                                                        \
     /* End Macro */
 
 
-#define MY_CUT_CHECK_ERROR(aMsg) 
-
+#ifdef _DEBUG
+#  define MY_CUT_CHECK_ERROR(errorMessage) {                                   \
+    cudaError_t err = cudaGetLastError();                                      \
+    if( cudaSuccess != err) {                                                  \
+        cudastd::logger::out << "Cuda error: "<< errorMessage  <<              \
+        " in file " << __FILE__ << " line "<<  __LINE__ << ": "<<              \
+                cudaGetErrorString( err) << "\n";                              \
+        /*exit(EXIT_FAILURE);*/                                                \
+    }                                                                          \
+    err = cudaThreadSynchronize();                                             \
+    if( cudaSuccess != err) {                                                  \
+        cudastd::logger::out << "Cuda error: "<< errorMessage  <<              \
+        " in file " << __FILE__ << " line "<<  __LINE__ << ": "<<              \
+                cudaGetErrorString( err) << "\n";                              \
+                /*exit(EXIT_FAILURE);*/                                        \
+    }                                                                          \
+    }
+#else
+#  define MY_CUT_CHECK_ERROR(errorMessage) {                                   \
+    cudaError_t err = cudaGetLastError();                                      \
+    if( cudaSuccess != err) {                                                  \
+        cudastd::logger::out << "Cuda error: "<< errorMessage  <<              \
+        " in file " << __FILE__ << " line "<<  __LINE__ << ": "<<              \
+                cudaGetErrorString( err) << "\n";                              \
+                /*exit(EXIT_FAILURE); */                                       \
+    }                                                                          \
+    }
+#endif
 
 
 namespace cudastd 

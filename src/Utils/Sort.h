@@ -42,6 +42,15 @@ public:
         }
     };
 
+    struct PairsCompare
+    {
+        HOST DEVICE bool operator () (uint2 aPair1, uint2 aPair2) const
+        {
+            return aPair1.x < aPair2.x;
+        }
+
+    };
+
     void operator()(uint2 *pData0, uint2 *pData1, uint aNumElements,
         uint aNumBits
         ) const;

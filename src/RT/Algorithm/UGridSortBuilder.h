@@ -30,7 +30,7 @@ class UGridSortBuilder
 
     uint mNumPrimitives;
     cudaEvent_t mStart, mDataUpload;
-    cudaEvent_t mSizeEstimation, mReduceCellIds, mWriteUnsortedCells, mSort, mEnd;
+    cudaEvent_t mRefCount, mScan, mWritePairs, mSort, mEnd;
 public:
     HOST void init(
         UniformGridMemoryManager&               aMemoryManager,
@@ -73,10 +73,10 @@ public:
         PrimitiveArray<tPrimitive>&                 aPrimitiveArray)
     {
         //////////////////////////////////////////////////////////////////////////
-        cudaEventCreate(&mSizeEstimation);
-        cudaEventCreate(&mWriteUnsortedCells);
+        cudaEventCreate(&mRefCount);
+        cudaEventCreate(&mScan);
+        cudaEventCreate(&mWritePairs);
         cudaEventCreate(&mSort);
-        cudaEventCreate(&mReduceCellIds);
         cudaEventCreate(&mEnd);
         //////////////////////////////////////////////////////////////////////////
         
@@ -100,7 +100,10 @@ public:
             aMemoryManager.getCellSizeRCP(),
             aMemoryManager.refCountsBuffer);
 
-        //CUT_CHECK_ERROR("Kernel Execution failed.\n");
+        MY_CUT_CHECK_ERROR("Kernel Execution failed.\n");
+
+        cudaEventRecord(mRefCount, 0);
+        cudaEventSynchronize(mRefCount);
         
         /////////////////////////////////////////////////////////////////////////
         //DEBUG
@@ -112,15 +115,14 @@ public:
         //cudastd::logger::out << "\n ----------------------\n";
         /////////////////////////////////////////////////////////////////////////
 
-
         ExclusiveScan scan;
         scan(aMemoryManager.refCountsBuffer, numCounters + 1);
 
 #if HAPPYRAY__CUDA_ARCH__ < 120
         MY_CUDA_SAFE_CALL( cudaMemcpy(aMemoryManager.refCountsBufferHost + numCounters, (aMemoryManager.refCountsBuffer + numCounters), sizeof(uint), cudaMemcpyDeviceToHost) );
 #endif
-        cudaEventRecord(mSizeEstimation, 0);
-        cudaEventSynchronize(mSizeEstimation);
+        cudaEventRecord(mScan, 0);
+        cudaEventSynchronize(mScan);
 
         /////////////////////////////////////////////////////////////////////////
         //DEBUG
@@ -141,7 +143,7 @@ public:
 
         writePairs<tPrimitive, PrimitiveArray >
             <<< gridUnsortedGrid, blockUnsortedGrid,
-            sizeof(uint) + sizeof(float3) * blockUnsortedGrid.x >>>(
+            sizeof(uint)/* + sizeof(float3) * blockUnsortedGrid.x*/ >>>(
             aPrimitiveArray,
             aMemoryManager.pairsBuffer,
             aPrimitiveArray.numPrimitives,
@@ -151,10 +153,10 @@ public:
             aMemoryManager.getCellSize(),
             aMemoryManager.getCellSizeRCP());
 
-        //CUT_CHECK_ERROR("Kernel Execution failed.\n");
+        MY_CUT_CHECK_ERROR("Kernel Execution failed.\n");
 
-        cudaEventRecord(mWriteUnsortedCells, 0);
-        cudaEventSynchronize(mWriteUnsortedCells);
+        cudaEventRecord(mWritePairs, 0);
+        cudaEventSynchronize(mWritePairs);
 
         const uint numCellsPlus1 = aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ;
         uint numBits = 9u;
@@ -183,11 +185,9 @@ public:
             static_cast<uint>(aMemoryManager.resZ)
             );
 
-        //CUT_CHECK_ERROR("Kernel Execution failed.\n");
+        MY_CUT_CHECK_ERROR("Kernel Execution failed.\n");
 
         //////////////////////////////////////////////////////////////////////////
-        cudaEventRecord(mReduceCellIds, 0);
-        cudaEventSynchronize(mReduceCellIds);
         cudaEventRecord(mEnd, 0);
         cudaEventSynchronize(mEnd);
         //////////////////////////////////////////////////////////////////////////
@@ -202,10 +202,10 @@ public:
     {
         cudaEventDestroy(mStart);
         cudaEventDestroy(mDataUpload);
-        cudaEventDestroy(mSizeEstimation);
-        cudaEventDestroy(mWriteUnsortedCells);
+        cudaEventDestroy(mRefCount);
+        cudaEventDestroy(mScan);
+        cudaEventDestroy(mWritePairs);
         cudaEventDestroy(mSort);
-        cudaEventDestroy(mReduceCellIds);
         cudaEventDestroy(mEnd);
     }
 
@@ -215,19 +215,19 @@ public:
         float elapsedTime;
         cudastd::logger::floatPrecision(4);       
         cudaEventElapsedTime(&elapsedTime, mStart, mDataUpload);
-        cudastd::logger::out << "Data upload:     " << elapsedTime << "ms\n";
-        cudaEventElapsedTime(&elapsedTime, mDataUpload, mSizeEstimation);
-        cudastd::logger::out << "Size estimation: " << elapsedTime << "ms\n";
-        cudaEventElapsedTime(&elapsedTime, mSizeEstimation, mWriteUnsortedCells);
-        cudastd::logger::out << "Write cells:     " << elapsedTime << "ms\n";
-        cudaEventElapsedTime(&elapsedTime, mWriteUnsortedCells, mSort);
-        cudastd::logger::out << "Sort:            " << elapsedTime << "ms\n";
-        cudaEventElapsedTime(&elapsedTime, mSort, mReduceCellIds);
-        cudastd::logger::out << "Reduce:          " << elapsedTime << "ms\n";
-        cudaEventElapsedTime(&elapsedTime, mReduceCellIds, mEnd);
-        cudastd::logger::out << "Bind to texture: " << elapsedTime << "ms\n";
+        cudastd::logger::out << "Data upload:      " << elapsedTime << "ms\n";
+        cudaEventElapsedTime(&elapsedTime, mDataUpload, mRefCount);
+        cudastd::logger::out << "Reference Count:  " << elapsedTime << "ms\n";
+        cudaEventElapsedTime(&elapsedTime, mRefCount, mScan);
+        cudastd::logger::out << "Scan:             " << elapsedTime << "ms\n";
+        cudaEventElapsedTime(&elapsedTime, mScan, mWritePairs);
+        cudastd::logger::out << "Write pairs:      " << elapsedTime << "ms\n";
+        cudaEventElapsedTime(&elapsedTime, mWritePairs, mSort);
+        cudastd::logger::out << "Sort pairs:       " << elapsedTime << "ms\n";
+        cudaEventElapsedTime(&elapsedTime, mSort, mEnd);
+        cudastd::logger::out << "Setup grid cells: " << elapsedTime << "ms\n";
         cudaEventElapsedTime(&elapsedTime, mDataUpload, mEnd);
-        cudastd::logger::out << "Total:           " << elapsedTime << "ms\n";
+        cudastd::logger::out << "Total:            " << elapsedTime << "ms\n";
         //////////////////////////////////////////////////////////////////////////
     }
 };

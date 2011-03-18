@@ -53,8 +53,7 @@ inline void prefix(
 	const T* aStart, 
 	const T* aEnd,
 	T* aOutput,
-	T* aTotal = 0,
-    cudaStream_t aStream = 0
+	T* aTotal = 0
 );
 template< typename T, class Op > 
 inline void prefix(
@@ -62,8 +61,7 @@ inline void prefix(
 	const T* aEnd,
 	T* aOutput,
 	T* aTotal,
-	const Op& aOperator,
-    cudaStream_t aStream = 0
+	const Op& aOperator
 );
 
 template< typename T > 
@@ -71,8 +69,7 @@ inline void prefix_inclusive(
 	const T* aStart, 
 	const T* aEnd,
 	T* aOutput,
-	T* aTotal = 0,
-    cudaStream_t aStream = 0
+	T* aTotal = 0
 );
 template< typename T, class Op > 
 inline void prefix_inclusive(
@@ -80,8 +77,7 @@ inline void prefix_inclusive(
 	const T* aEnd,
 	T* aOutput,
 	T* aTotal,
-	const Op& aOperator,
-    cudaStream_t aStream = 0
+	const Op& aOperator
 );
 
 
@@ -105,7 +101,6 @@ NTA_TEMPLATE(aspect::prefix) struct Prefixer
 		output_type* aOutput, 
 		output_type* aTotal,
 		const Op& aOperator,
-        cudaStream_t aStream,
 		output_type* aPartialBuffer = 0,
 		output_type* aPartialOffsets = 0
 	);

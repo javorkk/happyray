@@ -43,7 +43,6 @@ void createLightSource( AreaLightSource& oLightSource, const WFObject& aScene);
 
 bool loadScene( const char*          CONFIGURATION,
                 AnimationManager&    oAnimation,
-                WFObject&            oScene,
                 CameraManager&       oView,
                 AreaLightSource&     oLightSource
                 );

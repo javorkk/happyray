@@ -32,13 +32,12 @@ float               CUDAApplication::sBACKGROUND_G;
 float               CUDAApplication::sBACKGROUND_B;
 SceneLoader         CUDAApplication::sSceneLoader;
 AnimationManager    CUDAApplication::sAnimationManager;
-WFObject            CUDAApplication::sScene;
 AreaLightSource     CUDAApplication::sAreaLightSource;
 StaticRTEngine      gStaticRTEngine;
 
 void CUDAApplication::generateFrame(float& oRenderTime, float& oBuildTime)
 {
-    gStaticRTEngine.init(sScene);
+    gStaticRTEngine.init(sAnimationManager.getFrame(0));
 
     for(int y = 1; y < sRESY; y+=y)
     {

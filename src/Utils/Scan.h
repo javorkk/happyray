@@ -29,16 +29,27 @@
 #define PREFIXSUM_H_INCLUDED_5FEA3B3A_E2F1_49B2_9483_55F751905C38
 
 #include "CUDAStdAfx.h"
-#include "CUDAUtil.h"
+#include "Utils/CUDAUtil.h"
 
 
 class ExclusiveScan
 {
 public:
+    class OperatorPlus
+    {
+    public:
+        OperatorPlus()
+        {}
+
+        DEVICE inline uint operator()(uint a, uint b)
+        {
+            return a + b;
+        }
+    };
+
     void operator()(
-        uint*& aIn, 
-        const uint aNumElements, 
-        cudaStream_t aStream = 0
+        uint* aIn, 
+        const uint aNumElements
         ) const;
 };
 
@@ -46,24 +57,23 @@ public:
 class InclusiveScan
 {
 public:
-    //class OperatorPlus
-    //{
-    //public:
-    //    OperatorPlus()
-    //    {}
+    class OperatorPlus
+    {
+    public:
+        OperatorPlus()
+        {}
 
-    //    DEVICE inline uint operator()(uint a, uint b)
-    //    {
-    //        return a + b;
-    //    }
-    //};
+        DEVICE inline uint operator()(uint a, uint b)
+        {
+            return a + b;
+        }
+    };
 
     //aIn must point to device memory
     //currently limited to 31 million elements because of grid size restrictions
     void operator()(
-        uint*& aIn, 
-        const uint aNumElements,
-        cudaStream_t aStream = 0
+        uint* aIn, 
+        const uint aNumElements
         ) const;
 };
 

@@ -14,7 +14,7 @@ public:
     HOST static void allocateMappedDeviceArray(void** aDevicePtr, void** aHostPtr, size_t aSize,
         void** aOldDevicePtr, void** aOldHostPtr, size_t& aOldSize)
     {
-#if HAPPYRAY__CUDA_ARCH__ >= 120   
+#if HAPPYRAY__CUDA_ARCH__ >= 120
         if (aOldSize < aSize)
         {
             aOldSize = aSize;
@@ -63,10 +63,6 @@ public:
     {
         if (aOldSize < aSize)
         {
-#ifndef MEMORY_FRIENDLY
-            MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr1) );
-            MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr2) );
-#endif
             aOldSize = aSize;
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr1, aSize));
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr2, aSize));

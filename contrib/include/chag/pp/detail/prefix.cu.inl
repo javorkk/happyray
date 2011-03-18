@@ -31,13 +31,12 @@ inline void prefix(
 	const T* aStart, 
 	const T* aEnd,
 	T* aOutput,
-	T* aTotal,
-    cudaStream_t aStream
+	T* aTotal
 )
 {
 	Prefixer<
 		aspect::prefix::InputType<T>
-	>::prefix( aStart, aEnd, aOutput, aTotal, op::Add<T>(), aStream );
+	>::prefix( aStart, aEnd, aOutput, aTotal, op::Add<T>() );
 }
 template< typename T, class Op > 
 inline void prefix(
@@ -45,13 +44,12 @@ inline void prefix(
 	const T* aEnd,
 	T* aOutput,
 	T* aTotal,
-    const Op& aOperator,
-    cudaStream_t aStream
+    const Op& aOperator
 )
 {
 	Prefixer<
 		aspect::prefix::InputType<T>
-	>::prefix( aStart, aEnd, aOutput, aTotal, aOperator, aStream  );
+	>::prefix( aStart, aEnd, aOutput, aTotal, aOperator);
 }
 
 template< typename T > 
@@ -59,14 +57,13 @@ inline void prefix_inclusive(
 	const T* aStart, 
 	const T* aEnd,
 	T* aOutput,
-    T* aTotal,
-    cudaStream_t aStream
+    T* aTotal
 )
 {
 	Prefixer<
 		aspect::prefix::InputType<T>,
 		aspect::prefix::Inclusive< true >
-	>::prefix( aStart, aEnd, aOutput, aTotal, op::Add<T>(), aStream  );
+	>::prefix( aStart, aEnd, aOutput, aTotal, op::Add<T>() );
 }
 template< typename T, class Op > 
 inline void prefix_inclusive(
@@ -74,14 +71,13 @@ inline void prefix_inclusive(
 	const T* aEnd,
 	T* aOutput,
 	T* aTotal,
-    const Op& aOperator,
-    cudaStream_t aStream
+    const Op& aOperator
 )
 {
 	Prefixer<
 		aspect::prefix::InputType<T>,
 		aspect::prefix::Inclusive< true >
-	>::prefix( aStart, aEnd, aOutput, aTotal, aOperator, aStream  );
+	>::prefix( aStart, aEnd, aOutput, aTotal, aOperator);
 }
 
 
@@ -292,7 +288,6 @@ NTA_TEMPLATE_PREAMBLE template< class Op >
 void Prefixer<NTA_TEMPLATE_ARGUMENTS>::prefix(
 	const input_type* aStart, const input_type* aEnd,
 	output_type* aOutput, output_type* aTotal, const Op& aOperator,
-    cudaStream_t aStream,
 	output_type* aPartialReductions, output_type* aPartialOffsets
 )
 {
@@ -319,23 +314,23 @@ void Prefixer<NTA_TEMPLATE_ARGUMENTS>::prefix(
 	dim3 cub = KSetup::layout_cuda_blocks();
 	dim3 cut = KSetup::layout_cuda_threads();
 
-	prefix_reduce<JSetup><<<cub,cut,0,aStream>>>( 
+	prefix_reduce<JSetup><<<cub,cut>>>( 
 		aStart, partialRed, aOperator, setup.kernelParam() 
 	);
 	prefix_offset<
 		JSetup::JOB_COUNT, JSetup::JOB_BUFFER_SIZE,
 		KernelSetupBlock<1,512>
-	><<<1,512,0,aStream>>>( partialRed, partialOffs, aTotal, aOperator );
+	><<<1,512>>>( partialRed, partialOffs, aTotal, aOperator );
 
 	if( INCLUSIVE )
 	{
-		prefix_prefix_inclusive<JSetup><<<cub,cut,0,aStream>>>( 
+		prefix_prefix_inclusive<JSetup><<<cub,cut>>>( 
 			aStart, partialOffs, aOutput, aOperator, setup.kernelParam() 
 		);
 	}
 	else
 	{
-		prefix_prefix<JSetup><<<cub,cut,0,aStream>>>( 
+		prefix_prefix<JSetup><<<cub,cut>>>( 
 			aStart, partialOffs, aOutput, aOperator, setup.kernelParam() 
 		);
 	}

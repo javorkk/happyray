@@ -22,19 +22,31 @@
 /****************************************************************************/
 
 #include "Sort.h"
-#include "chag/pp/sort.cuh"
+
+#define USE_CHAG_PP_SORT
+
+#ifdef USE_CHAG_PP_SORT
+#   include "chag/pp/sort.cuh"
+#else
+#   include "thrust/detail/device/cuda/sort.h"
+#endif
+
 
 Sort::Sort()
 {
+#ifdef USE_CHAG_PP_SORT
 	size_t count = 16*1024; //XXX Stupid hack. should use JSetup::JOB_BUFFER_SIZE
 
 	cudaMalloc( (void**)&counts, sizeof(chag::pp::SizeType)*count );
 	cudaMalloc( (void**)&offsets, sizeof(chag::pp::SizeType)*count );
+#endif
 }
 Sort::~Sort()
 {
+#ifdef USE_CHAG_PP_SORT
 	cudaFree( offsets );
 	cudaFree( counts );
+#endif
 }
 
 void Sort::operator()(uint2 *pData0, 
@@ -43,6 +55,8 @@ void Sort::operator()(uint2 *pData0,
                       uint aNumBits
                       ) const
 {
+#ifdef USE_CHAG_PP_SORT
+
 	using namespace chag::pp;
 	using namespace chag::pp::aspect;
 
@@ -70,4 +84,13 @@ void Sort::operator()(uint2 *pData0,
 	else DO_PASS_(0u,32u);
 
 #	undef DO_PASS_
+
+#else
+    thrust::device_ptr<uint2> itBegin = thrust::device_pointer_cast(pData0);
+    thrust::device_ptr<uint2> itEnd = thrust::device_pointer_cast(pData0 + aNumElements);
+
+    thrust::detail::device::cuda::stable_sort(itBegin, itEnd, PairsCompare());
+#endif
 }
+
+#undef USE_CHAG_PP_SORT

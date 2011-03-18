@@ -14,7 +14,6 @@
 #include "RT/Primitive/LightSource.hpp"
 /////////////////////////////////////////
 
-using namespace cudastd;
 
 void SceneLoader::insertLightSourceGeometry(const AreaLightSource& aLightSource, WFObject& oScene)
 {
@@ -168,7 +167,6 @@ void SceneLoader::createLightSource( AreaLightSource& oLightSource, const WFObje
 bool SceneLoader::loadScene(
                 const char*         CONFIGURATION,
                 AnimationManager&   oAnimation,
-                WFObject&           oScene,
                 CameraManager&      oView,
                 AreaLightSource&    oLightSource)
 {
@@ -192,14 +190,13 @@ bool SceneLoader::loadScene(
         cudastd::logger::out << "Number of primitives: " <<
             oAnimation.getFrame(0).getNumFaces() << "\n";
 
-        oScene = oAnimation.getFrame(0);
     }
     else if (sceneConfig.hasObjFileName)
     {
         cudastd::logger::out << "Loading scene...\n";
-        oScene.read(sceneConfig.objFileName);
+        oAnimation.getFrame(0).read(sceneConfig.objFileName);
 
-        cudastd::logger::out << "Number of primitives: " << oScene.getNumFaces() << "\n";
+        cudastd::logger::out << "Number of primitives: " << oAnimation.getFrame(0).getNumFaces() << "\n";
 
     }
     else
@@ -247,18 +244,18 @@ bool SceneLoader::loadScene(
             cudastd::logger::out << "Loading area light...\n";
             LightSourceLoader loader;
             oLightSource = loader.loadFromFile(sceneConfig.lightsFileName);
-            insertLightSourceGeometry(oLightSource, oScene);
+            insertLightSourceGeometry(oLightSource, oAnimation.getFrame(0));
         }
         else
         {
-            createLightSource(oLightSource, oScene);
+            createLightSource(oLightSource, oAnimation.getFrame(0));
         }
 
     }
 
     if(retval == false)
     {
-        loadDefaultScene(oScene, oView);
+        loadDefaultScene(oAnimation.getFrame(0), oView);
     }
 
     return retval;
