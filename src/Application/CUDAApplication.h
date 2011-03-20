@@ -82,7 +82,12 @@ public:
        allocateHostBuffer(aResX, aResY);
     }
 
-    static void generateFrame(float& oRenderTime, float& oBuildTime);
+    static void initScene();
+    static void generateFrame(
+        CameraManager& aView,
+        int& aImageId,
+        float& oRenderTime, 
+        float& oBuildTime);
 
     static void updateBackgroundColor(float aR, float aG, float aB)
     {

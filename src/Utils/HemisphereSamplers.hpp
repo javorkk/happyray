@@ -28,18 +28,18 @@
 #ifndef HEMISPHERESAMPLERS_HPP_INCLUDED_BBEEF8B0_BE58_4BD1_AED5_CFA5411D41C1
 #define HEMISPHERESAMPLERS_HPP_INCLUDED_BBEEF8B0_BE58_4BD1_AED5_CFA5411D41C1
 
-#include "../CUDAStdAfx.h"
-#include "../Core/Algebra.hpp"
+#include "CUDAStdAfx.h"
+#include "Core/Algebra.hpp"
 
 class UniformHemisphereSampler
 {
 public:
-    DEVICE vec3f operator() (
+    DEVICE float3 operator() (
         const float aRandNum1,
         const float aRandNum2) const
     {
         //inverse probability of sample: (2.f * M_PI)
-        vec3f retval;
+        float3 retval;
 
         sinCos(2.f * M_PI * aRandNum1, &retval.y, &retval.x);
 
@@ -54,12 +54,12 @@ public:
 class CosineHemisphereSampler
 {
 public:
-    DEVICE vec3f operator() (
+    DEVICE float3 operator() (
         const float aRandNum1,
         const float aRandNum2) const
     {   
         //inverse probability of sample: M_PI / sqrtf(aRandNum2)
-        vec3f retval;
+        float3 retval;
         
         sinCos(2.f * M_PI * aRandNum1, &retval.y, &retval.x);
 
@@ -74,7 +74,7 @@ public:
 class PowerCosineHemisphereSampler
 {
 public:
-    DEVICE vec3f operator() (
+    DEVICE float3 operator() (
         const float aRandNum1,
         const float aRandNum2,
         const float aPower) const
@@ -82,7 +82,7 @@ public:
         //inverse probability of sample: 
         //2 * M_PI / ((aPower + 1) * powf(retval.z, aPower))
 
-        vec3f retval;
+        float3 retval;
         retval.z  = fastPow(aRandNum2, fastDivide(1.f, aPower + 1.f));
 
         sinCos(2.f * M_PI * aRandNum1, &retval.y, &retval.x);

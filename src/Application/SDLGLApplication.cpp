@@ -107,6 +107,11 @@ void SDLGLApplication::initScene()
         CUDAApplication::sAreaLightSource);
 
     mCamera = mInitialCamera;
+
+    CUDAApplication::initScene();
+    mRESX = mInitialCamera.getResX();
+    mRESY = mInitialCamera.getResX();
+    //changeWindowSize();
 }
 
 void SDLGLApplication::WindowActive	()
@@ -695,7 +700,8 @@ void SDLGLApplication::displayFrame()
     else
     {
         float time, renderTime, buildTime;
-        CUDAApplication::generateFrame(renderTime, buildTime);
+        CUDAApplication::generateFrame(mCamera, mNumImages, renderTime, buildTime);
+        ++mNumImages;
         time = renderTime + buildTime;
         //display frame rate in window title
         std::string windowName(mActiveWindowName);

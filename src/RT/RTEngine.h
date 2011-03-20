@@ -7,12 +7,25 @@
 
 #include "CUDAStdAfx.h"
 #include "Application/WFObject.hpp"
+#include "RT/Structure/FrameBuffer.h"
 
 class StaticRTEngine
 {
 public:
 
-    static void init(const WFObject& aScene);
+    static void init();
+    static void upload(const WFObject& aScene);
+    
+    static void setCamera(
+        const float3& aPosition,
+        const float3& aOrientation,
+        const float3& aUp,
+        const float   aFOV,
+        const int     aX,
+        const int     aY );
+
+    static void renderFrame(FrameBuffer& aFrameBuffer, const int aImageId);
+
     static void cleanup();
 };
 

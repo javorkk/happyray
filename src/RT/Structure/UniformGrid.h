@@ -20,20 +20,31 @@ public:
     cudaPitchedPtr cells;
     uint* primitives;
 
+    DEVICE const float3 getResolution() const
+    {
+        float3 retval;
+        retval.x = static_cast<float>(res[0]);
+        retval.y = static_cast<float>(res[1]);
+        retval.z = static_cast<float>(res[2]);
+        return retval;
+    }
+
     DEVICE float3 getCellSize() const
     {
         return cellSize;
+        //return fastDivide(vtx[1] - vtx[0], getResolution());
     }
 
     DEVICE float3 getCellSizeRCP() const
     {
         return cellSizeRCP;
+        //return fastDivide(getResolution(), vtx[1] - vtx[0]);
     }
 
-    DEVICE uint2* getCell(uint aIdX, uint aIdY, uint aIdZ)
+    DEVICE uint2 getCell(uint aIdX, uint aIdY, uint aIdZ)
     {
-        return (uint2*)((char*)cells.ptr
-            + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX;
+        return *((uint2*)((char*)cells.ptr
+            + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX);
     }
 
     DEVICE uint getPrimitiveId(uint aId)

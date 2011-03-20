@@ -23,6 +23,8 @@
 #include "CUDAStdAfx.h"
 #include "Application/CUDAApplication.h"
 #include "RT/RTEngine.h"
+#include "RT/Structure/FrameBuffer.h"
+
 
 float*              CUDAApplication::sFrameBufferFloatPtr;
 int                 CUDAApplication::sRESX;
@@ -34,23 +36,43 @@ SceneLoader         CUDAApplication::sSceneLoader;
 AnimationManager    CUDAApplication::sAnimationManager;
 AreaLightSource     CUDAApplication::sAreaLightSource;
 StaticRTEngine      gStaticRTEngine;
+FrameBuffer         gFrameBuffer;
 
-void CUDAApplication::generateFrame(float& oRenderTime, float& oBuildTime)
+void CUDAApplication::initScene()
 {
-    gStaticRTEngine.init(sAnimationManager.getFrame(0));
+        gStaticRTEngine.init();
+        gStaticRTEngine.upload(sAnimationManager.getFrame(0));
+}
 
-    for(int y = 1; y < sRESY; y+=y)
+void CUDAApplication::generateFrame(
+           CameraManager& aView, int& aImageId,
+           float& oRenderTime, float& oBuildTime)
+{
+    if(aView.getResX() != sRESX || aView.getResY() != sRESY)
     {
-        for(int x = 0; x < sRESX; x+=4)
-        {
-            sFrameBufferFloatPtr[3 * (x + sRESX * y)    ] = 0.9f;
-            sFrameBufferFloatPtr[3 * (x + sRESX * y) + 1] = 0.0f;
-            sFrameBufferFloatPtr[3 * (x + sRESX * y) + 2] = 0.0f;
-
-            sFrameBufferFloatPtr[3 * (x + sRESX * y) + 3] = 0.0f;
-            sFrameBufferFloatPtr[3 * (x + sRESX * y) + 4] = 0.9f;
-            sFrameBufferFloatPtr[3 * (x + sRESX * y) + 5] = 0.9f;
-
-        }
+        sRESX = aView.getResX();
+        sRESY = aView.getResY();
+        allocateHostBuffer(aView.getResX(), aView.getResY());
+        gFrameBuffer.cleanup();
+        gFrameBuffer.init(sRESX, sRESY);
     }
+
+    if(aImageId == 0)
+    {
+        gStaticRTEngine.setCamera(
+            aView.getPosition(),
+            aView.getOrientation(),
+            aView.getUp(),
+            aView.getFOV(),
+            aView.getResX(),
+            aView.getResY()
+            );
+    }
+
+    gStaticRTEngine.renderFrame(gFrameBuffer, aImageId);
+
+    gFrameBuffer.download((float3*)sFrameBufferFloatPtr, sRESX, sRESY);
+
+    oBuildTime = 28.f;
+    oRenderTime = 30.f;
 }

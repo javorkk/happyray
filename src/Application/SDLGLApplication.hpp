@@ -79,7 +79,7 @@ class SDLGLApplication
     CameraManager mCamera;
     //////////////////////////////////////////////////////////////////////////
     //Misc
-    unsigned int mNumImages;
+    int mNumImages;
     bool mPauseAnimation;
     enum RenderMode {DEFAULT = 0, RENDERMODE1 = 1, RENDERMODE2 = 2};
     RenderMode mRenderMode;

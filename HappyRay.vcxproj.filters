@@ -37,6 +37,9 @@
     <Filter Include="Utils\pp">
       <UniqueIdentifier>{e6115147-7670-41cf-9a96-4d36c6a56a9d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="RT\Integrator">
+      <UniqueIdentifier>{ce82bf06-36ff-4485-a95c-23d86452b5f7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="contrib\include\chag\pp\ext\detail\common.cu.inl">
@@ -167,6 +170,27 @@
     <ClInclude Include="src\RT\Structure\UGridMemoryManager.h">
       <Filter>RT\Structure</Filter>
     </ClInclude>
+    <ClInclude Include="src\RT\Primitive\Camera.h">
+      <Filter>RT\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Algorithm\RayGenerators.h">
+      <Filter>RT\Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Structure\RayBuffers.h">
+      <Filter>RT\Structure</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Integrator\SimpleIntegrator.h">
+      <Filter>RT\Integrator</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Algorithm\RayTriangleIntersector.h">
+      <Filter>RT\Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Algorithm\RayTracingKernels.h">
+      <Filter>RT\Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Structure\FrameBuffer.h">
+      <Filter>RT\Structure</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\stdafx.cpp">
@@ -205,11 +229,6 @@
     <ClCompile Include="src\RT\Primitive\Triangle.cpp">
       <Filter>RT\Primitive</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <Cudart_Build_Rule Include="src\Main.cu">
-      <Filter>Source Files</Filter>
-    </Cudart_Build_Rule>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\Utils\CUDAUtil.cu">
