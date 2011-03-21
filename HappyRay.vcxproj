@@ -115,8 +115,8 @@
       </AddedDependencies>
     </Cudart_Build_Rule>
     <CudaCompile>
-      <CodeGeneration>compute_12,sm_12</CodeGeneration>
-      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
+      <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
+      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MTd</Runtime>
     </CudaCompile>
@@ -150,9 +150,9 @@
       </AddedDependencies>
     </Cudart_Build_Rule>
     <CudaCompile>
-      <CodeGeneration>compute_12,sm_12</CodeGeneration>
+      <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MTd</Runtime>
     </CudaCompile>
@@ -187,8 +187,8 @@
       </AddedDependencies>
     </Cudart_Build_Rule>
     <CudaCompile>
-      <CodeGeneration>compute_12,sm_12</CodeGeneration>
-      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
+      <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
+      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
     </CudaCompile>
@@ -224,9 +224,9 @@
       </AddedDependencies>
     </Cudart_Build_Rule>
     <CudaCompile>
-      <CodeGeneration>compute_12,sm_12</CodeGeneration>
+      <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
     </CudaCompile>

@@ -15,6 +15,7 @@
 float                       sGridDensity = 5.f;
 int                         sFrameId = 0;
 PrimitiveArray<Triangle>    sTriangleArray;
+PrimitiveAttributeArray<Triangle, float3> sTriangleNormalArray;
 UniformGridMemoryManager    sUGridMemoryManager;
 UGridSortBuilder<Triangle>  sGridBuilder;
 Camera                      sCamera;
@@ -58,11 +59,15 @@ void StaticRTEngine::upload(
         sUGridMemoryManager.bounds.vtx[0],
         sUGridMemoryManager.bounds.vtx[1], sTriangleArray);
 
-    uploader.uploadObjFrameIndexData(
+    uploader.uploadObjFrameVertexIndexData(
         aScene, aScene, sTriangleArray);
 
     uploader.uploadObjFrameNormalData(
-        aScene, aScene, 0.f, sTriangleArray);
+        aScene, aScene, 0.f, sTriangleNormalArray);
+
+    uploader.uploadObjFrameNormalIndexData(
+        aScene, aScene, sTriangleNormalArray);
+
 
     sGridBuilder.init(sUGridMemoryManager, sTriangleArray.numPrimitives, sGridDensity);
     sGridBuilder.build(sUGridMemoryManager, sTriangleArray);
@@ -97,12 +102,12 @@ void StaticRTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId)
     if(aImageId < 4)
     {
         sRegularRayGen.dcImageId = aImageId;
-        sSimpleIntegratorReg.integrate(sTriangleArray, grid, sRegularRayGen, aFrameBuffer, aImageId);
+        sSimpleIntegratorReg.integrate(sTriangleArray, sTriangleNormalArray, grid, sRegularRayGen, aFrameBuffer, aImageId);
     }
     else
     {
         sRandomRayGen.dcImageId = aImageId;
-        sSimpleIntegratorRnd.integrate(sTriangleArray, grid, sRandomRayGen, aFrameBuffer, aImageId);
+        sSimpleIntegratorRnd.integrate(sTriangleArray, sTriangleNormalArray, grid, sRandomRayGen, aFrameBuffer, aImageId);
 
     }
 }

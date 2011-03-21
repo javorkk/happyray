@@ -23,7 +23,9 @@
 
 #include "Scan.h"
 
-#define USE_CHAG_PP_SCAN
+#if HAPPYRAY__CUDA_ARCH__ < 200
+#   define USE_CHAG_PP_SCAN
+#endif
 
 #ifdef USE_CHAG_PP_SCAN
 #   include "chag/pp/prefix.cuh"

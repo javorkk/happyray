@@ -24,13 +24,13 @@ public:
     uint*  indicesBufferHostPtr;
     size_t indicesBufferSize;
 
-    float3* normalBufferDevicePtr;
-    float3* normalBufferHostPtr;
-    size_t  normalBufferSize;
+    //float3* normalBufferDevicePtr;
+    //float3* normalBufferHostPtr;
+    //size_t  normalBufferSize;
 
-    uint*  normalIndicesBufferDevicePtr;
-    uint*  normalIndicesBufferHostPtr;
-    size_t normalIndicesBufferSize;
+    //uint*  normalIndicesBufferDevicePtr;
+    //uint*  normalIndicesBufferHostPtr;
+    //size_t normalIndicesBufferSize;
 
     size_t numPrimitives;
 
@@ -41,12 +41,12 @@ public:
         indicesBufferDevicePtr(NULL),
         indicesBufferHostPtr  (NULL),
         indicesBufferSize(0u),
-        normalBufferDevicePtr(NULL),
-        normalBufferHostPtr  (NULL),
-        normalBufferSize(0u),
-        normalIndicesBufferDevicePtr(NULL),
-        normalIndicesBufferHostPtr  (NULL),
-        normalIndicesBufferSize(0u),
+        //normalBufferDevicePtr(NULL),
+        //normalBufferHostPtr  (NULL),
+        //normalBufferSize(0u),
+        //normalIndicesBufferDevicePtr(NULL),
+        //normalIndicesBufferHostPtr  (NULL),
+        //normalIndicesBufferSize(0u),
         numPrimitives(0u)
     {}
 
@@ -57,28 +57,28 @@ public:
             MY_CUDA_SAFE_CALL( cudaFreeHost(vertexBufferHostPtr) );
         if(indicesBufferHostPtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
-        if(normalBufferHostPtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFreeHost(normalBufferHostPtr) );
-        if(normalIndicesBufferHostPtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFreeHost(normalIndicesBufferHostPtr) );
+        //if(normalBufferHostPtr != NULL)
+        //    MY_CUDA_SAFE_CALL( cudaFreeHost(normalBufferHostPtr) );
+        //if(normalIndicesBufferHostPtr != NULL)
+        //    MY_CUDA_SAFE_CALL( cudaFreeHost(normalIndicesBufferHostPtr) );
 #else
         if(vertexBufferHostPtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFreeHost(vertexBufferHostPtr) );
         if(indicesBufferHostPtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
-        if(normalBufferHostPtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFreeHost(normalBufferHostPtr) );
-        if(normalIndicesBufferHostPtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFreeHost(normalIndicesBufferHostPtr) );
+        //if(normalBufferHostPtr != NULL)
+        //    MY_CUDA_SAFE_CALL( cudaFreeHost(normalBufferHostPtr) );
+        //if(normalIndicesBufferHostPtr != NULL)
+        //    MY_CUDA_SAFE_CALL( cudaFreeHost(normalIndicesBufferHostPtr) );
 
         if(vertexBufferDevicePtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFree(vertexBufferDevicePtr) );
         if(indicesBufferDevicePtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFree(indicesBufferDevicePtr) );
-        if(normalBufferDevicePtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFree(normalBufferDevicePtr) );
-        if(normalIndicesBufferDevicePtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFree(normalIndicesBufferDevicePtr) );
+        //if(normalBufferDevicePtr != NULL)
+        //    MY_CUDA_SAFE_CALL( cudaFree(normalBufferDevicePtr) );
+        //if(normalIndicesBufferDevicePtr != NULL)
+        //    MY_CUDA_SAFE_CALL( cudaFree(normalIndicesBufferDevicePtr) );
 #endif
     }
 
@@ -148,29 +148,118 @@ public:
     }
 
     //The normals are stored in the vertex array of the returned primitive
-    DEVICE tPrimitive getVertexNormals(uint aIndex)
+//    DEVICE tPrimitive getVertexNormals(uint aIndex)
+//    {
+//        uint indices[tPrimitive::NUM_VERTICES];
+//
+//#pragma unroll 3
+//        for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
+//        {
+//            indices[i] = normalIndicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i]; 
+//        }
+//
+//        tPrimitive result;
+//
+//#pragma unroll 3
+//        for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
+//        {
+//            result.vtx[i] = normalBufferDevicePtr[indices[i]];
+//        }
+//
+//        return result;
+//    }
+
+};//class Primitive Array
+
+template<class tPrimitive, class tType>
+class AttribStruct
+{
+public:
+    tType data[tPrimitive::NUM_VERTICES];
+};
+
+template<class tPrimitive, class tType>
+class PrimitiveAttributeArray
+{
+public:
+    typedef AttribStruct<tPrimitive, tType> t_AttribStruct;
+
+    /////////////////////////////////////////////////////////////
+    //Memory Managment
+    /////////////////////////////////////////////////////////////
+
+    float3* dataBufferDevicePtr;
+    float3* dataBufferHostPtr;
+    size_t  dataBufferSize;
+
+    uint*  indicesBufferDevicePtr;
+    uint*  indicesBufferHostPtr;
+    size_t indicesBufferSize;
+
+    size_t numPrimitives;
+
+    HOST PrimitiveAttributeArray():
+        dataBufferDevicePtr(NULL),
+        dataBufferHostPtr  (NULL),
+        dataBufferSize(0u),
+        indicesBufferDevicePtr(NULL),
+        indicesBufferHostPtr  (NULL),
+        indicesBufferSize(0u),
+        numPrimitives(0u)
+    {}
+
+    HOST void cleanup()
+    {
+#if HAPPYRAY__CUDA_ARCH__ >= 120
+        if(dataBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(dataBufferHostPtr) );
+        if(indicesBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
+#else
+        if(dataBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(dataBufferHostPtr) );
+        if(indicesBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
+
+        if(dataBufferDevicePtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFree(dataBufferDevicePtr) );
+        if(indicesBufferDevicePtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFree(indicesBufferDevicePtr) );
+#endif
+    }
+
+    HOST DEVICE size_t getMemorySize()
+    {
+        return dataBufferSize + indicesBufferSize;
+    }
+
+
+    ////////////////////////////////////////////////////////////
+    //Device Functions
+    ////////////////////////////////////////////////////////////
+ 
+    DEVICE t_AttribStruct  operator[](uint aIndex) const
     {
         uint indices[tPrimitive::NUM_VERTICES];
 
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-            indices[i] = normalIndicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i]; 
+            indices[i] = indicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i]; 
         }
 
-        tPrimitive result;
+        t_AttribStruct result;
 
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-            result.vtx[i] = normalBufferDevicePtr[indices[i]];
+            result.data[i] = dataBufferDevicePtr[indices[i]];
         }
 
         return result;
     }
 
-};//class Primitive Array
-
+};//class Primitive Attribute Array
 
 #include "RT/Primitive/Primitive.hpp"
 #include "Application/WFObject.hpp"
@@ -193,14 +282,21 @@ public:
         const WFObject& aKeyFrame1,
         const WFObject& aKeyFrame2,
         const float     aCoeff,
-        PrimitiveArray<Primitive<3> >& aArray
+        PrimitiveAttributeArray<Primitive<3>, float3 >& aArray
         );
 
-    //Vertex and normal indices
-    HOST void uploadObjFrameIndexData(
+    //Vertex indices
+    HOST void uploadObjFrameVertexIndexData(
         const WFObject& aKeyFrame1,
         const WFObject& aKeyFrame2,
         PrimitiveArray<Primitive<3> >& aArray
+        );
+
+    //Normal indices
+    HOST void uploadObjFrameNormalIndexData(
+        const WFObject& aKeyFrame1,
+        const WFObject& aKeyFrame2,
+        PrimitiveAttributeArray<Primitive<3>, float3 >& aArray
         );
 };//class ObjUploader
 
@@ -272,7 +368,7 @@ HOST void ObjUploader::uploadObjFrameNormalData(
     const WFObject& aKeyFrame1,
     const WFObject& aKeyFrame2,
     const float     aCoeff,
-    PrimitiveArray<Primitive<3> >& aArray)
+    PrimitiveAttributeArray<Primitive<3>, float3 >& aArray)
 {
     const size_t numNormals1 = aKeyFrame1.getNumNormals();
     const size_t numNormals2 = aKeyFrame2.getNumNormals();
@@ -283,14 +379,14 @@ HOST void ObjUploader::uploadObjFrameNormalData(
     //cleanup
     ////////////////////////////////////////////////////////////
     MemoryManager::allocateMappedDeviceArray(
-        (void**)&aArray.normalBufferDevicePtr,
-        (void**)&aArray.normalBufferHostPtr,
+        (void**)&aArray.dataBufferDevicePtr,
+        (void**)&aArray.dataBufferHostPtr,
         normalsNewSize,
-        (void**)&aArray.normalBufferDevicePtr,
-        (void**)&aArray.normalBufferHostPtr,
-        aArray.normalBufferSize);
+        (void**)&aArray.dataBufferDevicePtr,
+        (void**)&aArray.dataBufferHostPtr,
+        aArray.dataBufferSize);
 
-    float3* normalsHost = aArray.normalBufferHostPtr;
+    float3* normalsHost = aArray.dataBufferHostPtr;
     
     //////////////////////////////////////////////////////////////////////////
     //Copy and transfer normal data
@@ -311,7 +407,7 @@ HOST void ObjUploader::uploadObjFrameNormalData(
     }
 }
 
-HOST void ObjUploader::uploadObjFrameIndexData(
+HOST void ObjUploader::uploadObjFrameVertexIndexData(
     const WFObject& aKeyFrame1,
     const WFObject& aKeyFrame2,
     PrimitiveArray<Primitive<3> >& aArray)
@@ -334,17 +430,7 @@ HOST void ObjUploader::uploadObjFrameIndexData(
         (void**)&aArray.indicesBufferHostPtr,
         aArray.indicesBufferSize);
 
-    MemoryManager::allocateMappedDeviceArray(
-        (void**)&aArray.normalIndicesBufferDevicePtr,
-        (void**)&aArray.normalIndicesBufferHostPtr,
-        indicesNewSize,
-        (void**)&aArray.normalIndicesBufferDevicePtr,
-        (void**)&aArray.normalIndicesBufferHostPtr,
-        aArray.normalIndicesBufferSize);
-
-
     uint* indicesHost = aArray.indicesBufferHostPtr;
-    uint* normalIndicesHost = aArray.normalIndicesBufferHostPtr;
 
     
     //////////////////////////////////////////////////////////////////////////
@@ -361,7 +447,37 @@ HOST void ObjUploader::uploadObjFrameIndexData(
     }
 
     aArray.bindIndicesTexture(aArray.indicesBufferDevicePtr, aArray.indicesBufferSize);
+}
 
+HOST void ObjUploader::uploadObjFrameNormalIndexData(
+    const WFObject& aKeyFrame1,
+    const WFObject& aKeyFrame2,
+    PrimitiveAttributeArray<Primitive<3>, float3 >& aArray)
+{
+    aArray.numPrimitives = aKeyFrame1.getNumFaces();
+    const size_t numIndices1 = aKeyFrame1.getNumFaces() * 3;
+    const size_t numIndices2 = aKeyFrame1.getNumFaces() * 3;
+    const size_t numIndices  = numIndices2;
+    const size_t indicesNewSize = numIndices * sizeof(uint);
+
+    ////////////////////////////////////////////////////////////
+    //cleanup
+    ////////////////////////////////////////////////////////////
+    MemoryManager::allocateMappedDeviceArray(
+        (void**)&aArray.indicesBufferDevicePtr,
+        (void**)&aArray.indicesBufferHostPtr,
+        indicesNewSize,
+        (void**)&aArray.indicesBufferDevicePtr,
+        (void**)&aArray.indicesBufferHostPtr,
+        aArray.indicesBufferSize);
+
+    uint* normalIndicesHost = aArray.indicesBufferHostPtr;
+
+    
+    //////////////////////////////////////////////////////////////////////////
+    //Copy and transfer indices
+    //////////////////////////////////////////////////////////////////////////
+    size_t it = 0;
     for (; it < cudastd::min(numIndices1, numIndices2); ++it)
     {
         normalIndicesHost[it] = aKeyFrame1.getNormalIndex(it);

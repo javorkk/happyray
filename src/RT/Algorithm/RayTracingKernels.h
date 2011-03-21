@@ -26,14 +26,14 @@
     RENDERTHREADSX * RENDERTHREADSY / WARPSIZE * 2 * sizeof(uint)              \
     /*End Macro*/
 
-DEVICE_NO_INLINE CONSTANT UniformGrid dcGrid;
+//DEVICE_NO_INLINE CONSTANT UniformGrid dcGrid;
 
 template<class tPrimitive, class tRayGenerator, class tRayBuffer,
     class tIntersector>
 GLOBAL void trace(
     PrimitiveArray<tPrimitive>  aPrimitiveArray,
     tRayGenerator               aRayGenerator,
-    //UniformGrid                 dcGrid,
+    UniformGrid                 dcGrid,
     tRayBuffer                  oBuffer,
     uint                        aNumRays,
     int*                        aGlobalMemoryPtr

@@ -18,7 +18,8 @@ template<
     class tMaterialStorage,
     class tInputBuffer >
 GLOBAL void simpleShade(
-        PrimitiveArray<tPrimitive>     aStorage,
+        PrimitiveArray<tPrimitive>      aStorage,
+        PrimitiveAttributeArray<tPrimitive, float3>      aNormalStorage,
         tInputBuffer                    aInputBuffer,
         FrameBuffer                     oFrameBuffer,
         const int                       aImageId,
@@ -67,10 +68,11 @@ GLOBAL void simpleShade(
             //float u = len(n0) * twiceSabc_RCP;
             //float v = len(n1) * twiceSabc_RCP;
 
-            //tPrimitive normals = aStorage.getVertexNormals(bestHit);
-            //float3& normal0 = normals.vtx[0];
-            //float3& normal1 = normals.vtx[1];
-            //float3& normal2 = normals.vtx[2];
+            //AttribStruct<tPrimitive, float3> normals;
+            //normals = aNormalStorage[bestHit];
+            //float3& normal0 = normals.data[0];
+            //float3& normal1 = normals.data[1];
+            //float3& normal2 = normals.data[2];
 
             //float3 normal = ~(u * normal0 + v * normal1 +
             //    (1.f - u - v) * normal2);
@@ -148,13 +150,13 @@ public:
         dim3 blockGridTrace  ( RENDERBLOCKSX, RENDERBLOCKSY );
 
         rayBuffer.setMemPtr(mGlobalMemoryPtr + 1);
-        MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcGrid", &aAccStruct, sizeof(UniformGrid)) );
+        //MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcGrid", &aAccStruct, sizeof(UniformGrid)) );
 
         trace<tPrimitive, t_PrimaryRayGenerator, t_RayBuffer, tPrimaryIntersector >
             <<< blockGridTrace, threadBlockTrace, sharedMemoryTrace>>>(
             aStorage,
             aRayGenerator,
-            //aAccStruct,
+            aAccStruct,
             rayBuffer,
             numRays,
             mGlobalMemoryPtr);
@@ -163,9 +165,10 @@ public:
     }
 
     HOST void shade(
-        PrimitiveArray<tPrimitive>&     aStorage,
-        FrameBuffer&                    aFrameBuffer,
-        const int                       aImageId
+        PrimitiveArray<tPrimitive>&                     aStorage,
+        PrimitiveAttributeArray<tPrimitive, float3>     aNormalStorage,
+        FrameBuffer&                                    aFrameBuffer,
+        const int                                       aImageId
         )
     {
         const uint sharedMemoryShade =
@@ -183,6 +186,7 @@ public:
             t_RayBuffer>
             <<< blockGridShade, threadBlockShade, sharedMemoryShade>>>(
             aStorage,
+            aNormalStorage,
             rayBuffer,
             aFrameBuffer,
             aImageId,
@@ -197,17 +201,18 @@ public:
     }
     
     HOST void integrate(
-        PrimitiveArray<tPrimitive>&     aStorage,
-        t_AccelerationStructure&        aAccStruct,
-        t_PrimaryRayGenerator&          aRayGenerator,
-        FrameBuffer&                    aFrameBuffer,
-        const int                       aImageId
+        PrimitiveArray<tPrimitive>&                     aStorage,
+        PrimitiveAttributeArray<tPrimitive, float3>     aNormalStorage,
+        t_AccelerationStructure&                        aAccStruct,
+        t_PrimaryRayGenerator&                          aRayGenerator,
+        FrameBuffer&                                    aFrameBuffer,
+        const int                                       aImageId
         )
     {
 
         tracePrimary(aStorage, aAccStruct, aRayGenerator, aFrameBuffer);
 
-        shade(aStorage, aFrameBuffer, aImageId);
+        shade(aStorage, aNormalStorage, aFrameBuffer, aImageId);
 
         cleanup();
     }

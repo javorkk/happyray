@@ -100,7 +100,7 @@ public:
             aMemoryManager.getCellSizeRCP(),
             aMemoryManager.refCountsBuffer);
 
-        MY_CUT_CHECK_ERROR("Kernel Execution failed.\n");
+        MY_CUT_CHECK_ERROR("Counting primitive-cell pairs failed.\n");
 
         cudaEventRecord(mRefCount, 0);
         cudaEventSynchronize(mRefCount);
@@ -153,7 +153,7 @@ public:
             aMemoryManager.getCellSize(),
             aMemoryManager.getCellSizeRCP());
 
-        MY_CUT_CHECK_ERROR("Kernel Execution failed.\n");
+        MY_CUT_CHECK_ERROR("Writing primitive-cell pairs failed.\n");
 
         cudaEventRecord(mWritePairs, 0);
         cudaEventSynchronize(mWritePairs);
@@ -166,8 +166,62 @@ public:
         Sort radixSort;
         radixSort((uint2*)aMemoryManager.pairsBuffer, (uint2*)aMemoryManager.pairsPingBuffer, numPairs, numBits);
 
+        MY_CUT_CHECK_ERROR("Sorting primitive-cell pairs failed.\n");
+
         cudaEventRecord(mSort, 0);
         cudaEventSynchronize(mSort);
+
+        ////////////////////////////////////////////////////////////////////////////
+        //DEBUG
+        //uint* pairsBufferHost;
+        //MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&pairsBufferHost, numPairs * sizeof(uint2)));
+
+        //MY_CUDA_SAFE_CALL( cudaMemcpy( pairsBufferHost, aMemoryManager.pairsBuffer, numPairs * sizeof(uint2),  cudaMemcpyDeviceToHost));
+
+        //uint2* cellsOnHost;
+        //MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&cellsOnHost, (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ * sizeof(uint2)));
+        //for(uint k = 0; k < (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ; ++k)
+        //{
+        //    cellsOnHost[k] = make_uint2(0u, 0u);
+        //}
+
+        //for(uint bla = 0; bla < numPairs; bla += 1)
+        //{
+        //    if (pairsBufferHost[2 * bla] > (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ)
+        //    {
+        //        cudastd::logger::out << "( " << pairsBufferHost[2 * bla] << "," << 
+        //            pairsBufferHost[2 * bla + 1]<< " ) ";
+        //        cudastd::logger::out << "\n";
+        //    }
+
+        //    if (bla < numPairs - 1  && pairsBufferHost[2 * bla] != pairsBufferHost[2 * bla + 2])
+        //    {
+        //        //cudastd::logger::out << "( " << pairsBufferHost[2 * bla] << "," << 
+        //        //    pairsBufferHost[2 * bla + 1]<< " ) ";
+        //        //cudastd::logger::out << "( " << pairsBufferHost[2 * bla + 2] << "," << 
+        //        //    pairsBufferHost[2 * bla + 3]<< " ) ";
+        //        //cudastd::logger::out << "\n";
+
+        //        cellsOnHost[pairsBufferHost[2 * bla]].y = bla + 1;
+        //        //cellsOnHost[tmpIndicesHost[2 * bla + 2]].x = bla + 1;
+        //    }
+
+        //    if (bla > 0 && pairsBufferHost[2 * bla - 2] != pairsBufferHost[2 * bla])
+        //    {
+        //        //cudastd::logger::out << "( " << pairsBufferHost[2 * bla - 2] << "," << 
+        //        //    pairsBufferHost[2 * bla - 1]<< " ) ";
+        //        //cudastd::logger::out << "( " << pairsBufferHost[2 * bla] << "," << 
+        //        //    pairsBufferHost[2 * bla + 1]<< " ) ";
+        //        //cudastd::logger::out << "\n";
+
+        //        //cellsOnHost[pairsBufferHost[2 * bla - 2]].y = bla;
+        //        cellsOnHost[pairsBufferHost[2 * bla]].x = bla;
+        //    }
+        //}
+        ////set second elem of last pair
+        //cellsOnHost[pairsBufferHost[2 * numPairs - 2]].y = numPairs;
+        ////////////////////////////////////////////////////////////////////////////
+
 
         aMemoryManager.allocatePrimitiveIndicesBuffer(numPairs);
 
@@ -185,7 +239,41 @@ public:
             static_cast<uint>(aMemoryManager.resZ)
             );
 
-        MY_CUT_CHECK_ERROR("Kernel Execution failed.\n");
+        MY_CUT_CHECK_ERROR("Setting up grid cells failed.\n");
+
+        ////////////////////////////////////////////////////////////////////////////
+        //DEBUG
+        //dim3 blockChkCells(aMemoryManager.resX);
+        //dim3 gridChkCells(aMemoryManager.resY, aMemoryManager.resZ);
+
+        //cudastd::logger::out << aMemoryManager.resX << " " << aMemoryManager.resY << " " << aMemoryManager.resZ << "\n";
+
+        //checkGridCells<<< gridPrepRng, blockChkCells >>>
+        //    (aPrimitiveArray,
+        //    aMemoryManager.primitiveIndices,
+        //    aMemoryManager.cellsPtrDevice,
+        //    aMemoryManager.getResolution());
+
+        //MY_CUT_CHECK_ERROR("Checking grid cells failed.\n");
+
+        //aMemoryManager.allocateHostCells();
+        //aMemoryManager.copyCellsDeviceToHost();
+
+        //for(uint k = 0; k < (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ; ++k)
+        //{
+        //    if (cellsOnHost[k].x != ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].x ||
+        //        cellsOnHost[k].y != ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].y)
+        //    {
+        //        cudastd::logger::out << "index : " << k << "\n";
+        //        cudastd::logger::out << "h( " << cellsOnHost[k].x << "," << cellsOnHost[k].y << " ) ";
+        //        cudastd::logger::out << "d( " << ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].x << "," << 
+        //            ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].y << " ) ";
+        //        cudastd::logger::out << "\n";
+        //    }
+        //    
+        //}
+        ////////////////////////////////////////////////////////////////////////////
+
 
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mEnd, 0);

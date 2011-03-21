@@ -279,6 +279,7 @@ GLOBAL void prepareCellRanges(
 template<class tPrimitive, template<class> class tPrimitiveArray>
 GLOBAL void checkGridCells(
                     tPrimitiveArray<tPrimitive>     aPrimitives,
+                    uint*                           aPrimitiveIndexIndirection,
                     cudaPitchedPtr                  aGridCellsPtr,
                     const float3                     aGridRes)
 {
@@ -291,7 +292,7 @@ GLOBAL void checkGridCells(
 
     for(uint it = cellRange.x; it != cellRange.y; ++ it)
     {
-        tPrimitive prim = aPrimitives[it];
+        tPrimitive prim = aPrimitives[aPrimitiveIndexIndirection[it]];
     }
 
     cellRange.x = aGridCellsPtr.pitch / sizeof(uint2);
