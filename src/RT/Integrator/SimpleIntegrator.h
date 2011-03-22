@@ -48,41 +48,41 @@ GLOBAL void simpleShade(
         float3 oRadiance;
         if (rayT < FLT_MAX)
         {
-            oRadiance = rep(rayT);
-            //tPrimitive prim = aStorage[bestHit];
-            //float3& vert0 = prim.vtx[0];
-            //float3& vert1 = prim.vtx[1];
-            //float3& vert2 = prim.vtx[2];
+            //oRadiance = rep(rayT);
+            tPrimitive prim = aStorage[bestHit];
+            float3& vert0 = prim.vtx[0];
+            float3& vert1 = prim.vtx[1];
+            float3& vert2 = prim.vtx[2];
 
-            //float3 realNormal = (vert1 - vert0) % (vert2 - vert0);
+            float3 realNormal = (vert1 - vert0) % (vert2 - vert0);
 
-            ////Compute barycentric coordinates
-            //vert0 = vert0 - rayOrg[threadId1D()];
-            //vert1 = vert1 - rayOrg[threadId1D()];
-            //vert2 = vert2 - rayOrg[threadId1D()];
+            //Compute barycentric coordinates
+            vert0 = vert0 - rayOrg[threadId1D()];
+            vert1 = vert1 - rayOrg[threadId1D()];
+            vert2 = vert2 - rayOrg[threadId1D()];
 
-            //float3 n0 = vert1 % vert2;
-            //float3 n1 = vert2 % vert0;
+            float3 n0 = vert1 % vert2;
+            float3 n1 = vert2 % vert0;
 
-            //float twiceSabc_RCP = lenRCP(realNormal);
-            //float u = len(n0) * twiceSabc_RCP;
-            //float v = len(n1) * twiceSabc_RCP;
+            float twiceSabc_RCP = lenRCP(realNormal);
+            float u = len(n0) * twiceSabc_RCP;
+            float v = len(n1) * twiceSabc_RCP;
 
-            //AttribStruct<tPrimitive, float3> normals;
-            //normals = aNormalStorage[bestHit];
-            //float3& normal0 = normals.data[0];
-            //float3& normal1 = normals.data[1];
-            //float3& normal2 = normals.data[2];
+            AttribStruct<tPrimitive, float3> normals;
+            normals = aNormalStorage[bestHit];
+            float3& normal0 = normals.data[0];
+            float3& normal1 = normals.data[1];
+            float3& normal2 = normals.data[2];
 
-            //float3 normal = ~(u * normal0 + v * normal1 +
-            //    (1.f - u - v) * normal2);
+            float3 normal = ~(u * normal0 + v * normal1 +
+                (1.f - u - v) * normal2);
 
-            //float3 diffReflectance;
-            //diffReflectance.x = u;
-            //diffReflectance.y = v;
-            //diffReflectance.z = 1.f - u - v;
+            float3 diffReflectance;
+            diffReflectance.x = u;
+            diffReflectance.y = v;
+            diffReflectance.z = 1.f - u - v;
 
-            //oRadiance =  diffReflectance * fmaxf(0.f, dot(-normal,~rayDir[threadId1D()]));
+            oRadiance =  diffReflectance * fmaxf(0.f, dot(-normal,~rayDir[threadId1D()]));
 
         }
         else

@@ -29,8 +29,8 @@
 //DEVICE_NO_INLINE CONSTANT UniformGrid dcGrid;
 
 template<class tPrimitive, class tRayGenerator, class tRayBuffer,
-    class tIntersector>
-GLOBAL void trace(
+class tIntersector>
+    GLOBAL void trace(
     PrimitiveArray<tPrimitive>  aPrimitiveArray,
     tRayGenerator               aRayGenerator,
     UniformGrid                 dcGrid,
@@ -70,7 +70,7 @@ GLOBAL void trace(
 
         if (myRayIndex >= aNumRays) //keep whole warp active
         {
-            myRayIndex = aNumRays;
+            myRayIndex = aNumRays - 1;
         }
 
         if (threadId1DInWarp32() == 0)
@@ -90,52 +90,70 @@ GLOBAL void trace(
         float3 rayOrg;
         float3& rayDirRCP = (((float3*)sharedMemNew)[threadId1D32()]);
 
-        float rayT   = aRayGenerator(rayOrg, rayDirRCP, myRayIndex, aNumRays);
+        float rayT  = aRayGenerator(rayOrg, rayDirRCP, myRayIndex, aNumRays);
         rayDirRCP.x = 1.f / rayDirRCP.x;
         rayDirRCP.y = 1.f / rayDirRCP.y;
         rayDirRCP.z = 1.f / rayDirRCP.z;
 
-        uint  bestHit;
+        uint  bestHit = aPrimitiveArray.numPrimitives;
         //////////////////////////////////////////////////////////////////////////
         //Traversal State
+        bool traversalFlag = (rayT >= 0.f) && myRayIndex < aNumRays;
         float3 tMax;
-        float3 cellId;
-        bool traversalFlag = (rayT >= 0.f);
-
-
-        //////////////////////////////////////////////////////////////////////////
-        //ray/box intersection test
-        float tEntry, tExit;
-        BBox bounds = BBoxExtractor<UniformGrid>::get(dcGrid);
-        bounds.fastClip(rayOrg, rayDirRCP, tEntry, tExit);
-
-        traversalFlag = traversalFlag && (tExit > tEntry && tExit > 0.f);
-        //end ray/box intersection test
+        int cellId[3];
         //////////////////////////////////////////////////////////////////////////
 
-        const float3 entryPt = (tEntry >= 0.f) ?
-            rayOrg + rep(tEntry + EPS) / rayDirRCP : rayOrg;
+        if (traversalFlag)
+        {
+            //////////////////////////////////////////////////////////////////////////
+            //ray/box intersection test
+            const float3 t1 = (dcGrid.vtx[0] - rayOrg) * rayDirRCP;
+            float3 tFar = (dcGrid.vtx[1] - rayOrg) * rayDirRCP;
 
-        cellId = 
-            (entryPt - dcGrid.vtx[0]) * dcGrid.getCellSizeRCP();
+            const float3 tNear = min(t1, tFar);
+            tFar = max(t1, tFar);
 
-        cellId.x = floorf(cellId.x);
-        cellId.y = floorf(cellId.y);
-        cellId.z = floorf(cellId.z);
+            const float tEntry = fmaxf(fmaxf(tNear.x, tNear.y), tNear.z);
+            const float tExit = fminf(fminf(tFar.x, tFar.y), tFar.z);
 
-        float3 tmp;
-        tmp.x = (rayDirRCP.x > 0.f) ? 1.f : 0.f;
-        tmp.y = (rayDirRCP.y > 0.f) ? 1.f : 0.f;
-        tmp.z = (rayDirRCP.z > 0.f) ? 1.f : 0.f;
+            //BBox bounds = BBoxExtractor<UniformGrid>::get(dcGrid);
+            //bounds.fastClip(rayOrg, rayDirRCP, tEntry, tExit);
 
-        tMax = ((cellId + tmp) * dcGrid.getCellSize() + dcGrid.vtx[0] - rayOrg) * rayDirRCP;
+            traversalFlag = traversalFlag && (tExit > tEntry && tExit >= 0.f);
+            //end ray/box intersection test
+            //////////////////////////////////////////////////////////////////////////
 
-        traversalFlag = traversalFlag && (  
-            (cellId.x != ((rayDirRCP.x > 0.f) ? dcGrid.res[0] : -1)) 
-            &&  (cellId.y != ((rayDirRCP.y > 0.f) ? dcGrid.res[1] : -1))
-            &&  (cellId.z != ((rayDirRCP.z > 0.f) ? dcGrid.res[2] : -1)) 
-            );
+            const float3 entryPt = (tEntry >= 0.f) ?
+                rayOrg + rep(tEntry + EPS) / rayDirRCP : rayOrg;
 
+            float3 cellIdf = 
+                (entryPt - dcGrid.vtx[0]) * dcGrid.getCellSizeRCP();
+
+            cellIdf.x = floorf(cellIdf.x);
+            cellIdf.y = floorf(cellIdf.y);
+            cellIdf.z = floorf(cellIdf.z);
+
+            float3 tmp;
+            tmp.x = (rayDirRCP.x > 0.f) ? 1.f : 0.f;
+            tmp.y = (rayDirRCP.y > 0.f) ? 1.f : 0.f;
+            tmp.z = (rayDirRCP.z > 0.f) ? 1.f : 0.f;
+
+            tMax = ((cellIdf + tmp) * dcGrid.getCellSize() + dcGrid.vtx[0] - rayOrg) * rayDirRCP;
+
+            cellId[0] = static_cast<int>(cellIdf.x);
+            cellId[1] = static_cast<int>(cellIdf.y);
+            cellId[2] = static_cast<int>(cellIdf.z);
+
+            traversalFlag = traversalFlag && (  
+                    (cellId[0] != ((rayDirRCP.x > 0.f) ? dcGrid.res[0] : -1)) 
+                &&  (cellId[1] != ((rayDirRCP.y > 0.f) ? dcGrid.res[1] : -1))
+                &&  (cellId[2] != ((rayDirRCP.z > 0.f) ? dcGrid.res[2] : -1)) 
+                );
+
+            //if(traversalFlag) rayT = 0.1f;//(cellId.x + cellId.y + cellId.z) / (dcGrid.res[0] + dcGrid.res[1] + dcGrid.res[2]);
+            //else rayT = 0.9f;
+            //traversalFlag = false;
+        }
         //////////////////////////////////////////////////////////////////////////
         //Traversal loop
         while (ANY(traversalFlag))
@@ -144,12 +162,9 @@ GLOBAL void trace(
 
             if (traversalFlag)
             {
-                cellRange =
-                    dcGrid.getCell(
-                    static_cast<uint>(cellId.x),
-                    static_cast<uint>(cellId.y),
-                    static_cast<uint>(cellId.z)
-                    );
+                cellRange = //make_uint2(0u, 0u);
+                    dcGrid.getCell(cellId[0], cellId[1], cellId[2]);
+                //cellRange =  make_uint2(0u, 0u);
             }
 
             intersector(rayOrg, rayDirRCP, rayT, bestHit,
@@ -169,18 +184,41 @@ GLOBAL void trace(
     (aX < aY) ? ((aX < aZ) ? 0 : 2)	: ((aY < aZ) ? 1 : 2)
 
                 const int tMinDimension =
-                    MIN_DIMENSION(toPtr(tMax)[0], toPtr(tMax)[1], toPtr(tMax)[2]);
+                    MIN_DIMENSION(tMax.x, tMax.y, tMax.z);
 
 #undef  MIN_DIMENSION
+                //if(tMinDimension == 0)
+                //{
+                //    cellId.x += (rayDirRCP.x > 0.f) ? 1.f : -1.f;
+                //    tMax.x += dcGrid.getCellSize().x * fabsf(rayDirRCP.x);
+                //    traversalFlag = (count-- == 0u) && traversalFlag &&
+                //        (fabsf(cellId.x  - (float)dcGrid.res[tMinDimension]) > 0.1f 
+                //        && fabsf(cellId.x + 1.f) > 0.1f);
+                //}
+                //else if (tMinDimension == 1)
+                //{
+                //    cellId.y += (rayDirRCP.y > 0.f) ? 1.f : -1.f;
+                //    tMax.y += dcGrid.getCellSize().y * fabsf(rayDirRCP.y);
+                //    traversalFlag = (count-- == 0u) && traversalFlag &&
+                //        (fabsf(cellId.y  - (float)dcGrid.res[tMinDimension]) > 0.1f 
+                //        && fabsf(cellId.y + 1.f) > 0.1f);
+                //}
+                //else
+                //{
+                //    cellId.z += (rayDirRCP.z > 0.f) ? 1.f : -1.f;
+                //    tMax.z += dcGrid.getCellSize().z * fabsf(rayDirRCP.z);
+                //    traversalFlag = (count-- == 0u) && traversalFlag &&
+                //        (fabsf(cellId.z  - (float)dcGrid.res[tMinDimension]) > 0.1f 
+                //        && fabsf(cellId.z + 1.f) > 0.1f);
+                //}
 
-                toPtr(cellId)[tMinDimension] += (toPtr(rayDirRCP)[tMinDimension] > 0.f) ? 1.f : -1.f;
+                cellId[tMinDimension] += (toPtr(rayDirRCP)[tMinDimension] > 0.f) ? 1 : -1;
                 toPtr(tMax)[tMinDimension] += toPtr(dcGrid.getCellSize())[tMinDimension] * 
                     fabsf(toPtr(rayDirRCP)[tMinDimension]);
 
-
                 traversalFlag = traversalFlag &&
-                    !(fabsf(toPtr(cellId)[tMinDimension]  - (float)dcGrid.res[tMinDimension]) < 0.1f 
-                    || fabsf(toPtr(cellId)[tMinDimension] + 1.f) < 0.1f);
+                    cellId[tMinDimension] != dcGrid.res[tMinDimension]
+                    && cellId[tMinDimension] != -1;
                 //////////////////////////////////////////////////////////////////////////
             }
         }

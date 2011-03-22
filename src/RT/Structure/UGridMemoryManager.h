@@ -87,7 +87,6 @@ struct UniformGridMemoryManager
         retval.cellSizeRCP = getCellSizeRCP();
         retval.cells = cellsPtrDevice;
         retval.primitives = primitiveIndices;
-
         return retval;
     }
 
@@ -95,11 +94,62 @@ struct UniformGridMemoryManager
 
     HOST void copyCellsHostToDevice();
 
-    HOST void bindDeviceDataToTexture();
+    HOST void bindDeviceDataToTexture()
+    {
+        cudaChannelFormatDesc chanelFormatDesc = cudaCreateChannelDesc<uint2>();
+        cudaExtent res = make_cudaExtent(resX, resY, resZ);
+        MY_CUDA_SAFE_CALL( cudaMalloc3DArray(&cellArray, &chanelFormatDesc, res) );
 
-    HOST void reBindDeviceDataToTexture(cudaStream_t& aStream);
+        cudaMemcpy3DParms cpyParams = { 0 };
+        cpyParams.srcPtr    = cellsPtrDevice;
+        cpyParams.dstArray  = cellArray;
+        cpyParams.extent    = res;
+        cpyParams.kind      = cudaMemcpyDeviceToDevice;
 
-    HOST void bindHostDataToTexture();
+
+        MY_CUDA_SAFE_CALL( cudaMemcpy3D(&cpyParams) );
+
+        MY_CUDA_SAFE_CALL( cudaBindTextureToArray(texGridCells, cellArray, chanelFormatDesc) );
+    }
+
+    HOST void reBindDeviceDataToTexture(cudaStream_t& aStream)
+    {
+        MY_CUDA_SAFE_CALL( cudaFreeArray(cellArray) );
+        MY_CUDA_SAFE_CALL( cudaUnbindTexture(texGridCells) );
+
+        cudaChannelFormatDesc chanelFormatDesc = cudaCreateChannelDesc<uint2>();
+        cudaExtent res = make_cudaExtent(resX, resY, resZ);
+        MY_CUDA_SAFE_CALL( cudaMalloc3DArray(&cellArray, &chanelFormatDesc, res) );
+
+        cudaMemcpy3DParms cpyParams = { 0 };
+        cpyParams.srcPtr    = cellsPtrDevice;
+        cpyParams.dstArray  = cellArray;
+        cpyParams.extent    = res;
+        cpyParams.kind      = cudaMemcpyDeviceToDevice;
+
+
+        MY_CUDA_SAFE_CALL( cudaMemcpy3DAsync(&cpyParams, aStream) );
+
+        MY_CUDA_SAFE_CALL( cudaBindTextureToArray(texGridCells, cellArray, chanelFormatDesc) );
+    }
+
+    HOST void bindHostDataToTexture()
+    {
+        cudaChannelFormatDesc chanelFormatDesc = cudaCreateChannelDesc<uint2>();
+        cudaExtent res = make_cudaExtent(resX, resY, resZ);
+        MY_CUDA_SAFE_CALL( cudaMalloc3DArray(&cellArray, &chanelFormatDesc, res) );
+
+        cudaMemcpy3DParms cpyParams = { 0 };
+        cpyParams.srcPtr    = cellsPtrHost;
+        cpyParams.dstArray  = cellArray;
+        cpyParams.extent    = res;
+        cpyParams.kind      = cudaMemcpyHostToDevice;
+
+        MY_CUDA_SAFE_CALL( cudaMemcpy3D(&cpyParams) );
+
+        MY_CUDA_SAFE_CALL( cudaBindTextureToArray(texGridCells, cellArray, chanelFormatDesc) );
+    }
+
 
     //////////////////////////////////////////////////////////////////////////
     //memory allocation

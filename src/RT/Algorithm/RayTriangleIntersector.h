@@ -10,6 +10,8 @@
 #include "RT/Primitive/Triangle.hpp"
 #include "RT/Structure/PrimitiveArray.h"
 
+#define INTERSECTION_EPS 0.00001f
+
 class MollerTrumboreIntersectionTest
 {
 public:
@@ -24,8 +26,13 @@ public:
         uint*                               aDummy
 ) const
     {
-        for (uint it = aIdRange.x; it != aIdRange.y; ++ it)
+        for (uint it = aIdRange.x; it < aIdRange.y; ++ it)
         {
+            if(it >= 104444u)
+                continue;
+            if(aIndexIndirection[it] >= aTriangleArray.numPrimitives)
+                continue;
+
             Triangle tri = aTriangleArray[aIndexIndirection[it]];
             float3& org   = tri.vtx[0];
             float3& edge1 = tri.vtx[1];
@@ -34,7 +41,7 @@ public:
             edge1 = edge1 - org;
             edge2 = edge2 - org;
 
-            float3 rayDir;
+            float3 rayDir =
             rayDir = fastDivide(rep(1.f), aRayDirRCP);
 
 
@@ -55,10 +62,10 @@ public:
 
             float dist  = detRCP * dot(edge2, tvec);
 
-            if (alpha >= 0.f        &&
-                beta >= 0.f         &&
-                alpha + beta <= 1.f &&
-                dist > EPS          &&
+            if (alpha >= 0.f            &&
+                beta >= 0.f             &&
+                alpha + beta <= 1.f     &&
+                dist > INTERSECTION_EPS &&
                 dist < oRayT)
             {
                 oRayT  = dist;
@@ -67,5 +74,7 @@ public:
         }//end for all intersection candidates
     }//end operator()
 };
+
+#undef INTERSECTION_EPS
 
 #endif // RAYTRIANGLEINTERSECTOR_H_81C76214_B137_402A_8609_0234EC809946

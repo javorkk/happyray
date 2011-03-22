@@ -303,15 +303,13 @@ void SDLGLApplication::MouseMoved		(const int& iButton,
 {
     if(mUpdateMouseCoords)
     {
-        mMouseX = iX;
-        mMouseY = iY;
-
+        SDL_GetRelativeMouseState(&mMouseX, &mMouseY);
         mUpdateMouseCoords = false;
     }
     else
     {
-        mMouseX += iRelX;
-        mMouseY += iRelY;
+        int x,y;
+        SDL_GetRelativeMouseState(&x, &y);
     }
 
     if (mHasMouse)
@@ -349,8 +347,6 @@ void SDLGLApplication::MouseButtonUp	(const int& iButton,
         else
         {
             mHasMouse = true;
-            mMouseX = iX;
-            mMouseY = iY;
             grabMouse();
         }
         break;
@@ -367,16 +363,18 @@ void SDLGLApplication::MouseButtonUp	(const int& iButton,
 
 void SDLGLApplication::grabMouse()
 {
-    SDL_ShowCursor(0);
-    SDL_WM_GrabInput(SDL_GRAB_ON);
+    SDL_SetRelativeMouseMode(SDL_TRUE);
+    //SDL_SelectMouse();
+    //SDL_ShowCursor(0);
+    int x, y;
+    SDL_GetRelativeMouseState(&x, &y);
     mUpdateMouseCoords = true;
 
 }
 
 void SDLGLApplication::releaseMouse()
 {
-    SDL_WM_GrabInput(SDL_GRAB_OFF);
-    SDL_ShowCursor(1);
+    SDL_SetRelativeMouseMode(SDL_FALSE);
     mUpdateMouseCoords = true;
 
 }
@@ -726,7 +724,7 @@ void SDLGLApplication::displayFrame()
         windowName += itoa(mNumImages);
 
 
-        SDL_WM_SetCaption(windowName.c_str(), "");
+        SDL_SetWindowTitle(mainwindow, windowName.c_str());
         
         runGLSLShader();
     }
@@ -905,10 +903,10 @@ void SDLGLApplication::runGLSLShader(void)
 
     const GLfloat texCoords[4][2] =
     {
-        {0.f, 0.f},
-        {1.f, 0.f},
+        {0.f, 1.f},
         {1.f, 1.f},
-        {0.f, 1.f}
+        {1.f, 0.f},
+        {0.f, 0.f}
     };
 
     const GLuint indices[6] = {0,1,2,0,3,2};

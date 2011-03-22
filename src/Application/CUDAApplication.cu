@@ -21,6 +21,7 @@
 */
 /****************************************************************************/
 #include "CUDAStdAfx.h"
+#include "Textures.h"
 #include "Application/CUDAApplication.h"
 #include "RT/RTEngine.h"
 #include "RT/Structure/FrameBuffer.h"

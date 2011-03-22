@@ -6,6 +6,7 @@
 #define UNIFORMGRID_H_C8280ED1_0974_408A_BD7C_9A509CA1C1DB
 
 #include "CUDAStdAfx.h"
+#include "Textures.h"
 #include "RT/Primitive/Primitive.hpp"
 #include "RT/Primitive/BBox.hpp"
 
@@ -41,11 +42,13 @@ public:
         //return fastDivide(getResolution(), vtx[1] - vtx[0]);
     }
 
-    DEVICE uint2 getCell(uint aIdX, uint aIdY, uint aIdZ)
+    DEVICE uint2 getCell(int aIdX, int aIdY, int aIdZ)
     {
         return *((uint2*)((char*)cells.ptr
             + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX);
-    }
+        //return tex3D(texGridCells, aIdX, 
+        //             aIdY,  aIdZ);
+    } 
 
     DEVICE uint getPrimitiveId(uint aId)
     {

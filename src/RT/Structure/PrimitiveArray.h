@@ -24,14 +24,6 @@ public:
     uint*  indicesBufferHostPtr;
     size_t indicesBufferSize;
 
-    //float3* normalBufferDevicePtr;
-    //float3* normalBufferHostPtr;
-    //size_t  normalBufferSize;
-
-    //uint*  normalIndicesBufferDevicePtr;
-    //uint*  normalIndicesBufferHostPtr;
-    //size_t normalIndicesBufferSize;
-
     size_t numPrimitives;
 
     HOST PrimitiveArray():
@@ -41,12 +33,6 @@ public:
         indicesBufferDevicePtr(NULL),
         indicesBufferHostPtr  (NULL),
         indicesBufferSize(0u),
-        //normalBufferDevicePtr(NULL),
-        //normalBufferHostPtr  (NULL),
-        //normalBufferSize(0u),
-        //normalIndicesBufferDevicePtr(NULL),
-        //normalIndicesBufferHostPtr  (NULL),
-        //normalIndicesBufferSize(0u),
         numPrimitives(0u)
     {}
 
@@ -57,28 +43,16 @@ public:
             MY_CUDA_SAFE_CALL( cudaFreeHost(vertexBufferHostPtr) );
         if(indicesBufferHostPtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
-        //if(normalBufferHostPtr != NULL)
-        //    MY_CUDA_SAFE_CALL( cudaFreeHost(normalBufferHostPtr) );
-        //if(normalIndicesBufferHostPtr != NULL)
-        //    MY_CUDA_SAFE_CALL( cudaFreeHost(normalIndicesBufferHostPtr) );
 #else
         if(vertexBufferHostPtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFreeHost(vertexBufferHostPtr) );
         if(indicesBufferHostPtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
-        //if(normalBufferHostPtr != NULL)
-        //    MY_CUDA_SAFE_CALL( cudaFreeHost(normalBufferHostPtr) );
-        //if(normalIndicesBufferHostPtr != NULL)
-        //    MY_CUDA_SAFE_CALL( cudaFreeHost(normalIndicesBufferHostPtr) );
 
         if(vertexBufferDevicePtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFree(vertexBufferDevicePtr) );
         if(indicesBufferDevicePtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFree(indicesBufferDevicePtr) );
-        //if(normalBufferDevicePtr != NULL)
-        //    MY_CUDA_SAFE_CALL( cudaFree(normalBufferDevicePtr) );
-        //if(normalIndicesBufferDevicePtr != NULL)
-        //    MY_CUDA_SAFE_CALL( cudaFree(normalIndicesBufferDevicePtr) );
 #endif
     }
 
@@ -128,8 +102,8 @@ public:
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-            indices[i] = tex1Dfetch(texVertexIndices, aIndex * tPrimitive::NUM_VERTICES + i);
-            //indices[i] = indicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i];
+            //indices[i] = tex1Dfetch(texVertexIndices, aIndex * tPrimitive::NUM_VERTICES + i);
+            indices[i] = indicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i];
         }
 
         tPrimitive result;
@@ -137,8 +111,8 @@ public:
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-             float4 tmp = tex1Dfetch(texVertices, indices[i]);
-             //float4 tmp = vertexBufferDevicePtr[indices[i]];
+             //float4 tmp = tex1Dfetch(texVertices, indices[i]);
+             float4 tmp = vertexBufferDevicePtr[indices[i]];
              result.vtx[i].x = tmp.x;
              result.vtx[i].y = tmp.y;
              result.vtx[i].z = tmp.z;
@@ -146,28 +120,6 @@ public:
 
         return result;
     }
-
-    //The normals are stored in the vertex array of the returned primitive
-//    DEVICE tPrimitive getVertexNormals(uint aIndex)
-//    {
-//        uint indices[tPrimitive::NUM_VERTICES];
-//
-//#pragma unroll 3
-//        for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
-//        {
-//            indices[i] = normalIndicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i]; 
-//        }
-//
-//        tPrimitive result;
-//
-//#pragma unroll 3
-//        for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
-//        {
-//            result.vtx[i] = normalBufferDevicePtr[indices[i]];
-//        }
-//
-//        return result;
-//    }
 
 };//class Primitive Array
 
@@ -268,39 +220,37 @@ public:
 class ObjUploader
 {
 public:
-    //Vertex coordinates
-    HOST void uploadObjFrameVertexData(
-        const WFObject& aKeyFrame1,
-        const WFObject& aKeyFrame2,
-        const float     aCoeff,
-        float3&         oMinBound,
-        float3&         oMaxBound,
-        PrimitiveArray<Primitive<3> >& aArray
-        );
-    //Normal coordinates
-    HOST void uploadObjFrameNormalData(
-        const WFObject& aKeyFrame1,
-        const WFObject& aKeyFrame2,
-        const float     aCoeff,
-        PrimitiveAttributeArray<Primitive<3>, float3 >& aArray
-        );
+    ////Vertex coordinates
+    //HOST void uploadObjFrameVertexData(
+    //    const WFObject& aKeyFrame1,
+    //    const WFObject& aKeyFrame2,
+    //    const float     aCoeff,
+    //    float3&         oMinBound,
+    //    float3&         oMaxBound,
+    //    PrimitiveArray<Primitive<3> >& aArray
+    //    );
+    ////Normal coordinates
+    //HOST void uploadObjFrameNormalData(
+    //    const WFObject& aKeyFrame1,
+    //    const WFObject& aKeyFrame2,
+    //    const float     aCoeff,
+    //    PrimitiveAttributeArray<Primitive<3>, float3 >& aArray
+    //    );
 
-    //Vertex indices
-    HOST void uploadObjFrameVertexIndexData(
-        const WFObject& aKeyFrame1,
-        const WFObject& aKeyFrame2,
-        PrimitiveArray<Primitive<3> >& aArray
-        );
+    ////Vertex indices
+    //HOST void uploadObjFrameVertexIndexData(
+    //    const WFObject& aKeyFrame1,
+    //    const WFObject& aKeyFrame2,
+    //    PrimitiveArray<Primitive<3> >& aArray
+    //    );
 
-    //Normal indices
-    HOST void uploadObjFrameNormalIndexData(
-        const WFObject& aKeyFrame1,
-        const WFObject& aKeyFrame2,
-        PrimitiveAttributeArray<Primitive<3>, float3 >& aArray
-        );
-};//class ObjUploader
-
-HOST void ObjUploader::uploadObjFrameVertexData(
+    ////Normal indices
+    //HOST void uploadObjFrameNormalIndexData(
+    //    const WFObject& aKeyFrame1,
+    //    const WFObject& aKeyFrame2,
+    //    PrimitiveAttributeArray<Primitive<3>, float3 >& aArray
+    //    );
+    HOST void ObjUploader::uploadObjFrameVertexData(
     const WFObject& aKeyFrame1,
     const WFObject& aKeyFrame2,
     const float     aCoeff,
@@ -488,5 +438,8 @@ HOST void ObjUploader::uploadObjFrameNormalIndexData(
     }
 
 }
+
+};//class ObjUploader
+
 
 #endif // PRIMITIVEARRAY_H_INCLUDED_4D30F730_121F_4E9F_915B_1814410DAEB0

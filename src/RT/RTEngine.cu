@@ -1,4 +1,5 @@
 #include "CUDAStdAfx.h"
+#include "Textures.h"
 #include "RT/RTEngine.h"
 
 #include "RT/Primitive/LightSource.hpp"
@@ -96,7 +97,6 @@ void StaticRTEngine::setCamera(
 
 void StaticRTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId)
 {
-   
     UniformGrid grid = sUGridMemoryManager.getParameters();
 
     if(aImageId < 4)

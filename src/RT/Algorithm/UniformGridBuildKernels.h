@@ -265,7 +265,7 @@ GLOBAL void prepareCellRanges(
 
     SYNCTHREADS;
 
-    //compact triangle indices from aInIndices to the output indices
+    //compact the primitive indices from the sorted pairs to the output indices
     for(int instanceId = globalThreadId1D();
         instanceId < aNumInstances;
         instanceId += numThreads())
@@ -281,7 +281,7 @@ GLOBAL void checkGridCells(
                     tPrimitiveArray<tPrimitive>     aPrimitives,
                     uint*                           aPrimitiveIndexIndirection,
                     cudaPitchedPtr                  aGridCellsPtr,
-                    const float3                     aGridRes)
+                    const float3                    aGridRes)
 {
 
     uint2* cell = (uint2*)((char*)aGridCellsPtr.ptr
@@ -289,13 +289,58 @@ GLOBAL void checkGridCells(
         + blockIdx.y * aGridCellsPtr.pitch * aGridCellsPtr.ysize) + threadIdx.x;
 
     uint2 cellRange = *cell;
+    float3 aRayDirRCP = rep(0.3333f);
+    float3 aRayOrg = rep(0.f);
+    float oRayT = FLT_MAX;
+    uint oBestHit = 0u;
 
-    for(uint it = cellRange.x; it != cellRange.y; ++ it)
+    for(uint it = cellRange.x; it != cellRange.y; ++it)
     {
         tPrimitive prim = aPrimitives[aPrimitiveIndexIndirection[it]];
+        float3& org   = prim.vtx[0];
+        float3& edge1 = prim.vtx[1];
+        float3& edge2 = prim.vtx[2];
+
+        edge1 = edge1 - org;
+        edge2 = edge2 - org;
+
+        float3 rayDir;
+        rayDir = fastDivide(rep(1.f), aRayDirRCP);
+
+
+        float3 pvec      = rayDir % edge2;
+        float detRCP    = 1.f / dot(edge1, pvec);
+
+        //if(fabsf(detRCP) <= EPS_RCP) continue;
+
+        float3 tvec  = aRayOrg - org;
+        float alpha = detRCP * dot(tvec, pvec);
+
+        //if(alpha < 0.f || alpha > 1.f) continue;
+
+        tvec        = tvec % edge1;
+        float beta  = detRCP * dot(tvec, rayDir);
+
+        //if(beta < 0.f || beta + alpha > 1.f) continue;
+
+        float dist  = detRCP * dot(edge2, tvec);
+
+        if (alpha >= 0.f        &&
+            beta >= 0.f         &&
+            alpha + beta <= 1.f &&
+            dist > 0.000001f    &&
+            dist < oRayT)
+        {
+            oRayT  = dist;
+            oBestHit = it;
+        }
+
     }
 
-    cellRange.x = aGridCellsPtr.pitch / sizeof(uint2);
+    if(oBestHit == 0u)
+        cellRange.x = aGridCellsPtr.pitch / sizeof(uint2);
+    else
+        aPrimitiveIndexIndirection[globalThreadId1D()] = 0u;
 }
 
 

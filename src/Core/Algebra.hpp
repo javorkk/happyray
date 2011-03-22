@@ -240,7 +240,7 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
     //Cross product
     DEVICE HOST float3 operator %(const float3& aVec1, const float3& aVec2)
     {
-        return cross(aVec1, aVec1);
+        return cross(aVec1, aVec2);
     }
 
     //A normalized vector: V / |V|
