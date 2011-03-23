@@ -10,6 +10,7 @@
 #include "RT/Structure/FrameBuffer.h"
 #include "RT/Structure/PrimitiveArray.h"
 #include "RT/Structure/RayBuffers.h"
+#include "RT/Structure/MemoryManager.h"
 
 #include "RT/Algorithm/RayTracingKernels.h"
 
@@ -127,24 +128,9 @@ public:
 
     ~SimpleIntegrator()
     {
-        if(mGlobalMemorySize == 0u)
+        if(mGlobalMemorySize != 0u)
         {
             MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
-        }
-
-    }
-
-    HOST void allocateGlobalMemory(size_t aSize)
-    {
-        if(aSize > mGlobalMemorySize)
-        {
-            if(mGlobalMemorySize != 0u)
-            {
-                MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
-            }
-            mGlobalMemorySize = aSize;
-
-            MY_CUDA_SAFE_CALL( cudaMalloc((void**)&mGlobalMemoryPtr, mGlobalMemorySize));
         }
 
     }
@@ -167,7 +153,7 @@ public:
             //gRESX * gRESY * NUMOCCLUSIONSAMPLES * sizeof(float3) + //light vector
             0u;
 
-        allocateGlobalMemory(globalMemorySize);
+        MemoryManager::allocateDeviceArray((void**)&mGlobalMemoryPtr, mGlobalMemorySize);
 
         MY_CUDA_SAFE_CALL( cudaMemset( mGlobalMemoryPtr, 0, sizeof(uint)) );
 
@@ -186,7 +172,7 @@ public:
             numRays,
             mGlobalMemoryPtr);
 
-        MY_CUT_CHECK_ERROR("Kernel Execution failed.\n");
+        MY_CUT_CHECK_ERROR("Tracing primary rays failed!\n");
     }
 
     HOST void shade(
@@ -217,13 +203,10 @@ public:
             aImageId,
             mGlobalMemoryPtr);
 
-        MY_CUT_CHECK_ERROR("Kernel Execution failed.\n");
+        MY_CUT_CHECK_ERROR("Simple shading kernel failed.\n");
     }
 
-    //HOST void cleanup()
-    //{
-    //}
-    
+  
     HOST void integrate(
         PrimitiveArray<tPrimitive>&                     aStorage,
         PrimitiveAttributeArray<tPrimitive, float3>     aNormalStorage,
@@ -233,12 +216,9 @@ public:
         const int                                       aImageId
         )
     {
-
         tracePrimary(aStorage, aAccStruct, aRayGenerator, aFrameBuffer);
 
         shade(aStorage, aNormalStorage, aFrameBuffer, aImageId);
-
-        //cleanup();
     }
 
 };

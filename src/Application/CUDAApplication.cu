@@ -71,6 +71,9 @@ float CUDAApplication::nextFrame()
 
     float oBuildTime;
     cudaEventElapsedTime(&oBuildTime, mStart, mEnd);
+
+    cudaEventDestroy(mStart);
+    cudaEventDestroy(mEnd);
     
     return oBuildTime;
 }
@@ -114,5 +117,8 @@ float CUDAApplication::generateFrame(
     float oRenderTime;
     cudaEventElapsedTime(&oRenderTime, mStart, mEnd);
     
+    cudaEventDestroy(mStart);
+    cudaEventDestroy(mEnd);
+
     return oRenderTime;
 }
