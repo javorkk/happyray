@@ -9,12 +9,18 @@
 #include "Application/WFObject.hpp"
 #include "RT/Structure/FrameBuffer.h"
 
-class StaticRTEngine
+class RTEngine
 {
 public:
 
     static void init();
-    static void upload(const WFObject& aScene);
+    
+    static void upload(
+        const WFObject& aFrame1,
+        const WFObject& aFrame2,
+        const float aCoeff);
+
+    static void buildAccStruct();
     
     static void setCamera(
         const float3& aPosition,

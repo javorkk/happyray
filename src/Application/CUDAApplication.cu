@@ -36,18 +36,47 @@ float               CUDAApplication::sBACKGROUND_B;
 SceneLoader         CUDAApplication::sSceneLoader;
 AnimationManager    CUDAApplication::sAnimationManager;
 AreaLightSource     CUDAApplication::sAreaLightSource;
-StaticRTEngine      gStaticRTEngine;
+RTEngine            gRTEngine;
 FrameBuffer         gFrameBuffer;
 
 void CUDAApplication::initScene()
 {
-        gStaticRTEngine.init();
-        gStaticRTEngine.upload(sAnimationManager.getFrame(0));
+        gRTEngine.init();
+        gRTEngine.upload(sAnimationManager.getFrame(0), sAnimationManager.getFrame(0), 1.f);
+        gRTEngine.buildAccStruct();
+        gFrameBuffer.init(sRESX, sRESY);
+
 }
 
-void CUDAApplication::generateFrame(
-           CameraManager& aView, int& aImageId,
-           float& oRenderTime, float& oBuildTime)
+float CUDAApplication::nextFrame()
+{
+    sAnimationManager.nextFrame();
+    const size_t frameId1 = sAnimationManager.getFrameId();
+    const size_t frameId2 = sAnimationManager.getNextFrameId();
+
+    gRTEngine.upload(
+        sAnimationManager.getFrame(frameId1),
+        sAnimationManager.getFrame(frameId2),
+        sAnimationManager.getInterpolationCoefficient());
+    
+    cudaEvent_t mStart, mEnd;
+    cudaEventCreate(&mStart);
+    cudaEventCreate(&mEnd);
+    cudaEventRecord(mStart, 0);
+
+    gRTEngine.buildAccStruct();
+    
+    cudaEventRecord(mEnd, 0);
+    cudaEventSynchronize(mEnd);
+
+    float oBuildTime;
+    cudaEventElapsedTime(&oBuildTime, mStart, mEnd);
+    
+    return oBuildTime;
+}
+
+float CUDAApplication::generateFrame(
+           CameraManager& aView, int& aImageId)
 {
     if(aView.getResX() != sRESX || aView.getResY() != sRESY)
     {
@@ -60,7 +89,7 @@ void CUDAApplication::generateFrame(
 
     if(aImageId == 0)
     {
-        gStaticRTEngine.setCamera(
+        gRTEngine.setCamera(
             aView.getPosition(),
             aView.getOrientation(),
             aView.getUp(),
@@ -70,10 +99,20 @@ void CUDAApplication::generateFrame(
             );
     }
 
-    gStaticRTEngine.renderFrame(gFrameBuffer, aImageId);
+    cudaEvent_t mStart, mEnd;
+    cudaEventCreate(&mStart);
+    cudaEventCreate(&mEnd);
+    cudaEventRecord(mStart, 0);
+
+    gRTEngine.renderFrame(gFrameBuffer, aImageId);
+
+    cudaEventRecord(mEnd, 0);
+    cudaEventSynchronize(mEnd);
 
     gFrameBuffer.download((float3*)sFrameBufferFloatPtr, sRESX, sRESY);
 
-    oBuildTime = 28.f;
-    oRenderTime = 30.f;
+    float oRenderTime;
+    cudaEventElapsedTime(&oRenderTime, mStart, mEnd);
+    
+    return oRenderTime;
 }

@@ -102,8 +102,8 @@ public:
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-            //indices[i] = tex1Dfetch(texVertexIndices, aIndex * tPrimitive::NUM_VERTICES + i);
-            indices[i] = indicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i];
+            indices[i] = tex1Dfetch(texVertexIndices, aIndex * tPrimitive::NUM_VERTICES + i);
+            //indices[i] = indicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i];
         }
 
         tPrimitive result;
@@ -111,8 +111,8 @@ public:
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-             //float4 tmp = tex1Dfetch(texVertices, indices[i]);
-             float4 tmp = vertexBufferDevicePtr[indices[i]];
+             float4 tmp = tex1Dfetch(texVertices, indices[i]);
+             //float4 tmp = vertexBufferDevicePtr[indices[i]];
              result.vtx[i].x = tmp.x;
              result.vtx[i].y = tmp.y;
              result.vtx[i].z = tmp.z;

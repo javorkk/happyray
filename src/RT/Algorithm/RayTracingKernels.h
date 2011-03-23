@@ -17,7 +17,7 @@
 
 #define RENDERTHREADSX  32
 #define RENDERTHREADSY  4
-#define RENDERBLOCKSX   120
+#define RENDERBLOCKSX   60
 #define RENDERBLOCKSY   1
 #define BATCHSIZE       96
 
@@ -70,7 +70,7 @@ class tIntersector>
 
         if (myRayIndex >= aNumRays) //keep whole warp active
         {
-            myRayIndex = aNumRays - 1;
+            myRayIndex = aNumRays;
         }
 
         if (threadId1DInWarp32() == 0)
@@ -149,10 +149,6 @@ class tIntersector>
                 &&  (cellId[1] != ((rayDirRCP.y > 0.f) ? dcGrid.res[1] : -1))
                 &&  (cellId[2] != ((rayDirRCP.z > 0.f) ? dcGrid.res[2] : -1)) 
                 );
-
-            //if(traversalFlag) rayT = 0.1f;//(cellId.x + cellId.y + cellId.z) / (dcGrid.res[0] + dcGrid.res[1] + dcGrid.res[2]);
-            //else rayT = 0.9f;
-            //traversalFlag = false;
         }
         //////////////////////////////////////////////////////////////////////////
         //Traversal loop
@@ -187,30 +183,6 @@ class tIntersector>
                     MIN_DIMENSION(tMax.x, tMax.y, tMax.z);
 
 #undef  MIN_DIMENSION
-                //if(tMinDimension == 0)
-                //{
-                //    cellId.x += (rayDirRCP.x > 0.f) ? 1.f : -1.f;
-                //    tMax.x += dcGrid.getCellSize().x * fabsf(rayDirRCP.x);
-                //    traversalFlag = (count-- == 0u) && traversalFlag &&
-                //        (fabsf(cellId.x  - (float)dcGrid.res[tMinDimension]) > 0.1f 
-                //        && fabsf(cellId.x + 1.f) > 0.1f);
-                //}
-                //else if (tMinDimension == 1)
-                //{
-                //    cellId.y += (rayDirRCP.y > 0.f) ? 1.f : -1.f;
-                //    tMax.y += dcGrid.getCellSize().y * fabsf(rayDirRCP.y);
-                //    traversalFlag = (count-- == 0u) && traversalFlag &&
-                //        (fabsf(cellId.y  - (float)dcGrid.res[tMinDimension]) > 0.1f 
-                //        && fabsf(cellId.y + 1.f) > 0.1f);
-                //}
-                //else
-                //{
-                //    cellId.z += (rayDirRCP.z > 0.f) ? 1.f : -1.f;
-                //    tMax.z += dcGrid.getCellSize().z * fabsf(rayDirRCP.z);
-                //    traversalFlag = (count-- == 0u) && traversalFlag &&
-                //        (fabsf(cellId.z  - (float)dcGrid.res[tMinDimension]) > 0.1f 
-                //        && fabsf(cellId.z + 1.f) > 0.1f);
-                //}
 
                 cellId[tMinDimension] += (toPtr(rayDirRCP)[tMinDimension] > 0.f) ? 1 : -1;
                 toPtr(tMax)[tMinDimension] += toPtr(dcGrid.getCellSize())[tMinDimension] * 

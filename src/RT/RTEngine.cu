@@ -22,13 +22,13 @@ UGridSortBuilder<Triangle>  sGridBuilder;
 Camera                      sCamera;
 int                         sResX;
 int                         sResY;
-   
+
 RegularPrimaryRayGenerator< RegularPixelSampler<2,2>, true >
-                            sRegularRayGen;
+    sRegularRayGen;
 
 RandomPrimaryRayGenerator< GaussianPixelSampler, true >
-                            sRandomRayGen;
-  
+    sRandomRayGen;
+
 
 
 SimpleIntegrator<
@@ -47,34 +47,40 @@ SimpleIntegrator<
     MollerTrumboreIntersectionTest
 >                           sSimpleIntegratorRnd;
 
-void StaticRTEngine::init()
+void RTEngine::init()
 {}
 
-void StaticRTEngine::upload(
-    const WFObject& aScene)
+void RTEngine::upload(
+    const WFObject& aFrame1,
+    const WFObject& aFrame2,
+    const float aCoeff)
 {
     ObjUploader uploader;
 
     uploader.uploadObjFrameVertexData(
-        aScene, aScene, 0.f, 
+        aFrame1, aFrame2, aCoeff, 
         sUGridMemoryManager.bounds.vtx[0],
         sUGridMemoryManager.bounds.vtx[1], sTriangleArray);
 
     uploader.uploadObjFrameVertexIndexData(
-        aScene, aScene, sTriangleArray);
+        aFrame1, aFrame2, sTriangleArray);
 
     uploader.uploadObjFrameNormalData(
-        aScene, aScene, 0.f, sTriangleNormalArray);
+        aFrame1, aFrame2, 0.f, sTriangleNormalArray);
 
     uploader.uploadObjFrameNormalIndexData(
-        aScene, aScene, sTriangleNormalArray);
+        aFrame1, aFrame2, sTriangleNormalArray);
 
+}
 
+void RTEngine::buildAccStruct()
+
+{
     sGridBuilder.init(sUGridMemoryManager, sTriangleArray.numPrimitives, sGridDensity);
     sGridBuilder.build(sUGridMemoryManager, sTriangleArray);
 }
 
-void StaticRTEngine::setCamera(
+void RTEngine::setCamera(
     const float3& aPosition,
     const float3& aOrientation,
     const float3& aUp,
@@ -95,7 +101,7 @@ void StaticRTEngine::setCamera(
 
 }
 
-void StaticRTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId)
+void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId)
 {
     UniformGrid grid = sUGridMemoryManager.getParameters();
 
@@ -112,7 +118,7 @@ void StaticRTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId)
     }
 }
 
-void StaticRTEngine::cleanup()
+void RTEngine::cleanup()
 {
     sUGridMemoryManager.freeCellMemoryDevice();
     sUGridMemoryManager.freeCellMemoryHost();
@@ -120,6 +126,6 @@ void StaticRTEngine::cleanup()
     sUGridMemoryManager.freeRefCountsBuffer();
     sUGridMemoryManager.freePrimitiveIndicesBuffer();
     sUGridMemoryManager.cleanup();
-    
+
     sTriangleArray.cleanup();
 }

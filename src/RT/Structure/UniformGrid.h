@@ -46,8 +46,7 @@ public:
     {
         return *((uint2*)((char*)cells.ptr
             + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX);
-        //return tex3D(texGridCells, aIdX, 
-        //             aIdY,  aIdZ);
+        //return tex3D(texGridCells, aIdX, aIdY,  aIdZ);
     } 
 
     DEVICE uint getPrimitiveId(uint aId)

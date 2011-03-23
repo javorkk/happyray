@@ -53,10 +53,7 @@ public:
 
     static void allocateHostBuffer(const int aResX, const int aResY)
     {
-        if (sFrameBufferFloatPtr != NULL)
-        {
-            deallocateHostBuffer();
-        }
+        deallocateHostBuffer();
 
         sRESX = aResX;
         sRESY = aResY;
@@ -83,11 +80,11 @@ public:
     }
 
     static void initScene();
-    static void generateFrame(
+    static float nextFrame();
+
+    static float generateFrame(
         CameraManager& aView,
-        int& aImageId,
-        float& oRenderTime, 
-        float& oBuildTime);
+        int& aImageId);
 
     static void updateBackgroundColor(float aR, float aG, float aB)
     {

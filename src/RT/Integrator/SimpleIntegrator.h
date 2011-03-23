@@ -74,8 +74,7 @@ GLOBAL void simpleShade(
             float3& normal1 = normals.data[1];
             float3& normal2 = normals.data[2];
 
-            float3 normal = ~(u * normal0 + v * normal1 +
-                (1.f - u - v) * normal2);
+            float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
 
             float3 diffReflectance;
             diffReflectance.x = u;
@@ -113,6 +112,7 @@ template<
 class SimpleIntegrator
 {
     int* mGlobalMemoryPtr;
+    size_t mGlobalMemorySize;
 
 public:
     typedef tPrimaryRayGenerator            t_PrimaryRayGenerator;
@@ -122,8 +122,32 @@ public:
 
     t_RayBuffer rayBuffer;
 
-    SimpleIntegrator():rayBuffer(t_RayBuffer(NULL))
+    SimpleIntegrator():rayBuffer(t_RayBuffer(NULL)), mGlobalMemorySize(0u)
     {}
+
+    ~SimpleIntegrator()
+    {
+        if(mGlobalMemorySize == 0u)
+        {
+            MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
+        }
+
+    }
+
+    HOST void allocateGlobalMemory(size_t aSize)
+    {
+        if(aSize > mGlobalMemorySize)
+        {
+            if(mGlobalMemorySize != 0u)
+            {
+                MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
+            }
+            mGlobalMemorySize = aSize;
+
+            MY_CUDA_SAFE_CALL( cudaMalloc((void**)&mGlobalMemoryPtr, mGlobalMemorySize));
+        }
+
+    }
 
     HOST void tracePrimary(
         PrimitiveArray<tPrimitive>&     aStorage,
@@ -143,7 +167,8 @@ public:
             //gRESX * gRESY * NUMOCCLUSIONSAMPLES * sizeof(float3) + //light vector
             0u;
 
-        MY_CUDA_SAFE_CALL( cudaMalloc((void**)&mGlobalMemoryPtr, globalMemorySize));
+        allocateGlobalMemory(globalMemorySize);
+
         MY_CUDA_SAFE_CALL( cudaMemset( mGlobalMemoryPtr, 0, sizeof(uint)) );
 
         dim3 threadBlockTrace( RENDERTHREADSX, RENDERTHREADSY );
@@ -195,10 +220,9 @@ public:
         MY_CUT_CHECK_ERROR("Kernel Execution failed.\n");
     }
 
-    HOST void cleanup()
-    {
-        MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
-    }
+    //HOST void cleanup()
+    //{
+    //}
     
     HOST void integrate(
         PrimitiveArray<tPrimitive>&                     aStorage,
@@ -214,7 +238,7 @@ public:
 
         shade(aStorage, aNormalStorage, aFrameBuffer, aImageId);
 
-        cleanup();
+        //cleanup();
     }
 
 };

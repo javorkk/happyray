@@ -697,9 +697,20 @@ void SDLGLApplication::displayFrame()
     } 
     else
     {
-        float time, renderTime, buildTime;
-        CUDAApplication::generateFrame(mCamera, mNumImages, renderTime, buildTime);
-        ++mNumImages;
+        float time, renderTime, buildTime = 0.f;
+        
+        if(!mPauseAnimation)
+        {
+            buildTime = CUDAApplication::nextFrame();
+        }
+
+        renderTime = CUDAApplication::generateFrame(mCamera, mNumImages);
+
+        if(mPauseAnimation)
+        {
+            ++mNumImages;
+        }
+
         time = renderTime + buildTime;
         //display frame rate in window title
         std::string windowName(mActiveWindowName);
@@ -1012,6 +1023,9 @@ void SDLGLApplication::changeWindowSize(void)
     maincontext = SDL_GL_CreateContext(mainwindow);
 
     CUDAApplication::allocateHostBuffer(mRESX, mRESY);
+
+    mCamera.setResX(mRESX);
+    mCamera.setResY(mRESY);
 
     cameraChanged();
     

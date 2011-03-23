@@ -173,57 +173,57 @@ public:
 
         ////////////////////////////////////////////////////////////////////////////
         //DEBUG
-        uint* pairsBufferHost;
-        MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&pairsBufferHost, numPairs * sizeof(uint2)));
+        //uint* pairsBufferHost;
+        //MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&pairsBufferHost, numPairs * sizeof(uint2)));
 
-        MY_CUDA_SAFE_CALL( cudaMemcpy( pairsBufferHost, aMemoryManager.pairsBuffer, numPairs * sizeof(uint2),  cudaMemcpyDeviceToHost));
+        //MY_CUDA_SAFE_CALL( cudaMemcpy( pairsBufferHost, aMemoryManager.pairsBuffer, numPairs * sizeof(uint2),  cudaMemcpyDeviceToHost));
 
-        for(uint i = 0; i < numPairs - 1; ++i)
-        {
-            //Check if properly sorted
-            if(pairsBufferHost[2 * i] > pairsBufferHost[2 * i + 2])
-            {
-                cudastd::logger::out << "Unsorted pairs ( " << pairsBufferHost[2 * i] << "," << 
-                    pairsBufferHost[2 * i + 1]<< " ) ";
-                cudastd::logger::out << " and ( " << pairsBufferHost[2 * i + 2] << "," << 
-                    pairsBufferHost[2 * i + 3]<< " ) ";
-                cudastd::logger::out << " at postion " << i << " and " << i + 1 << " out of " << numPairs;
-                cudastd::logger::out << "\n";
+        //for(uint i = 0; i < numPairs - 1; ++i)
+        //{
+        //    //Check if properly sorted
+        //    if(pairsBufferHost[2 * i] > pairsBufferHost[2 * i + 2])
+        //    {
+        //        cudastd::logger::out << "Unsorted pairs ( " << pairsBufferHost[2 * i] << "," << 
+        //            pairsBufferHost[2 * i + 1]<< " ) ";
+        //        cudastd::logger::out << " and ( " << pairsBufferHost[2 * i + 2] << "," << 
+        //            pairsBufferHost[2 * i + 3]<< " ) ";
+        //        cudastd::logger::out << " at postion " << i << " and " << i + 1 << " out of " << numPairs;
+        //        cudastd::logger::out << "\n";
 
-            }
-            //Check for cell and primitive indices that make sense
-            if (pairsBufferHost[2 * i] > (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ ||
-                pairsBufferHost[2 * i + 1] > aPrimitiveArray.numPrimitives)
-            {
-                cudastd::logger::out << "( " << pairsBufferHost[2 * i] << "," << 
-                    pairsBufferHost[2 * i + 1]<< " ) ";
-                cudastd::logger::out << "\n";
-            }
+        //    }
+        //    //Check for cell and primitive indices that make sense
+        //    if (pairsBufferHost[2 * i] > (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ ||
+        //        pairsBufferHost[2 * i + 1] > aPrimitiveArray.numPrimitives)
+        //    {
+        //        cudastd::logger::out << "( " << pairsBufferHost[2 * i] << "," << 
+        //            pairsBufferHost[2 * i + 1]<< " ) ";
+        //        cudastd::logger::out << "\n";
+        //    }
 
-        }
+        //}
 
-        uint2* cellsOnHost;
-        MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&cellsOnHost, (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ * sizeof(uint2)));
-        for(uint k = 0; k < (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ; ++k)
-        {
-            cellsOnHost[k] = make_uint2(0u, 0u);
-        }
+        //uint2* cellsOnHost;
+        //MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&cellsOnHost, (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ * sizeof(uint2)));
+        //for(uint k = 0; k < (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ; ++k)
+        //{
+        //    cellsOnHost[k] = make_uint2(0u, 0u);
+        //}
 
-        //Build the grid cells on the host
-        for(uint bla = 0; bla < numPairs; bla += 1)
-        {
-            if (bla < numPairs - 1  && pairsBufferHost[2 * bla] != pairsBufferHost[2 * bla + 2])
-            {
-                cellsOnHost[pairsBufferHost[2 * bla]].y = bla + 1;
-            }
+        ////Build the grid cells on the host
+        //for(uint bla = 0; bla < numPairs; bla += 1)
+        //{
+        //    if (bla < numPairs - 1  && pairsBufferHost[2 * bla] != pairsBufferHost[2 * bla + 2])
+        //    {
+        //        cellsOnHost[pairsBufferHost[2 * bla]].y = bla + 1;
+        //    }
 
-            if (bla > 0 && pairsBufferHost[2 * bla - 2] != pairsBufferHost[2 * bla])
-            {
-                cellsOnHost[pairsBufferHost[2 * bla]].x = bla;
-            }
-        }
-        //set second elem of last pair
-        cellsOnHost[pairsBufferHost[2 * numPairs - 2]].y = numPairs;
+        //    if (bla > 0 && pairsBufferHost[2 * bla - 2] != pairsBufferHost[2 * bla])
+        //    {
+        //        cellsOnHost[pairsBufferHost[2 * bla]].x = bla;
+        //    }
+        //}
+        ////set second elem of last pair
+        //cellsOnHost[pairsBufferHost[2 * numPairs - 2]].y = numPairs;
         ////////////////////////////////////////////////////////////////////////////
 
 
@@ -247,55 +247,55 @@ public:
 
         ////////////////////////////////////////////////////////////////////////////
         //DEBUG
-        dim3 blockChkCells(aMemoryManager.resX);
-        dim3 gridChkCells(aMemoryManager.resY, aMemoryManager.resZ);
+        //dim3 blockChkCells(aMemoryManager.resX);
+        //dim3 gridChkCells(aMemoryManager.resY, aMemoryManager.resZ);
 
-        cudastd::logger::out << aMemoryManager.resX << " " << aMemoryManager.resY << " " << aMemoryManager.resZ << "\n";
+        //cudastd::logger::out << aMemoryManager.resX << " " << aMemoryManager.resY << " " << aMemoryManager.resZ << "\n";
 
-        checkGridCells<<< gridPrepRng, blockChkCells >>>
-            (aPrimitiveArray,
-            aMemoryManager.primitiveIndices,
-            aMemoryManager.cellsPtrDevice,
-            aMemoryManager.getResolution());
+        //checkGridCells<<< gridPrepRng, blockChkCells >>>
+        //    (aPrimitiveArray,
+        //    aMemoryManager.primitiveIndices,
+        //    aMemoryManager.cellsPtrDevice,
+        //    aMemoryManager.getResolution());
 
-        MY_CUT_CHECK_ERROR("Checking grid cells failed.\n");
+        //MY_CUT_CHECK_ERROR("Checking grid cells failed.\n");
 
-        aMemoryManager.allocateHostCells();
-        aMemoryManager.copyCellsDeviceToHost();
+        //aMemoryManager.allocateHostCells();
+        //aMemoryManager.copyCellsDeviceToHost();
 
-        //Compare the cells built on the host to those built on the device
-        for(uint k = 0; k < (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ; ++k)
-        {
-            if (cellsOnHost[k].x != ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].x ||
-                cellsOnHost[k].y != ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].y ||
-                ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].x > numPairs ||
-                ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].y > numPairs ||
-                ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].x > ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].y)
-            {
-                cudastd::logger::out << "index : " << k << "\n";
-                cudastd::logger::out << "h( " << cellsOnHost[k].x << "," << cellsOnHost[k].y << " ) ";
-                cudastd::logger::out << "d( " << ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].x << "," << 
-                    ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].y << " ) ";
-                cudastd::logger::out << "\n";
-            }           
-        }
-        uint* primitiveIndicesHost;
-        MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&primitiveIndicesHost, numPairs * sizeof(uint)));
-        MY_CUDA_SAFE_CALL( cudaMemcpy( primitiveIndicesHost, aMemoryManager.primitiveIndices, aMemoryManager.primitiveIndicesSize,  cudaMemcpyDeviceToHost));
+        ////Compare the cells built on the host to those built on the device
+        //for(uint k = 0; k < (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ; ++k)
+        //{
+        //    if (cellsOnHost[k].x != ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].x ||
+        //        cellsOnHost[k].y != ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].y ||
+        //        ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].x > numPairs ||
+        //        ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].y > numPairs ||
+        //        ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].x > ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].y)
+        //    {
+        //        cudastd::logger::out << "index : " << k << "\n";
+        //        cudastd::logger::out << "h( " << cellsOnHost[k].x << "," << cellsOnHost[k].y << " ) ";
+        //        cudastd::logger::out << "d( " << ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].x << "," << 
+        //            ((uint2*)aMemoryManager.cellsPtrHost.ptr)[k].y << " ) ";
+        //        cudastd::logger::out << "\n";
+        //    }           
+        //}
+        //uint* primitiveIndicesHost;
+        //MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&primitiveIndicesHost, numPairs * sizeof(uint)));
+        //MY_CUDA_SAFE_CALL( cudaMemcpy( primitiveIndicesHost, aMemoryManager.primitiveIndices, aMemoryManager.primitiveIndicesSize,  cudaMemcpyDeviceToHost));
 
-        //Check for primitive indices that make sense
-        for(uint i = 0; i < numPairs; ++i)
-        {
-            if(primitiveIndicesHost[i] > aPrimitiveArray.numPrimitives)
-            {
-                cudastd::logger::out << "Invalid primitive indirection at position " << i;
-                cudastd::logger::out << " primitive id is " << primitiveIndicesHost[i];
-                cudastd::logger::out << " number of primitives is " << aPrimitiveArray.numPrimitives;
-                cudastd::logger::out << " comming from pair (" << pairsBufferHost[2 * i] << ", " << pairsBufferHost[2 * i + 1] << ")";
-                cudastd::logger::out << "\n";
-            }
-        }
-        aMemoryManager.bindDeviceDataToTexture();
+        ////Check for primitive indices that make sense
+        //for(uint i = 0; i < numPairs; ++i)
+        //{
+        //    if(primitiveIndicesHost[i] > aPrimitiveArray.numPrimitives)
+        //    {
+        //        cudastd::logger::out << "Invalid primitive indirection at position " << i;
+        //        cudastd::logger::out << " primitive id is " << primitiveIndicesHost[i];
+        //        cudastd::logger::out << " number of primitives is " << aPrimitiveArray.numPrimitives;
+        //        cudastd::logger::out << " comming from pair (" << pairsBufferHost[2 * i] << ", " << pairsBufferHost[2 * i + 1] << ")";
+        //        cudastd::logger::out << "\n";
+        //    }
+        //}
+        //aMemoryManager.bindDeviceDataToTexture();
         ////////////////////////////////////////////////////////////////////////////
 
        
@@ -304,8 +304,8 @@ public:
         cudaEventSynchronize(mEnd);
         //////////////////////////////////////////////////////////////////////////
 
-        cudastd::logger::out << "Number of pairs:" << numPairs << "\n";
-        outputStats();
+        //cudastd::logger::out << "Number of pairs:" << numPairs << "\n";
+        //outputStats();
 
         cleanup();
     }
