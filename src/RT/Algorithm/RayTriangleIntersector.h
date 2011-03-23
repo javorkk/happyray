@@ -28,11 +28,6 @@ public:
     {
         for (uint it = aIdRange.x; it < aIdRange.y; ++ it)
         {
-            //if(it >= 194444u)
-            //    continue;
-            //if(aIndexIndirection[it] >= aTriangleArray.numPrimitives)
-            //    continue;
-
             Triangle tri = aTriangleArray[aIndexIndirection[it]];
             float3& org   = tri.vtx[0];
             float3& edge1 = tri.vtx[1];
