@@ -153,7 +153,7 @@ public:
             //gRESX * gRESY * NUMOCCLUSIONSAMPLES * sizeof(float3) + //light vector
             0u;
 
-        MemoryManager::allocateDeviceArray((void**)&mGlobalMemoryPtr, mGlobalMemorySize);
+        MemoryManager::allocateDeviceArray((void**)&mGlobalMemoryPtr, globalMemorySize, (void**)&mGlobalMemoryPtr, mGlobalMemorySize);
 
         MY_CUDA_SAFE_CALL( cudaMemset( mGlobalMemoryPtr, 0, sizeof(uint)) );
 
