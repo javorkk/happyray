@@ -275,6 +275,8 @@
     <ClInclude Include="src\RT\Structure\MemoryManager.h" />
     <ClInclude Include="src\RT\Structure\PrimitiveArray.h" />
     <ClInclude Include="src\RT\Structure\RayBuffers.h" />
+    <ClInclude Include="src\RT\Structure\TLGridMemoryManager.h" />
+    <ClInclude Include="src\RT\Structure\TwoLevelGrid.h" />
     <ClInclude Include="src\RT\Structure\UGridMemoryManager.h" />
     <ClInclude Include="src\RT\Structure\UniformGrid.h" />
     <ClInclude Include="src\stdafx.hpp" />

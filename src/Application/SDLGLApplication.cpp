@@ -142,8 +142,11 @@ void SDLGLApplication::writeScreenShot()
     }
 
     img.gammaCorrect(2.2f);
-    img.writePNG("screenshot.png");
-    std::cout << "Wrote " << "screenshot.png" << "\n";
+    std::string filename("screenshot");
+    filename += itoa(mNumScreenshots++);
+    filename += ".png";
+    img.writePNG(filename.c_str());
+    std::cout << "Wrote " << filename << "\n";
 }
 
 void SDLGLApplication::outputCameraParameters()
@@ -738,6 +741,8 @@ void SDLGLApplication::displayFrame()
         SDL_SetWindowTitle(mainwindow, windowName.c_str());
         
         runGLSLShader();
+
+        writeScreenShot();
     }
 }
 

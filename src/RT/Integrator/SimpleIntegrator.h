@@ -78,18 +78,18 @@ GLOBAL void simpleShade(
             float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
 
             float3 diffReflectance;
-            diffReflectance.x = u;
-            diffReflectance.y = v;
-            diffReflectance.z = 1.f - u - v;
+            diffReflectance.x = 1.f;// M_PI_RCP; //u;
+            diffReflectance.y = 1.f;//M_PI_RCP; //v;
+            diffReflectance.z = 1.f;//M_PI_RCP; //1.f - u - v;
 
-            oRadiance =  diffReflectance * fmaxf(0.f, dot(-normal,~rayDir[threadId1D()]));
+            oRadiance =  diffReflectance * fmaxf(0.f, fabsf(dot(-normal,~rayDir[threadId1D()])));
 
         }
         else
         {
-            oRadiance.x = 0.1f;
-            oRadiance.y = 0.4f;
-            oRadiance.z = 0.2f;
+            oRadiance.x = 0.15f;
+            oRadiance.y = 0.2f;
+            oRadiance.z = 0.3f;
         }
 
         float newSampleWeight = 1.f / (float)(aImageId + 1);

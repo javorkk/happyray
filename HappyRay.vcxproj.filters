@@ -191,6 +191,12 @@
     <ClInclude Include="src\RT\Structure\FrameBuffer.h">
       <Filter>RT\Structure</Filter>
     </ClInclude>
+    <ClInclude Include="src\RT\Structure\TwoLevelGrid.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Structure\TLGridMemoryManager.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\stdafx.cpp">
