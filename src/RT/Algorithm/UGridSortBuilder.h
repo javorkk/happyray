@@ -33,9 +33,9 @@ class UGridSortBuilder
     cudaEvent_t mRefCount, mScan, mWritePairs, mSort, mEnd;
 public:
     HOST void init(
-        UniformGridMemoryManager&               aMemoryManager,
-        const uint                              aNumPrimitives,
-        const float&                            aDensity = 5.f
+        UGridMemoryManager&             aMemoryManager,
+        const uint                      aNumPrimitives,
+        const float&                    aDensity = 5.f
         )
     {
         //////////////////////////////////////////////////////////////////////////
@@ -69,8 +69,8 @@ public:
     }
 
     HOST void build(
-        UniformGridMemoryManager&                   aMemoryManager,
-        PrimitiveArray<tPrimitive>&                 aPrimitiveArray)
+        UGridMemoryManager&                 aMemoryManager,
+        PrimitiveArray<tPrimitive>&         aPrimitiveArray)
     {
         //////////////////////////////////////////////////////////////////////////
         cudaEventCreate(&mRefCount);

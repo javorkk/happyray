@@ -81,6 +81,7 @@ class SDLGLApplication
     //Misc
     int mNumImages;
     int mNumScreenshots;
+    bool mDumpFrames;
     bool mPauseAnimation;
     enum RenderMode {DEFAULT = 0, RENDERMODE1 = 1, RENDERMODE2 = 2};
     RenderMode mRenderMode;
@@ -129,7 +130,7 @@ public:
         mMoveBackward(false), mMoveUp(false), mMoveDown(false),
         mVerticalRotationAngle(0.f), mHorizontalRotationAngle(0.f),
         mUpOrientationAngleChange(0.f), mNumImages(0), mNumScreenshots(0),
-        mPauseAnimation(false),
+        mDumpFrames(false),mPauseAnimation(false),
         mRenderMode(DEFAULT), mMinimizedWindowName("Happy Ray"),
         mActiveWindowName("Fps: "), CONFIGURATION("animation.cfg")
     {}
@@ -218,6 +219,8 @@ public:
     void toggleFullSreenMode();
 
     void nextRenderMode();
+
+    void dumpFrames();
 
     void pauseAnimation();
 

@@ -10,7 +10,7 @@
 //data transfer related
 //////////////////////////////////////////////////////////////////////////
 
-HOST void UniformGridMemoryManager::copyCellsDeviceToHost()
+HOST void UGridMemoryManager::copyCellsDeviceToHost()
 {
     cudaMemcpy3DParms cpyParamsDownloadPtr = { 0 };
     cpyParamsDownloadPtr.srcPtr  = cellsPtrDevice;
@@ -21,7 +21,7 @@ HOST void UniformGridMemoryManager::copyCellsDeviceToHost()
     MY_CUDA_SAFE_CALL( cudaMemcpy3D(&cpyParamsDownloadPtr) );
 }
 
-HOST void UniformGridMemoryManager::copyCellsHostToDevice()
+HOST void UGridMemoryManager::copyCellsHostToDevice()
 {
     cudaMemcpy3DParms cpyParamsUploadPtr = { 0 };
     cpyParamsUploadPtr.srcPtr  = cellsPtrHost;
@@ -36,7 +36,7 @@ HOST void UniformGridMemoryManager::copyCellsHostToDevice()
 //////////////////////////////////////////////////////////////////////////
 //memory allocation
 //////////////////////////////////////////////////////////////////////////
-HOST cudaPitchedPtr UniformGridMemoryManager::allocateHostCells()
+HOST cudaPitchedPtr UGridMemoryManager::allocateHostCells()
 {
     checkResolution();
 
@@ -49,7 +49,7 @@ HOST cudaPitchedPtr UniformGridMemoryManager::allocateHostCells()
     return cellsPtrHost;
 }
 
-HOST cudaPitchedPtr UniformGridMemoryManager::allocateDeviceCells()
+HOST cudaPitchedPtr UGridMemoryManager::allocateDeviceCells()
 {
     checkResolution();
 
@@ -64,7 +64,7 @@ HOST cudaPitchedPtr UniformGridMemoryManager::allocateDeviceCells()
     return cellsPtrDevice;
 }
 
-HOST void UniformGridMemoryManager::setDeviceCellsToZero()
+HOST void UGridMemoryManager::setDeviceCellsToZero()
 {
     MY_CUDA_SAFE_CALL( cudaMemset(cellsPtrDevice.ptr, 0 ,
         cellsPtrDevice.pitch * resY * resZ ) );
@@ -75,7 +75,7 @@ HOST void UniformGridMemoryManager::setDeviceCellsToZero()
     //CUDA_SAFE_CALL( cudaMemset3D(aDeviceCells, 0, memExtent) );
 }
 
-HOST uint* UniformGridMemoryManager::allocatePrimitiveIndicesBuffer(const size_t aNumIndices)
+HOST uint* UGridMemoryManager::allocatePrimitiveIndicesBuffer(const size_t aNumIndices)
 {
     MemoryManager::allocateDeviceArray((void**)&primitiveIndices, aNumIndices * sizeof(uint),
         (void**)&primitiveIndices, primitiveIndicesSize);
@@ -83,7 +83,7 @@ HOST uint* UniformGridMemoryManager::allocatePrimitiveIndicesBuffer(const size_t
     return primitiveIndices;
 }
 
-HOST void UniformGridMemoryManager::allocateRefCountsBuffer(const size_t aNumSlots)
+HOST void UGridMemoryManager::allocateRefCountsBuffer(const size_t aNumSlots)
 {
     MemoryManager::allocateMappedDeviceArray(
         (void**)&refCountsBuffer, (void**)&refCountsBufferHost, aNumSlots * sizeof(uint),
@@ -92,7 +92,7 @@ HOST void UniformGridMemoryManager::allocateRefCountsBuffer(const size_t aNumSlo
     MY_CUDA_SAFE_CALL( cudaMemset(refCountsBuffer + aNumSlots - 1, 0, sizeof(uint)) );
 }
 
-HOST void UniformGridMemoryManager::allocatePairsBufferPair(const size_t aNumPairs)
+HOST void UGridMemoryManager::allocatePairsBufferPair(const size_t aNumPairs)
 {
     MemoryManager::allocateDeviceArrayPair(
         (void**)&pairsBuffer, (void**)&pairsPingBuffer, aNumPairs * sizeof(uint2),
@@ -102,17 +102,17 @@ HOST void UniformGridMemoryManager::allocatePairsBufferPair(const size_t aNumPai
 //////////////////////////////////////////////////////////////////////////
 //memory deallocation
 //////////////////////////////////////////////////////////////////////////
-HOST void UniformGridMemoryManager::freeCellMemoryDevice()
+HOST void UGridMemoryManager::freeCellMemoryDevice()
 {
     MY_CUDA_SAFE_CALL( cudaFree((char*)cellsPtrDevice.ptr) );
 }
 
-HOST void UniformGridMemoryManager::freeCellMemoryHost()
+HOST void UGridMemoryManager::freeCellMemoryHost()
 {
     MY_CUDA_SAFE_CALL( cudaFreeHost((char*)cellsPtrHost.ptr) );
 }
 
-HOST void UniformGridMemoryManager::freePrimitiveIndicesBuffer()
+HOST void UGridMemoryManager::freePrimitiveIndicesBuffer()
 {
     if(primitiveIndicesSize != 0u)
     {
@@ -121,7 +121,7 @@ HOST void UniformGridMemoryManager::freePrimitiveIndicesBuffer()
     }
 }
 
-HOST void UniformGridMemoryManager::freeRefCountsBuffer()
+HOST void UGridMemoryManager::freeRefCountsBuffer()
 {
     if(refCountsBufferSize != 0u)
     {
@@ -130,7 +130,7 @@ HOST void UniformGridMemoryManager::freeRefCountsBuffer()
     }
 }
 
-HOST void UniformGridMemoryManager::freePairsBufferPair()
+HOST void UGridMemoryManager::freePairsBufferPair()
 {
     if(pairsBufferSize != 0u)
     {
@@ -141,7 +141,7 @@ HOST void UniformGridMemoryManager::freePairsBufferPair()
 }
 
 
-HOST void UniformGridMemoryManager::cleanup()
+HOST void UGridMemoryManager::cleanup()
 {
     if(cellArray != NULL)
         MY_CUDA_SAFE_CALL( cudaFreeArray(cellArray) );
@@ -149,7 +149,7 @@ HOST void UniformGridMemoryManager::cleanup()
 //////////////////////////////////////////////////////////////////////////
 //debug related
 //////////////////////////////////////////////////////////////////////////
-HOST void UniformGridMemoryManager::checkResolution()
+HOST void UGridMemoryManager::checkResolution()
 {
     if (resX <= 0 || resY <= 0 || resZ <= 0)
     {

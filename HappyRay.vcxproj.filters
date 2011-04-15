@@ -192,10 +192,16 @@
       <Filter>RT\Structure</Filter>
     </ClInclude>
     <ClInclude Include="src\RT\Structure\TwoLevelGrid.h">
-      <Filter>Headers</Filter>
+      <Filter>RT\Structure</Filter>
     </ClInclude>
     <ClInclude Include="src\RT\Structure\TLGridMemoryManager.h">
-      <Filter>Headers</Filter>
+      <Filter>RT\Structure</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Algorithm\TLGridBuildKernels.h">
+      <Filter>RT\Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Algorithm\TLGridSortBuilder.h">
+      <Filter>RT\Algorithm</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -253,6 +259,9 @@
       <Filter>Utils</Filter>
     </CudaCompile>
     <CudaCompile Include="src\RT\Structure\UGridMemoryManager.cu">
+      <Filter>RT\Structure</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\RT\Structure\TLGridMemManager.cu">
       <Filter>RT\Structure</Filter>
     </CudaCompile>
   </ItemGroup>

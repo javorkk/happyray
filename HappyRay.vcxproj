@@ -152,7 +152,7 @@
     <CudaCompile>
       <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MTd</Runtime>
     </CudaCompile>
@@ -226,7 +226,7 @@
     <CudaCompile>
       <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
     </CudaCompile>
@@ -262,6 +262,8 @@
     <ClInclude Include="src\RT\Algorithm\RayGenerators.h" />
     <ClInclude Include="src\RT\Algorithm\RayTracingKernels.h" />
     <ClInclude Include="src\RT\Algorithm\RayTriangleIntersector.h" />
+    <ClInclude Include="src\RT\Algorithm\TLGridBuildKernels.h" />
+    <ClInclude Include="src\RT\Algorithm\TLGridSortBuilder.h" />
     <ClInclude Include="src\RT\Algorithm\UGridSortBuilder.h" />
     <ClInclude Include="src\RT\Algorithm\UniformGridBuildKernels.h" />
     <ClInclude Include="src\RT\Integrator\SimpleIntegrator.h" />
@@ -300,6 +302,7 @@
     <ClCompile Include="src\Core\SSEAlgebra.cpp" />
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\RT\Primitive\Triangle.cpp" />
+    <CudaCompile Include="src\RT\Structure\TLGridMemManager.cu" />
     <ClCompile Include="src\stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>

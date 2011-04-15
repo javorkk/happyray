@@ -223,6 +223,9 @@ void SDLGLApplication::KeyUp		(const int& iKeyEnum)
     case SDLK_m:
         nextRenderMode();
         break;
+    case SDLK_n:
+        dumpFrames();
+        break;
     case SDLK_b:
         setBackgroundColor();
         break;
@@ -280,6 +283,8 @@ void SDLGLApplication::KeyDown		(const int& iKeyEnum)
     case SDLK_r:
         break;
     case SDLK_m:
+        break;
+    case SDLK_n:
         break;
     case SDLK_b:
         break;
@@ -613,6 +618,11 @@ void SDLGLApplication::nextRenderMode()
     cameraChanged();
 }
 
+void SDLGLApplication::dumpFrames()
+{
+    mDumpFrames = !mDumpFrames;
+}
+
 void SDLGLApplication::pauseAnimation()
 {
     mPauseAnimation = !mPauseAnimation;
@@ -742,7 +752,8 @@ void SDLGLApplication::displayFrame()
         
         runGLSLShader();
 
-        writeScreenShot();
+        if(!mPauseAnimation && mDumpFrames)
+            writeScreenShot();
     }
 }
 

@@ -78,9 +78,9 @@ GLOBAL void simpleShade(
             float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
 
             float3 diffReflectance;
-            diffReflectance.x = 1.f;// M_PI_RCP; //u;
-            diffReflectance.y = 1.f;//M_PI_RCP; //v;
-            diffReflectance.z = 1.f;//M_PI_RCP; //1.f - u - v;
+            diffReflectance.x = u;//1.f;// M_PI_RCP; //u;
+            diffReflectance.y = v;//1.f;//M_PI_RCP; //v;
+            diffReflectance.z = 1.f-u-v;//1.f;//M_PI_RCP; //1.f - u - v;
 
             oRadiance =  diffReflectance * fmaxf(0.f, fabsf(dot(-normal,~rayDir[threadId1D()])));
 

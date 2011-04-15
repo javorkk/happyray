@@ -8,17 +8,25 @@
 #include "RT/Primitive/Camera.h"
 #include "RT/Structure/UGridMemoryManager.h"
 #include "RT/Algorithm/UGridSortBuilder.h"
+#include "RT/Structure/TLGridMemoryManager.h"
+#include "RT/Algorithm/TLGridSortBuilder.h"
 #include "RT/Algorithm/RayGenerators.h"
 #include "RT/Algorithm/RayTriangleIntersector.h"
 
 #include "RT/Integrator/SimpleIntegrator.h"
 
 float                       sGridDensity = 5.f;
+float                       sTopLevelDensity = 0.0625f;
+float                       sLeafLevelDensity = 1.2f;
+
 int                         sFrameId = 0;
 PrimitiveArray<Triangle>    sTriangleArray;
 PrimitiveAttributeArray<Triangle, float3> sTriangleNormalArray;
-UniformGridMemoryManager    sUGridMemoryManager;
+UGridMemoryManager          sUGridMemoryManager;
 UGridSortBuilder<Triangle>  sGridBuilder;
+TLGridMemoryManager         sTLGridMemoryManager;
+TLGridSortBuilder<Triangle> sTLGridBuilder;
+
 Camera                      sCamera;
 int                         sResX;
 int                         sResY;
@@ -71,13 +79,21 @@ void RTEngine::upload(
     uploader.uploadObjFrameNormalIndexData(
         aFrame1, aFrame2, sTriangleNormalArray);
 
+    sTLGridMemoryManager.bounds.vtx[0] = sUGridMemoryManager.bounds.vtx[0];
+    sTLGridMemoryManager.bounds.vtx[1] = sUGridMemoryManager.bounds.vtx[1];
+
 }
 
 void RTEngine::buildAccStruct()
 
 {
-    sGridBuilder.init(sUGridMemoryManager, sTriangleArray.numPrimitives, sGridDensity);
-    sGridBuilder.build(sUGridMemoryManager, sTriangleArray);
+    sTLGridBuilder.init(sTLGridMemoryManager, sTriangleArray.numPrimitives, sTopLevelDensity, sLeafLevelDensity);
+    sTLGridBuilder.build(sTLGridMemoryManager, sTriangleArray);
+    
+    //sGridBuilder.init(sUGridMemoryManager, sTriangleArray.numPrimitives, sGridDensity);
+    //sGridBuilder.build(sUGridMemoryManager, sTriangleArray);
+
+
 }
 
 void RTEngine::setCamera(

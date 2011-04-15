@@ -9,8 +9,9 @@
 #include "RT/Primitive/BBox.hpp"
 #include "RT/Structure/UniformGrid.h"
 
-struct UniformGridMemoryManager
+class UGridMemoryManager
 {
+public:
     typedef uint2 Cell;
 
     int resX, resY, resZ;
@@ -37,7 +38,7 @@ struct UniformGridMemoryManager
     size_t pairsBufferSize;
 
 
-    UniformGridMemoryManager()
+    UGridMemoryManager()
         :resX(0), resY(0), resZ(0), bounds(BBox::empty()),
         cpuCells(NULL), gpuCells(NULL), cellArray(NULL), primitiveIndices(NULL),
         primitiveIndicesSize(0u), refCountsBuffer(NULL), refCountsBufferHost(NULL),
