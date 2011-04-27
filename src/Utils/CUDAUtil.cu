@@ -33,8 +33,6 @@ void cudastd::getBestCUDADevice(int argc, char* argv[])
 
 #ifndef __DEVICE_EMULATION__
 
-    MY_CUDA_SAFE_CALL( cudaSetDeviceFlags(cudaDeviceMapHost) );
-
     int deviceCount;  
     MY_CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
 

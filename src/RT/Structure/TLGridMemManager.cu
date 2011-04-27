@@ -29,6 +29,15 @@ HOST void TLGridMemoryManager::copyCellsHostToDevice()
     MY_CUDA_SAFE_CALL( cudaMemcpy3D(&cpyParamsUploadPtr) );
 }
 
+HOST void TLGridMemoryManager::copyLeavesHostToDevice()
+{
+    MY_CUDA_SAFE_CALL(cudaMemcpy(leavesDevice, leavesHost, leavesSize, cudaMemcpyHostToDevice));
+}
+
+HOST void TLGridMemoryManager::copyLeavesDeviceToHost()
+{
+    MY_CUDA_SAFE_CALL(cudaMemcpy(leavesHost, leavesDevice, leavesSize, cudaMemcpyDeviceToHost));
+}
 
 //////////////////////////////////////////////////////////////////////////
 //memory allocation

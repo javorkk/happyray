@@ -332,7 +332,6 @@ public:
         //uint2* hostPairs;
         //MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&hostPairs, numLeafLevelPairs * sizeof(uint2)) );
         //MY_CUDA_SAFE_CALL( cudaMemcpy(hostPairs, aMemoryManager.leafLevelPairsBuffer, numLeafLevelPairs * sizeof(uint2), cudaMemcpyDeviceToHost) );
-        //cudastd::logger::out << "Sorted leaf pairs:\n";
         //uint numRealPairs = 0u;
         //for(uint it = 0; it < numLeafLevelPairs - 1; ++it)
         //{
@@ -346,7 +345,6 @@ public:
         //        cudastd::logger::out << " ( " << hostPairs[it+1].x << " | " << hostPairs[it+1].y  << " ) ";
         //    }
         //}
-        //cudastd::logger::out <<"Number of actual references: "<< numRealPairs <<"\n";
         //////////////////////////////////////////////////////////////////////////
         
         aMemoryManager.allocateDeviceLeaves(numLeafCells);
@@ -363,6 +361,25 @@ public:
             numLeafLevelPairs,
             (uint2*)aMemoryManager.leavesDevice
             );
+         
+        //////////////////////////////////////////////////////////////////////////
+        //DEBUG
+        //aMemoryManager.allocateHostLeaves(numLeafCells);
+        //aMemoryManager.copyLeavesDeviceToHost();
+        //for(uint i = 0; i < numLeafCells; ++i)
+        //{
+        //    if(aMemoryManager.leavesHost[i].x > aMemoryManager.leavesHost[i].y)
+        //    {
+        //        cudastd::logger::out << "Bad leaf at position " << i <<" -> ( " << 
+        //            aMemoryManager.leavesHost[i].x << " | " << aMemoryManager.leavesHost[i].y << " )\n";
+        //    }
+        //    else if(aMemoryManager.leavesHost[i].y - aMemoryManager.leavesHost[i].x > 32u )
+        //    {
+        //        //cudastd::logger::out << "Big leaf at position " << i <<" -> ( " << 
+        //        //    aMemoryManager.leavesHost[i].x << " | " << aMemoryManager.leavesHost[i].y << " )\n";
+        //    }
+        //}
+        //////////////////////////////////////////////////////////////////////////
 
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mEnd, 0);
