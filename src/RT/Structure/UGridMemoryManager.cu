@@ -40,11 +40,23 @@ HOST cudaPitchedPtr UGridMemoryManager::allocateHostCells()
 {
     checkResolution();
 
+    if(oldResX == resX && oldResY == resY && oldResZ == resZ)
+    {
+        return cellsPtrHost;
+    }
+
+    freeCellMemoryHost();
+
+
     MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&cpuCells,
         resX * resY * resZ * sizeof(Cell)));
 
     cellsPtrHost = 
         make_cudaPitchedPtr(cpuCells, resX * sizeof(Cell), resX, resY);
+
+    oldResX = resX;
+    oldResY = resY;
+    oldResZ = resZ;
 
     return cellsPtrHost;
 }
@@ -53,6 +65,13 @@ HOST cudaPitchedPtr UGridMemoryManager::allocateDeviceCells()
 {
     checkResolution();
 
+    if(oldResX == resX && oldResY == resY && oldResZ == resZ)
+    {
+        return cellsPtrDevice;
+    }
+
+    freeCellMemoryDevice();
+
     cellsPtrDevice =
         make_cudaPitchedPtr(gpuCells, resX * sizeof(Cell), resX, resY);
 
@@ -60,6 +79,10 @@ HOST cudaPitchedPtr UGridMemoryManager::allocateDeviceCells()
         make_cudaExtent(resX * sizeof(Cell), resY, resZ);
 
     MY_CUDA_SAFE_CALL( cudaMalloc3D(&cellsPtrDevice, cellDataExtent) );
+
+    oldResX = resX;
+    oldResY = resY;
+    oldResZ = resZ;
 
     return cellsPtrDevice;
 }
@@ -145,6 +168,12 @@ HOST void UGridMemoryManager::cleanup()
 {
     if(cellArray != NULL)
         MY_CUDA_SAFE_CALL( cudaFreeArray(cellArray) );
+
+    freeCellMemoryDevice();
+    freeCellMemoryHost();
+    freePrimitiveIndicesBuffer();
+    freeRefCountsBuffer();
+    freePairsBufferPair();
 }
 //////////////////////////////////////////////////////////////////////////
 //debug related

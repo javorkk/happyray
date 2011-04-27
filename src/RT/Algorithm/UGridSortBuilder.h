@@ -35,7 +35,8 @@ public:
     HOST void init(
         UGridMemoryManager&             aMemoryManager,
         const uint                      aNumPrimitives,
-        const float&                    aDensity = 5.f
+        const float                     aDensity = 5.f,
+        const float                     aDummy = 1.2f
         )
     {
         //////////////////////////////////////////////////////////////////////////
@@ -100,10 +101,9 @@ public:
             aMemoryManager.getCellSizeRCP(),
             aMemoryManager.refCountsBuffer);
 
-        MY_CUT_CHECK_ERROR("Counting primitive-cell pairs failed.\n");
-
         cudaEventRecord(mRefCount, 0);
         cudaEventSynchronize(mRefCount);
+        MY_CUT_CHECK_ERROR("Counting primitive-cell pairs failed.\n");
         
         /////////////////////////////////////////////////////////////////////////
         //DEBUG
@@ -153,10 +153,9 @@ public:
             aMemoryManager.getCellSize(),
             aMemoryManager.getCellSizeRCP());
 
-        MY_CUT_CHECK_ERROR("Writing primitive-cell pairs failed.\n");
-
         cudaEventRecord(mWritePairs, 0);
         cudaEventSynchronize(mWritePairs);
+        MY_CUT_CHECK_ERROR("Writing primitive-cell pairs failed.\n");
 
         const uint numCellsPlus1 = aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ;
         uint numBits = 9u;
@@ -166,10 +165,10 @@ public:
         Sort radixSort;
         radixSort((uint2*)aMemoryManager.pairsBuffer, (uint2*)aMemoryManager.pairsPingBuffer, numPairs, numBits);
 
-        MY_CUT_CHECK_ERROR("Sorting primitive-cell pairs failed.\n");
-
         cudaEventRecord(mSort, 0);
         cudaEventSynchronize(mSort);
+        MY_CUT_CHECK_ERROR("Sorting primitive-cell pairs failed.\n");
+
 
         ////////////////////////////////////////////////////////////////////////////
         //DEBUG
@@ -243,7 +242,11 @@ public:
             static_cast<uint>(aMemoryManager.resZ)
             );
 
+        //////////////////////////////////////////////////////////////////////////
+        cudaEventRecord(mEnd, 0);
+        cudaEventSynchronize(mEnd);
         MY_CUT_CHECK_ERROR("Setting up grid cells failed.\n");
+        //////////////////////////////////////////////////////////////////////////
 
         ////////////////////////////////////////////////////////////////////////////
         //DEBUG
@@ -297,12 +300,6 @@ public:
         //}
         //aMemoryManager.bindDeviceDataToTexture();
         ////////////////////////////////////////////////////////////////////////////
-
-       
-        //////////////////////////////////////////////////////////////////////////
-        cudaEventRecord(mEnd, 0);
-        cudaEventSynchronize(mEnd);
-        //////////////////////////////////////////////////////////////////////////
 
         //cudastd::logger::out << "Number of pairs:" << numPairs << "\n";
         //outputStats();

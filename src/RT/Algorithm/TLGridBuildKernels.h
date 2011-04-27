@@ -30,7 +30,7 @@ GLOBAL void countLeafLevelCells(
     const float lambda          = aDensity;
 
     uint cellId = globalThreadId1D();
-    const uint2 cellRange = *((uint2*)((char*)oTopLevelCells.ptr + 
+    const uint2 cellRange = *((uint2*)((char*)oTopLevelCells.ptr 
         + blockIdx.x * oTopLevelCells.pitch
         + blockIdx.y * oTopLevelCells.pitch * oTopLevelCells.ysize) + threadIdx.x);
 
@@ -90,7 +90,7 @@ GLOBAL void countLeafLevelCells(
     cell.setZ(resZ);
     cell.setLeafRangeBegin(cellId);
 
-    *((TwoLevelGridCell*)((char*)oTopLevelCells.ptr + 
+    *((TwoLevelGridCell*)((char*)oTopLevelCells.ptr
         + blockIdx.x * oTopLevelCells.pitch
         + blockIdx.y * oTopLevelCells.pitch * oTopLevelCells.ysize)
         + threadIdx.x) = cell;
@@ -112,7 +112,7 @@ GLOBAL void prepareTopLevelCellRanges(
 
     const uint cellCount = aCellCounts[cellId];
 
-    TwoLevelGridCell* cell = ((TwoLevelGridCell*)((char*)oTopLevelCells.ptr + 
+    TwoLevelGridCell* cell = ((TwoLevelGridCell*)((char*)oTopLevelCells.ptr
         + blockIdx.x * oTopLevelCells.pitch
         + blockIdx.y * oTopLevelCells.pitch * oTopLevelCells.ysize)
         + threadIdx.x);
@@ -173,7 +173,7 @@ GLOBAL void countLeafLevelPairs(
         const uint topLvlCellZ = indexPair.x / (aGridResX * aGridResY);
 
         const TwoLevelGridCell topLvlCell = *((TwoLevelGridCell*)
-            ((char*)aTopLevelCells.ptr + 
+            ((char*)aTopLevelCells.ptr
             + topLvlCellY * aTopLevelCells.pitch
             + topLvlCellZ * aTopLevelCells.pitch * aTopLevelCells.ysize)
             + topLvlCellX);
@@ -192,10 +192,10 @@ GLOBAL void countLeafLevelPairs(
 
         //triangleBounds.tighten(topLvlCellOrigin, topLvlCellOrigin + aCellSize);
 
-        float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
-        minCellIdf =
-            //const float3 minCellIdf =
-            (bounds.vtx[0] - topLvlCellOrigin + rep(10E-5f)) * subCellSizeRCP;
+        //float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
+        //minCellIdf =
+        const float3 minCellIdf =
+            (bounds.vtx[0] - topLvlCellOrigin + rep(-10E-5f)) * subCellSizeRCP;
         const float3 maxCellIdPlus1f =
             (bounds.vtx[1] - topLvlCellOrigin + rep(10E-5f)) * subCellSizeRCP + rep(1.f);
 
@@ -203,9 +203,9 @@ GLOBAL void countLeafLevelPairs(
         const int minCellIdY =  max(0, (int)(minCellIdf.y));
         const int minCellIdZ =  max(0, (int)(minCellIdf.z));
 
-        const int maxCellIdP1X =  min((int)topLvlCellRes.x, (int)(maxCellIdPlus1f.x));
-        const int maxCellIdP1Y =  min((int)topLvlCellRes.y, (int)(maxCellIdPlus1f.y));
-        const int maxCellIdP1Z =  min((int)topLvlCellRes.z, (int)(maxCellIdPlus1f.z));
+        const int maxCellIdP1X =  min((int)topLvlCell[0], (int)(maxCellIdPlus1f.x));
+        const int maxCellIdP1Y =  min((int)topLvlCell[1], (int)(maxCellIdPlus1f.y));
+        const int maxCellIdP1Z =  min((int)topLvlCell[2], (int)(maxCellIdPlus1f.z));
 
         const int numCells =
             (maxCellIdP1X - minCellIdX) *
@@ -252,7 +252,7 @@ GLOBAL void countLeafLevelPairs(
 
     SYNCTHREADS;
 
-#if SHINOBI__CUDA_ARCH__ >= 120
+#if HAPPYRAY__CUDA_ARCH__ >= 120
 
     //reduction
     if (taBlockSize >= 512) { if (threadId1D() < 256) { shMem[threadId1D()] += shMem[threadId1D() + 256]; } SYNCTHREADS;   }
@@ -296,7 +296,7 @@ GLOBAL void writeLeafLevelPairs(
     extern SHARED uint shMem[];
 
 
-#if SHINOBI__CUDA_ARCH__ >= 120
+#if HAPPYRAY__CUDA_ARCH__ >= 120
 
     if (threadId1D() == 0)
     {
@@ -341,7 +341,7 @@ GLOBAL void writeLeafLevelPairs(
         const uint topLvlCellZ = indexPair.x / (aGridResX * aGridResY);
 
         const TwoLevelGridCell topLvlCell = *((TwoLevelGridCell*)
-            ((char*)aTopLevelCells.ptr + 
+            ((char*)aTopLevelCells.ptr
             + topLvlCellY * aTopLevelCells.pitch
             + topLvlCellZ * aTopLevelCells.pitch * aTopLevelCells.ysize)
             + topLvlCellX);
@@ -359,7 +359,7 @@ GLOBAL void writeLeafLevelPairs(
         const float3 subCellSizeRCP = topLvlCellRes / aCellSize;
 
         const float3 minCellIdf =
-            (bounds.vtx[0] - topLvlCellOrigin + rep(10E-5f)) * subCellSizeRCP;
+            (bounds.vtx[0] - topLvlCellOrigin + rep(-10E-5f)) * subCellSizeRCP;
         const float3 maxCellIdPlus1f =
             (bounds.vtx[1] - topLvlCellOrigin + rep(10E-5f)) * subCellSizeRCP + rep(1.f);
 
@@ -367,16 +367,16 @@ GLOBAL void writeLeafLevelPairs(
         const int minCellIdY =  max(0, (int)(minCellIdf.y));
         const int minCellIdZ =  max(0, (int)(minCellIdf.z));
 
-        const int maxCellIdP1X =  min((int)topLvlCellRes.x, (int)(maxCellIdPlus1f.x));
-        const int maxCellIdP1Y =  min((int)topLvlCellRes.y, (int)(maxCellIdPlus1f.y));
-        const int maxCellIdP1Z =  min((int)topLvlCellRes.z, (int)(maxCellIdPlus1f.z));
+        const int maxCellIdP1X =  min((int)topLvlCell[0], (int)(maxCellIdPlus1f.x));
+        const int maxCellIdP1Y =  min((int)topLvlCell[1], (int)(maxCellIdPlus1f.y));
+        const int maxCellIdP1Z =  min((int)topLvlCell[2], (int)(maxCellIdPlus1f.z));
 
         const int numCells =
             (maxCellIdP1X - minCellIdX) *
             (maxCellIdP1Y - minCellIdY) *
             (maxCellIdP1Z - minCellIdZ);
 
-#if SHINOBI__CUDA_ARCH__ >= 120
+#if HAPPYRAY__CUDA_ARCH__ >= 120
         uint nextSlot  = atomicAdd(&shMem[0], numCells);
 #else
         uint nextSlot = startPosition;
@@ -389,9 +389,8 @@ GLOBAL void writeLeafLevelPairs(
             {
                 for (uint x = minCellIdX; x < maxCellIdP1X; ++x, ++nextSlot)
                 {
-                    oPairs[2 * nextSlot] = x +
-                        y * (uint)topLvlCellRes.x +
-                        z * (uint)(topLvlCellRes.x * topLvlCellRes.y) +
+                    oPairs[2 * nextSlot] = x + y * topLvlCell[0] +
+                        z * topLvlCell[0] * topLvlCell[1] +
                         topLvlCell.getLeafRangeBegin();
                     oPairs[2 * nextSlot + 1] = indexPair.y;
                 }//end for z
@@ -404,7 +403,6 @@ GLOBAL void writeLeafLevelPairs(
 }
 
 
-template<int taDummy>
 GLOBAL void prepareLeafCellRanges(
     uint*             oPrimitiveIndices,
     uint2*            aSortedPairs,
@@ -638,7 +636,7 @@ GLOBAL void computeLeafLevelIntersectionCost(
 
     SYNCTHREADS;
 
-#if SHINOBI__CUDA_ARCH__ >= 120
+#if HAPPYRAY__CUDA_ARCH__ >= 120
 
     //reduction
     if (taBlockSize >= 512) { if (threadId1D() < 256) { shMemF[threadId1D()] += shMemF[threadId1D() + 256]; } SYNCTHREADS;   }

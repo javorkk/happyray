@@ -15,21 +15,33 @@
 
 #include "RT/Integrator/SimpleIntegrator.h"
 
-float                       sGridDensity = 5.f;
-float                       sTopLevelDensity = 0.0625f;
-float                       sLeafLevelDensity = 1.2f;
+typedef Triangle    t_Primitive;
 
-int                         sFrameId = 0;
-PrimitiveArray<Triangle>    sTriangleArray;
-PrimitiveAttributeArray<Triangle, float3> sTriangleNormalArray;
-UGridMemoryManager          sUGridMemoryManager;
-UGridSortBuilder<Triangle>  sGridBuilder;
-TLGridMemoryManager         sTLGridMemoryManager;
-TLGridSortBuilder<Triangle> sTLGridBuilder;
+#define TLGRID
 
-Camera                      sCamera;
-int                         sResX;
-int                         sResY;
+#ifdef TLGRID
+typedef TLGridMemoryManager             t_MemoryManager;
+typedef TLGridSortBuilder<t_Primitive>  t_AccStructBuilder;
+typedef TwoLevelGrid                    t_AccStruct;
+float                                   sTopLevelDensity = 0.0625f;
+float                                   sLeafLevelDensity = 1.2f;
+#else
+typedef UGridMemoryManager              t_MemoryManager;
+typedef UGridSortBuilder<t_Primitive>   t_AccStructBuilder;
+typedef UniformGrid                     t_AccStruct;
+float                                   sTopLevelDensity = 5.f;
+float                                   sLeafLevelDensity = 1.2f; //dummy
+#endif
+
+int                                             sFrameId = 0;
+PrimitiveArray<t_Primitive>                     sTriangleArray;
+PrimitiveAttributeArray<t_Primitive, float3>    sTriangleNormalArray;
+t_MemoryManager                                 sMemoryManager;
+t_AccStructBuilder                              sBuilder;
+
+Camera                                          sCamera;
+int                                             sResX;
+int                                             sResY;
 
 RegularPrimaryRayGenerator< RegularPixelSampler<2,2>, true >
     sRegularRayGen;
@@ -37,12 +49,10 @@ RegularPrimaryRayGenerator< RegularPixelSampler<2,2>, true >
 RandomPrimaryRayGenerator< GaussianPixelSampler, true >
     sRandomRayGen;
 
-
-
 SimpleIntegrator<
     Triangle,
     RegularPrimaryRayGenerator< RegularPixelSampler<2,2>, true >,
-    UniformGrid,
+    t_AccStruct,
     MollerTrumboreIntersectionTest,
     MollerTrumboreIntersectionTest
 >                           sSimpleIntegratorReg;
@@ -50,10 +60,11 @@ SimpleIntegrator<
 SimpleIntegrator<
     Triangle,
     RandomPrimaryRayGenerator< GaussianPixelSampler, true >,
-    UniformGrid,
+    t_AccStruct,
     MollerTrumboreIntersectionTest,
     MollerTrumboreIntersectionTest
 >                           sSimpleIntegratorRnd;
+
 
 void RTEngine::init()
 {}
@@ -67,8 +78,8 @@ void RTEngine::upload(
 
     uploader.uploadObjFrameVertexData(
         aFrame1, aFrame2, aCoeff, 
-        sUGridMemoryManager.bounds.vtx[0],
-        sUGridMemoryManager.bounds.vtx[1], sTriangleArray);
+        sMemoryManager.bounds.vtx[0],
+        sMemoryManager.bounds.vtx[1], sTriangleArray);
 
     uploader.uploadObjFrameVertexIndexData(
         aFrame1, aFrame2, sTriangleArray);
@@ -79,21 +90,13 @@ void RTEngine::upload(
     uploader.uploadObjFrameNormalIndexData(
         aFrame1, aFrame2, sTriangleNormalArray);
 
-    sTLGridMemoryManager.bounds.vtx[0] = sUGridMemoryManager.bounds.vtx[0];
-    sTLGridMemoryManager.bounds.vtx[1] = sUGridMemoryManager.bounds.vtx[1];
-
 }
 
 void RTEngine::buildAccStruct()
 
 {
-    sTLGridBuilder.init(sTLGridMemoryManager, sTriangleArray.numPrimitives, sTopLevelDensity, sLeafLevelDensity);
-    sTLGridBuilder.build(sTLGridMemoryManager, sTriangleArray);
-    
-    //sGridBuilder.init(sUGridMemoryManager, sTriangleArray.numPrimitives, sGridDensity);
-    //sGridBuilder.build(sUGridMemoryManager, sTriangleArray);
-
-
+    sBuilder.init(sMemoryManager, sTriangleArray.numPrimitives, sTopLevelDensity, sLeafLevelDensity);
+    sBuilder.build(sMemoryManager, sTriangleArray);
 }
 
 void RTEngine::setCamera(
@@ -119,7 +122,7 @@ void RTEngine::setCamera(
 
 void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId)
 {
-    UniformGrid grid = sUGridMemoryManager.getParameters();
+    t_AccStruct grid = sMemoryManager.getParameters();
 
     if(aImageId < 4)
     {
@@ -136,12 +139,6 @@ void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId)
 
 void RTEngine::cleanup()
 {
-    sUGridMemoryManager.freeCellMemoryDevice();
-    sUGridMemoryManager.freeCellMemoryHost();
-    sUGridMemoryManager.freePairsBufferPair();
-    sUGridMemoryManager.freeRefCountsBuffer();
-    sUGridMemoryManager.freePrimitiveIndicesBuffer();
-    sUGridMemoryManager.cleanup();
-
+    sMemoryManager.cleanup();
     sTriangleArray.cleanup();
 }

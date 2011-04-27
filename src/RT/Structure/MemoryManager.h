@@ -54,7 +54,7 @@ public:
     {
         if (aOldSize < aSize)
         {
-            MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr) );
+            //MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr) );
             aOldSize = aSize;
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr, aSize));
         }

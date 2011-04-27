@@ -13,6 +13,7 @@
 #include "RT/Structure/MemoryManager.h"
 
 #include "RT/Algorithm/RayTracingKernels.h"
+#include "RT/Algorithm/TLGridTraverser.h"
 
 template< 
     class tPrimitive,

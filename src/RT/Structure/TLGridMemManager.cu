@@ -36,6 +36,14 @@ HOST void TLGridMemoryManager::copyCellsHostToDevice()
 HOST cudaPitchedPtr TLGridMemoryManager::allocateHostCells()
 {
     checkResolution();
+
+    if(oldResX == resX && oldResY == resY && oldResZ == resZ)
+    {
+        return cellsPtrHost;
+    }
+
+    freeCellMemoryHost();
+
     t_Cell* cpuCells = NULL;
     MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&cpuCells,
         resX * resY * resZ * sizeof(t_Cell)));
@@ -43,12 +51,24 @@ HOST cudaPitchedPtr TLGridMemoryManager::allocateHostCells()
     cellsPtrHost = 
         make_cudaPitchedPtr(cpuCells, resX * sizeof(t_Cell), resX, resY);
 
+    oldResX = resX;
+    oldResY = resY;
+    oldResZ = resZ;
+
+
     return cellsPtrHost;
 }
 
 HOST cudaPitchedPtr TLGridMemoryManager::allocateDeviceCells()
 {
     checkResolution();
+
+    if(oldResX == resX && oldResY == resY && oldResZ == resZ)
+    {
+        return cellsPtrDevice;
+    }
+
+    freeCellMemoryDevice();
 
     t_Cell* gpuCells = NULL;
     cellsPtrDevice =
@@ -58,6 +78,11 @@ HOST cudaPitchedPtr TLGridMemoryManager::allocateDeviceCells()
         make_cudaExtent(resX * sizeof(t_Cell), resY, resZ);
 
     MY_CUDA_SAFE_CALL( cudaMalloc3D(&cellsPtrDevice, cellDataExtent) );
+
+    oldResX = resX;
+    oldResY = resY;
+    oldResZ = resZ;
+
 
     return cellsPtrDevice;
 }
@@ -216,6 +241,16 @@ HOST void TLGridMemoryManager::freeLeafLevelPairsBufferPair()
 
 HOST void TLGridMemoryManager::cleanup()
 {
+    freeCellMemoryDevice();
+    freeCellMemoryHost();
+    freeLeafMemoryDevice();
+    freeLeafMemoryHost();
+    freePrimitiveIndicesBuffer();
+    freeRefCountsBuffer();
+    freeCellCountsBuffer();
+    freeTopLevelPairsBufferPair();
+    freeLeafLevelPairsBufferPair();
+
 }
 //////////////////////////////////////////////////////////////////////////
 //debug related

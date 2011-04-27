@@ -203,6 +203,9 @@
     <ClInclude Include="src\RT\Algorithm\TLGridSortBuilder.h">
       <Filter>RT\Algorithm</Filter>
     </ClInclude>
+    <ClInclude Include="src\RT\Algorithm\TLGridTraverser.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\stdafx.cpp">

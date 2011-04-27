@@ -264,6 +264,7 @@
     <ClInclude Include="src\RT\Algorithm\RayTriangleIntersector.h" />
     <ClInclude Include="src\RT\Algorithm\TLGridBuildKernels.h" />
     <ClInclude Include="src\RT\Algorithm\TLGridSortBuilder.h" />
+    <ClInclude Include="src\RT\Algorithm\TLGridTraverser.h" />
     <ClInclude Include="src\RT\Algorithm\UGridSortBuilder.h" />
     <ClInclude Include="src\RT\Algorithm\UniformGridBuildKernels.h" />
     <ClInclude Include="src\RT\Integrator\SimpleIntegrator.h" />

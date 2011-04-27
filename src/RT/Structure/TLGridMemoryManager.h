@@ -16,6 +16,7 @@ public:
     typedef uint2                   t_Leaf;
 
     int resX, resY, resZ;
+    int oldResX, oldResY, oldResZ;
     BBox bounds;
     float topLevelDensity;
     float leafLevelDensity;
@@ -48,7 +49,7 @@ public:
 
 
     TLGridMemoryManager()
-        :resX(0), resY(0), resZ(0), bounds(BBox::empty()),leavesHost(NULL),
+        :resX(0), resY(0), resZ(0), oldResX(0), oldResY(0), oldResZ(0), bounds(BBox::empty()),leavesHost(NULL),
         leavesDevice(NULL), leavesSize(0), primitiveIndices(NULL),
         primitiveIndicesSize(0u), refCountsBuffer(NULL), refCountsBufferHost(NULL),
         refCountsBufferSize(0u),cellCountsBuffer(NULL),cellCountsBufferHost(NULL),

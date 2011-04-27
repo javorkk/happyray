@@ -115,7 +115,15 @@ public:
             aMemoryManager.getCellSizeRCP(),
             aMemoryManager.refCountsBuffer);
 
-        MY_CUT_CHECK_ERROR("Counting top level primitive-cell pairs failed.\n");
+        /////////////////////////////////////////////////////////////////////////
+        //DEBUG
+        //cudastd::logger::out << "Initial counts:";
+        //for(size_t i = 0; i <= numCounters; ++i)
+        //{
+        //    cudastd::logger::out << " " <<  aMemoryManager.refCountsBufferHost[i];
+        //}
+        //cudastd::logger::out << "\n ----------------------\n";
+        /////////////////////////////////////////////////////////////////////////
 
         ExclusiveScan scan;
         scan(aMemoryManager.refCountsBuffer, numCounters + 1);
@@ -123,8 +131,22 @@ public:
 #if HAPPYRAY__CUDA_ARCH__ < 120
         MY_CUDA_SAFE_CALL( cudaMemcpy(aMemoryManager.refCountsBufferHost + numCounters, (aMemoryManager.refCountsBuffer + numCounters), sizeof(uint), cudaMemcpyDeviceToHost) );
 #endif
+        /////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mScan, 0);
         cudaEventSynchronize(mScan);
+        MY_CUT_CHECK_ERROR("Counting top level primitive-cell pairs failed.\n");
+        /////////////////////////////////////////////////////////////////////////
+
+        /////////////////////////////////////////////////////////////////////////
+        //DEBUG
+        //cudastd::logger::out << "Scanned counts:";
+        //for(size_t i = 0; i <= numCounters; ++i)
+        //{
+        //    cudastd::logger::out << " " <<  aMemoryManager.refCountsBufferHost[i];
+        //}
+        //cudastd::logger::out << "\n ----------------------\n";
+        /////////////////////////////////////////////////////////////////////////
+
 
         const uint& numTopLevelPairs = aMemoryManager.refCountsBufferHost[numCounters];
         aMemoryManager.allocateTopLevelPairsBufferPair(numTopLevelPairs);
@@ -174,11 +196,10 @@ public:
             static_cast<uint>(aMemoryManager.resZ)
             );
 
-        MY_CUT_CHECK_ERROR("Setting up top level cells failed.\n");
-
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mTopLevel, 0);
         cudaEventSynchronize(mTopLevel);
+        MY_CUT_CHECK_ERROR("Setting up top level cells failed.\n");
         //////////////////////////////////////////////////////////////////////////
         //END OF TOP LEVEL GRID CONSTRUCTION
         //////////////////////////////////////////////////////////////////////////
@@ -196,18 +217,24 @@ public:
             aMemoryManager.cellCountsBuffer
             );
 
-        MY_CUT_CHECK_ERROR("Counting leaf level cells failed.\n");
-
         ExclusiveScan escan;
         escan(aMemoryManager.cellCountsBuffer, aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ + 1);
+
+        //////////////////////////////////////////////////////////////////////////
+        cudaEventRecord(mLeafCellCount, 0);
+        cudaEventSynchronize(mLeafCellCount);
+        MY_CUT_CHECK_ERROR("Counting leaf level cells failed.\n");
+        //////////////////////////////////////////////////////////////////////////
+        
+        prepareTopLevelCellRanges<<< gridCellCount, blockCellCount >>>(
+            aMemoryManager.cellCountsBuffer,
+            aMemoryManager.cellsPtrDevice
+            );
 
 #if HAPPYRAY__CUDA_ARCH__ < 120
         MY_CUDA_SAFE_CALL( cudaMemcpy(aMemoryManager.cellCountsBufferHost + aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ, (aMemoryManager.refCountsBuffer + aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ), sizeof(uint), cudaMemcpyDeviceToHost) );
 #endif
-        //////////////////////////////////////////////////////////////////////////
-        cudaEventRecord(mLeafCellCount, 0);
-        cudaEventSynchronize(mLeafCellCount);
-        //////////////////////////////////////////////////////////////////////////
+
         const uint numLeafCells = *(aMemoryManager.cellCountsBufferHost + aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ);
 
         dim3 blockRefCount = sNUM_COUNTER_THREADS;
@@ -216,12 +243,11 @@ public:
         aMemoryManager.allocateRefCountsBuffer(numCounters + 1);
 
         countLeafLevelPairs<tPrimitive, PrimitiveArray, sNUM_COUNTER_THREADS > 
-            <<< gridRefCount, blockRefCount,  blockRefCount.x * (sizeof(uint) + sizeof(float3)) >>>(
+            <<< gridRefCount, blockRefCount,  blockRefCount.x * (sizeof(uint) /*+ sizeof(float3)*/) >>>(
             aPrimitiveArray,
             numTopLevelPairs,
             (uint2*)aMemoryManager.topLevelPairsBuffer,
             aMemoryManager.cellsPtrDevice,
-            //oGrid.getResolution(),
             static_cast<uint>(aMemoryManager.resX),
             static_cast<uint>(aMemoryManager.resY),
             static_cast<uint>(aMemoryManager.resZ),
@@ -234,8 +260,6 @@ public:
             //////////////////////////////////////////////////////////////////////////
             );
 
-        MY_CUT_CHECK_ERROR("Counting leaf level pairs failed.\n");
-
         scan(aMemoryManager.refCountsBuffer, numCounters + 1);
 
 #if HAPPYRAY__CUDA_ARCH__ < 120
@@ -244,7 +268,23 @@ public:
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mLeafRefsCount, 0);
         cudaEventSynchronize(mLeafRefsCount);
+        MY_CUT_CHECK_ERROR("Counting leaf level pairs failed.\n");
         //////////////////////////////////////////////////////////////////////////
+        
+        //////////////////////////////////////////////////////////////////////////
+        //DEBUG
+        cudastd::logger::out << "Scanned leaf level reference counts: ";
+        #if HAPPYRAY__CUDA_ARCH__ < 120
+        MY_CUDA_SAFE_CALL( cudaMemcpy(aMemoryManager.refCountsBufferHost, aMemoryManager.refCountsBuffer, (numCounters + 1) * sizeof(uint), cudaMemcpyDeviceToHost ));
+        #endif
+        for(int it = 0; it < numCounters + 1; ++it)
+        {
+            cudastd::logger::out << aMemoryManager.refCountsBufferHost[it] << " ";
+        }
+        cudastd::logger::out << "\n";
+        //////////////////////////////////////////////////////////////////////////
+
+
         const uint numLeafLevelPairs = aMemoryManager.refCountsBufferHost[numCounters];
 
         aMemoryManager.allocateLeafLevelPairsBufferPair(numLeafLevelPairs);
@@ -253,14 +293,13 @@ public:
         dim3 gridRefWrite  = sNUM_WRITE_BLOCKS;
 
         writeLeafLevelPairs<tPrimitive, PrimitiveArray>
-            <<< gridRefWrite, blockRefWrite,  sizeof(uint) + sizeof(float3) * blockRefWrite.x >>>(
+            <<< gridRefWrite, blockRefWrite,  sizeof(uint)>>>(
             aPrimitiveArray,
             numTopLevelPairs,
             (uint2*)aMemoryManager.topLevelPairsBuffer,
             aMemoryManager.cellsPtrDevice,
             numLeafCells,
             aMemoryManager.refCountsBuffer,
-            //oGrid.getResolution(),
             static_cast<uint>(aMemoryManager.resX),
             static_cast<uint>(aMemoryManager.resY),
             static_cast<uint>(aMemoryManager.resZ),
@@ -268,13 +307,13 @@ public:
             aMemoryManager.getCellSize(),
             aMemoryManager.leafLevelPairsBuffer
             );
-
-        MY_CUT_CHECK_ERROR("Writing leaf level pairs failed.\n");
-        
+       
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mLeafRefsWrite, 0);
         cudaEventSynchronize(mLeafRefsWrite);
+        MY_CUT_CHECK_ERROR("Writing the leaf level pairs failed.\n");
         //////////////////////////////////////////////////////////////////////////
+        
 
         numBits = 7u;
         while (numLeafCells >> numBits != 0u){numBits += 1u;}
@@ -285,15 +324,38 @@ public:
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mSortLeafPairs, 0);
         cudaEventSynchronize(mSortLeafPairs);
+        MY_CUT_CHECK_ERROR("Sorting the leaf level pairs failed.\n");
         //////////////////////////////////////////////////////////////////////////
-
+        
+        //////////////////////////////////////////////////////////////////////////
+        //DEBUG
+        //uint2* hostPairs;
+        //MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&hostPairs, numLeafLevelPairs * sizeof(uint2)) );
+        //MY_CUDA_SAFE_CALL( cudaMemcpy(hostPairs, aMemoryManager.leafLevelPairsBuffer, numLeafLevelPairs * sizeof(uint2), cudaMemcpyDeviceToHost) );
+        //cudastd::logger::out << "Sorted leaf pairs:\n";
+        //uint numRealPairs = 0u;
+        //for(uint it = 0; it < numLeafLevelPairs - 1; ++it)
+        //{
+        //    if (hostPairs[it].x < numLeafCells)
+        //    {
+        //        ++numRealPairs;
+        //    }
+        //    if(hostPairs[it].x > hostPairs[it + 1].x)
+        //    {
+        //        cudastd::logger::out << "Unsorted pairs ( " << hostPairs[it].x << " | " << hostPairs[it].y  << " ) ";
+        //        cudastd::logger::out << " ( " << hostPairs[it+1].x << " | " << hostPairs[it+1].y  << " ) ";
+        //    }
+        //}
+        //cudastd::logger::out <<"Number of actual references: "<< numRealPairs <<"\n";
+        //////////////////////////////////////////////////////////////////////////
+        
         aMemoryManager.allocateDeviceLeaves(numLeafCells);
         aMemoryManager.setDeviceLeavesToZero();
 
         dim3 blockPrepLeafRng(sNUM_CELL_SETUP_THREADS);
         dim3 gridPrepLeafRng (sNUM_CELL_SETUP_BLOCKS );
 
-        prepareLeafCellRanges< sNUM_CELL_SETUP_THREADS >
+        prepareLeafCellRanges
             <<< gridPrepLeafRng, blockPrepLeafRng,
             (2 + blockPrepRng.x) * sizeof(uint) >>>(
             aMemoryManager.primitiveIndices,
@@ -302,26 +364,25 @@ public:
             (uint2*)aMemoryManager.leavesDevice
             );
 
-        MY_CUT_CHECK_ERROR("Setting up leaf cells and primitive array failed.\n");
-
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mEnd, 0);
         cudaEventSynchronize(mEnd);
+        MY_CUT_CHECK_ERROR("Setting up leaf cells and primitive array failed.\n");
         //////////////////////////////////////////////////////////////////////////
 
-        cudastd::logger::out << "Top  level cells:     " << aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ << "\n";
-        cudastd::logger::out << "Top  level refs:      " << numTopLevelPairs << "\n";
-        cudastd::logger::out << "Leaf level cells:     " << numLeafCells << "\n";
-        cudastd::logger::out << "Leaf level refs:      " << numLeafLevelPairs << "\n";
-        cudastd::logger::out << "Allocated memory:     " << (float)aMemoryManager.getMemorySize() / 1048576.f << " MB\n";
-        const float memCells = (float)(aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ + aMemoryManager.leavesSize) / 1048576.f;
-        cudastd::logger::out << "Memory for cells:     " << memCells << " MB\n";
-        const float memRefs = (float)(numLeafLevelPairs * sizeof(uint)) / 1048576.f;
-        cudastd::logger::out << "Memory for refs:      " << memRefs << " MB\n";
-        cudastd::logger::out << "Memory total:         " << memCells + memRefs << " MB\n";
+        //cudastd::logger::out << "Top  level cells:     " << aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ << "\n";
+        //cudastd::logger::out << "Top  level refs:      " << numTopLevelPairs << "\n";
+        //cudastd::logger::out << "Leaf level cells:     " << numLeafCells << "\n";
+        //cudastd::logger::out << "Leaf level refs:      " << numLeafLevelPairs << "\n";
+        //cudastd::logger::out << "Allocated memory:     " << (float)aMemoryManager.getMemorySize() / 1048576.f << " MB\n";
+        //const float memCells = (float)(aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ + aMemoryManager.leavesSize) / 1048576.f;
+        //cudastd::logger::out << "Memory for cells:     " << memCells << " MB\n";
+        //const float memRefs = (float)(numLeafLevelPairs * sizeof(uint)) / 1048576.f;
+        //cudastd::logger::out << "Memory for refs:      " << memRefs << " MB\n";
+        //cudastd::logger::out << "Memory total:         " << memCells + memRefs << " MB\n";
 
 
-        outputStats();
+        //outputStats();
         cleanup();
 
 

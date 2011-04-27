@@ -98,10 +98,7 @@ public:
         return sFrameBufferFloatPtr;
     }
 
-    static void cleanup()
-    {
-        deallocateHostBuffer();
-    }
+    static void cleanup();
 };
 
 

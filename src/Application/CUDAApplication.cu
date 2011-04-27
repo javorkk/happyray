@@ -122,3 +122,10 @@ float CUDAApplication::generateFrame(
 
     return oRenderTime;
 }
+
+void CUDAApplication::cleanup()
+{
+    gRTEngine.cleanup();
+    gFrameBuffer.cleanup();
+    deallocateHostBuffer();
+}
