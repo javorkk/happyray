@@ -284,7 +284,6 @@ GLOBAL void writeLeafLevelPairs(
     cudaPitchedPtr    aTopLevelCells,
     const uint        aNumLeafLevelCells,
     uint*             aStartId,
-    //const float3       aGridRes,
     const uint        aGridResX,
     const uint        aGridResY,
     const uint        aGridResZ,

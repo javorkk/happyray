@@ -115,7 +115,7 @@ class SimpleIntegrator
 {
     int* mGlobalMemoryPtr;
     size_t mGlobalMemorySize;
-
+    cudaEvent_t mTrace, mShade;
 public:
     typedef tPrimaryRayGenerator            t_PrimaryRayGenerator;
     typedef SimpleRayBuffer                 t_RayBuffer;
@@ -125,10 +125,16 @@ public:
     t_RayBuffer rayBuffer;
 
     SimpleIntegrator():rayBuffer(t_RayBuffer(NULL)), mGlobalMemorySize(0u)
-    {}
+    {
+        cudaEventCreate(&mTrace);
+        cudaEventCreate(&mShade);
+    }
 
     ~SimpleIntegrator()
     {
+        cudaEventDestroy(mTrace);
+        cudaEventDestroy(mShade);
+
         if(mGlobalMemorySize != 0u)
         {
             MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
@@ -172,7 +178,9 @@ public:
             rayBuffer,
             numRays,
             mGlobalMemoryPtr);
-
+        
+        cudaEventRecord(mTrace, 0);
+        cudaEventSynchronize(mTrace);
         MY_CUT_CHECK_ERROR("Tracing primary rays failed!\n");
     }
 
@@ -203,7 +211,9 @@ public:
             aFrameBuffer,
             aImageId,
             mGlobalMemoryPtr);
-
+        
+        cudaEventRecord(mShade, 0);
+        cudaEventSynchronize(mShade);
         MY_CUT_CHECK_ERROR("Simple shading kernel failed.\n");
     }
 
