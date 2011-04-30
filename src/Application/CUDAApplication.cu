@@ -63,6 +63,7 @@ float CUDAApplication::nextFrame()
     cudaEventCreate(&mStart);
     cudaEventCreate(&mEnd);
     cudaEventRecord(mStart, 0);
+    cudaEventSynchronize(mStart);
 
     gRTEngine.buildAccStruct();
     
@@ -106,6 +107,7 @@ float CUDAApplication::generateFrame(
     cudaEventCreate(&mStart);
     cudaEventCreate(&mEnd);
     cudaEventRecord(mStart, 0);
+    cudaEventSynchronize(mStart);
 
     gRTEngine.renderFrame(gFrameBuffer, aImageId);
 

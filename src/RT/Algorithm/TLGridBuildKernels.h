@@ -423,9 +423,10 @@ GLOBAL void prepareLeafCellRanges(
 
     SYNCTHREADS;
 
+    const int numJobs = aNumPairs + (blockSize() - aNumPairs % blockSize());
 
     for(int instanceId = globalThreadId1D();
-        instanceId < aNumPairs + blockSize() - 1;
+        instanceId < numJobs;
         instanceId += numThreads())
     {
         //load blockSize() + 2 input elements in shared memory

@@ -75,12 +75,14 @@ void cudastd::getBestCUDADevice(int argc, char* argv[])
         }
     }
 
+    MY_CUDA_SAFE_CALL( cudaThreadExit() );
+
     cudastd::logger::out << "Will use device " << bestDevice 
         << " with capability " << bestDeviceProp.major << "." 
         << bestDeviceProp.minor << " (" << bestDeviceProp.name 
         << ")\n";
 
-#if SHINOBI__CUDA_ARCH__ >= 200
+#if HAPPYRAY__CUDA_ARCH__ >= 200
 
     if (bestDeviceProp.major < 2)
     {
@@ -97,7 +99,7 @@ void cudastd::getBestCUDADevice(int argc, char* argv[])
         cudastd::logger::out << "Warning: this device does not support mapped memory!\n";
     }
 
-#elif SHINOBI__CUDA_ARCH__ >= 120
+#elif HAPPYRAY__CUDA_ARCH__ >= 120
 
     if (bestDeviceProp.major <= 1 && bestDeviceProp.minor < 2)
     {
@@ -114,7 +116,7 @@ void cudastd::getBestCUDADevice(int argc, char* argv[])
         cudastd::logger::out << "Warning: this device does not support mapped memory!\n";
     }
 
-#elif SHINOBI__CUDA_ARCH__ >= 110
+#elif HAPPYRAY__CUDA_ARCH__ >= 110
 
     if (bestDeviceProp.major <= 1 && bestDeviceProp.minor < 1)
     {
@@ -122,7 +124,7 @@ void cudastd::getBestCUDADevice(int argc, char* argv[])
             "Warning: code is compiled for devices with capability 1.1 or higher!\n";
     }
 
-#endif // __CUDA_ARCH__ >= 120 
+#endif // HAPPYRAY__CUDA_ARCH__
 
     MY_CUDA_SAFE_CALL(cudaSetDevice(bestDevice));
 

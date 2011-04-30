@@ -125,16 +125,10 @@ public:
     t_RayBuffer rayBuffer;
 
     SimpleIntegrator():rayBuffer(t_RayBuffer(NULL)), mGlobalMemorySize(0u)
-    {
-        cudaEventCreate(&mTrace);
-        cudaEventCreate(&mShade);
-    }
+    {}
 
     ~SimpleIntegrator()
     {
-        cudaEventDestroy(mTrace);
-        cudaEventDestroy(mShade);
-
         if(mGlobalMemorySize != 0u)
         {
             MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
@@ -149,6 +143,7 @@ public:
         FrameBuffer&                    aFrameBuffer
         )
     {
+
         const uint sharedMemoryTrace = SHARED_MEMORY_TRACE;
 
         const uint numRays = aFrameBuffer.resX * aFrameBuffer.resY;
@@ -170,6 +165,8 @@ public:
         rayBuffer.setMemPtr(mGlobalMemoryPtr + 1);
         //MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcGrid", &aAccStruct, sizeof(UniformGrid)) );
 
+        cudaEventCreate(&mTrace);
+
         trace<tPrimitive, t_PrimaryRayGenerator, t_RayBuffer, tPrimaryIntersector >
             <<< blockGridTrace, threadBlockTrace, sharedMemoryTrace>>>(
             aStorage,
@@ -182,6 +179,8 @@ public:
         cudaEventRecord(mTrace, 0);
         cudaEventSynchronize(mTrace);
         MY_CUT_CHECK_ERROR("Tracing primary rays failed!\n");
+        cudaEventDestroy(mTrace);
+
     }
 
     HOST void shade(
@@ -200,6 +199,7 @@ public:
         dim3 threadBlockShade( RENDERTHREADSX, RENDERTHREADSY );
         dim3 blockGridShade  ( RENDERBLOCKSX, RENDERBLOCKSY );
 
+        cudaEventCreate(&mShade);
 
         simpleShade<
             tPrimitive,
@@ -215,6 +215,7 @@ public:
         cudaEventRecord(mShade, 0);
         cudaEventSynchronize(mShade);
         MY_CUT_CHECK_ERROR("Simple shading kernel failed.\n");
+        cudaEventDestroy(mShade);
     }
 
   

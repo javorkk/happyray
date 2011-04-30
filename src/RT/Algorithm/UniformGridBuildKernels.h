@@ -182,7 +182,7 @@ template<int taBlockSize>
 GLOBAL void prepareCellRanges(
                               uint*             oPrimitiveIndices,
                               uint2*            aSortedPairs,
-                              const uint        aNumInstances,
+                              const uint        aNumPairs,
                               cudaPitchedPtr    aGridCellsPtr,
                               const uint        aGridResX,
                               const uint        aGridResY,
@@ -202,9 +202,11 @@ GLOBAL void prepareCellRanges(
     padShMem[threadId1D()] = 0u;
 
     SYNCTHREADS;
+    
+    const int numJobs = aNumPairs + (blockSize() - aNumPairs % blockSize());
 
     for(int instanceId = globalThreadId1D();
-        instanceId < aNumInstances + blockSize() - 1;
+        instanceId < numJobs;
         instanceId += numThreads())
     {
         //load blockSize() + 2 input elements in shared memory
@@ -216,12 +218,12 @@ GLOBAL void prepareCellRanges(
             //padding left
             shMem[0] = aSortedPairs[instanceId - 1].x;
         }
-        if (threadId1D() == 0 && instanceId + blockSize() < aNumInstances)
+        if (threadId1D() == 0 && instanceId + blockSize() < aNumPairs)
         {
             //padding right
             padShMem[blockSize()] = aSortedPairs[instanceId + blockSize()].x;
         }
-        if (instanceId < aNumInstances)
+        if (instanceId < aNumPairs)
         {
             padShMem[threadId1D()] = aSortedPairs[instanceId].x;
         }
@@ -232,7 +234,7 @@ GLOBAL void prepareCellRanges(
         //which means that at this point there is an end of and a begin of a range
 
         //compare left neighbor
-        if (instanceId > 0 && instanceId < aNumInstances && padShMem[threadId1D()] != shMem[threadId1D()])
+        if (instanceId > 0 && instanceId < aNumPairs && padShMem[threadId1D()] != shMem[threadId1D()])
         {
             //begin of range
             uint cellIdX =  padShMem[threadId1D()] % aGridResX;
@@ -247,7 +249,7 @@ GLOBAL void prepareCellRanges(
         }
 
         //compare right neighbor
-        if (instanceId < aNumInstances && padShMem[threadId1D()] != padShMem[threadId1D() + 1])
+        if (instanceId < aNumPairs && padShMem[threadId1D()] != padShMem[threadId1D() + 1])
         {
             //end of range
             uint cellIdX =  padShMem[threadId1D()] % aGridResX;
@@ -267,7 +269,7 @@ GLOBAL void prepareCellRanges(
 
     //compact the primitive indices from the sorted pairs to the output indices
     for(int instanceId = globalThreadId1D();
-        instanceId < aNumInstances;
+        instanceId < aNumPairs;
         instanceId += numThreads())
     {
         oPrimitiveIndices[instanceId] = aSortedPairs[instanceId].y;

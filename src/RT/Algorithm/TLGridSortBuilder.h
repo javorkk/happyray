@@ -27,7 +27,7 @@ class TLGridSortBuilder
     static const uint   sNUM_WRITE_THREADS      = sNUM_COUNTER_THREADS;
     static const uint   sNUM_WRITE_BLOCKS       = sNUM_COUNTER_BLOCKS;
     static const uint   sNUM_CELL_SETUP_THREADS = 256u;
-    static const uint   sNUM_CELL_SETUP_BLOCKS  =  90u;
+    static const uint   sNUM_CELL_SETUP_BLOCKS  = 240u;
 
     uint mNumPrimitives;
     cudaEvent_t mStart, mDataUpload, mScan;
@@ -46,6 +46,7 @@ public:
         cudaEventCreate(&mStart);
         cudaEventCreate(&mDataUpload);
         cudaEventRecord(mStart, 0);
+        cudaEventSynchronize(mStart);
         //////////////////////////////////////////////////////////////////////////
 
         float3 diagonal = aMemoryManager.bounds.diagonal();
@@ -347,6 +348,7 @@ public:
         //}
         //////////////////////////////////////////////////////////////////////////
         
+        aMemoryManager.allocatePrimitiveIndicesBuffer(numLeafLevelPairs);
         aMemoryManager.allocateDeviceLeaves(numLeafCells);
         aMemoryManager.setDeviceLeavesToZero();
 
@@ -355,7 +357,7 @@ public:
 
         prepareLeafCellRanges
             <<< gridPrepLeafRng, blockPrepLeafRng,
-            (2 + blockPrepRng.x) * sizeof(uint) >>>(
+            (2 + blockPrepLeafRng.x) * sizeof(uint) >>>(
             aMemoryManager.primitiveIndices,
             (uint2*)aMemoryManager.leafLevelPairsBuffer,
             numLeafLevelPairs,
