@@ -54,9 +54,6 @@ public:
     static void allocateHostBuffer(const int aResX, const int aResY)
     {
         deallocateHostBuffer();
-
-        sRESX = aResX;
-        sRESY = aResY;
         MY_CUDA_SAFE_CALL( cudaHostAlloc((void**)&sFrameBufferFloatPtr, aResX * aResY * 3 * sizeof(float), cudaHostAllocDefault) );
     }
 

@@ -67,25 +67,33 @@
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src</IncludePath>
+    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include</IncludePath>
+    <LibraryPath>$(LIB32);$(LibraryPath);$(ProjectDir)contrib/lib/x86</LibraryPath>
+    <ExecutablePath>$(BIN32);$(ExecutablePath);$(ProjectDir)contrib/bin/x86</ExecutablePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src</IncludePath>
+    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include</IncludePath>
+    <LibraryPath>$(LIB64);$(LibraryPath);$(ProjectDir)contrib/lib/x64</LibraryPath>
+    <ExecutablePath>$(BIN64);$(ExecutablePath);$(ProjectDir)contrib/bin/x64</ExecutablePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src</IncludePath>
+    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include</IncludePath>
+    <LibraryPath>$(LIB32);$(LibraryPath);$(ProjectDir)contrib/lib/x86</LibraryPath>
+    <ExecutablePath>$(BIN32);$(ExecutablePath);$(ProjectDir)contrib/bin/x86</ExecutablePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src</IncludePath>
+    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include</IncludePath>
+    <LibraryPath>$(LIB64);$(LibraryPath);$(ProjectDir)contrib/lib/x64</LibraryPath>
+    <ExecutablePath>$(BIN64);$(ExecutablePath);$(ProjectDir)contrib/bin/x64</ExecutablePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -266,6 +274,7 @@
     <ClInclude Include="src\RT\Algorithm\TLGridSortBuilder.h" />
     <ClInclude Include="src\RT\Algorithm\TLGridTraverser.h" />
     <ClInclude Include="src\RT\Algorithm\UGridSortBuilder.h" />
+    <ClInclude Include="src\RT\Algorithm\UGridTraverser.h" />
     <ClInclude Include="src\RT\Algorithm\UniformGridBuildKernels.h" />
     <ClInclude Include="src\RT\Integrator\SimpleIntegrator.h" />
     <ClInclude Include="src\RT\Primitive\BBox.hpp" />

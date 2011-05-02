@@ -182,6 +182,8 @@ void SDLGLApplication::resetCamera()
 
 void SDLGLApplication::cameraChanged()
 {
+    mCamera.setResX(mRESX);
+    mCamera.setResY(mRESY);
     mNumImages = 0;
 }
 
@@ -1037,11 +1039,6 @@ void SDLGLApplication::changeWindowSize(void)
     SDL_SetWindowSize(mainwindow, mRESX, mRESY);
 
     maincontext = SDL_GL_CreateContext(mainwindow);
-
-    CUDAApplication::allocateHostBuffer(mRESX, mRESY);
-
-    mCamera.setResX(mRESX);
-    mCamera.setResY(mRESY);
 
     cameraChanged();
     

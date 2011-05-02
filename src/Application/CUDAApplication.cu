@@ -86,8 +86,7 @@ float CUDAApplication::generateFrame(
     {
         sRESX = aView.getResX();
         sRESY = aView.getResY();
-        allocateHostBuffer(aView.getResX(), aView.getResY());
-        gFrameBuffer.cleanup();
+        allocateHostBuffer(sRESX, sRESY);
         gFrameBuffer.init(sRESX, sRESY);
     }
 
@@ -114,7 +113,7 @@ float CUDAApplication::generateFrame(
     cudaEventRecord(mEnd, 0);
     cudaEventSynchronize(mEnd);
 
-    gFrameBuffer.download((float3*)sFrameBufferFloatPtr, sRESX, sRESY);
+    gFrameBuffer.download((float3*)sFrameBufferFloatPtr);
 
     float oRenderTime;
     cudaEventElapsedTime(&oRenderTime, mStart, mEnd);

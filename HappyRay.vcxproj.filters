@@ -204,7 +204,10 @@
       <Filter>RT\Algorithm</Filter>
     </ClInclude>
     <ClInclude Include="src\RT\Algorithm\TLGridTraverser.h">
-      <Filter>Headers</Filter>
+      <Filter>RT\Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Algorithm\UGridTraverser.h">
+      <Filter>RT\Algorithm</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
