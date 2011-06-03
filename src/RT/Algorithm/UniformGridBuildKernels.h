@@ -48,8 +48,6 @@ GLOBAL void countPairs(
     extern SHARED uint shMem[];
     shMem[threadId1D()] = 0u;
 
-    const float EPSILON = (aCellSizeRCP.x + aCellSizeRCP.y + aCellSizeRCP.z) * 10E-5f;
-
     for(int primitiveId = globalThreadId1D(); primitiveId < aNumPrimitives; primitiveId += numThreads())
     {
         const tPrimitive prim = aPrimitiveArray[primitiveId];
@@ -57,17 +55,17 @@ GLOBAL void countPairs(
         
         float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
         minCellIdf =
-            max(rep(0.f), (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP + rep(-EPSILON));
+            max(rep(0.f), (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP );
         const float3 maxCellIdf =
-            min(aGridRes - rep(1.f), (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP + rep(EPSILON));
+            min(aGridRes - rep(1.f), (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP );
 
-        const uint minCellIdX =  (uint)(minCellIdf.x);
-        const uint minCellIdY =  (uint)(minCellIdf.y);
-        const uint minCellIdZ =  (uint)(minCellIdf.z);
+        const int minCellIdX =   max(0, (int)(minCellIdf.x));
+        const int minCellIdY =   max(0, (int)(minCellIdf.y));
+        const int minCellIdZ =   max(0, (int)(minCellIdf.z));
 
-        const uint maxCellIdX =  (uint)(maxCellIdf.x);
-        const uint maxCellIdY =  (uint)(maxCellIdf.y);
-        const uint maxCellIdZ =  (uint)(maxCellIdf.z);
+        const int maxCellIdX =  min((int)aGridRes.x, (int)(maxCellIdf.x));
+        const int maxCellIdY =  min((int)aGridRes.y, (int)(maxCellIdf.y));
+        const int maxCellIdZ =  min((int)aGridRes.z, (int)(maxCellIdf.z));
 
         shMem[threadId1D()] += (maxCellIdX - minCellIdX + 1)
             * (maxCellIdY - minCellIdY + 1)
@@ -128,8 +126,6 @@ GLOBAL void writePairs(
 
 #endif
 
-    const float EPSILON = (aCellSizeRCP.x + aCellSizeRCP.y + aCellSizeRCP.z) * 10E-5f;
-
     for(int primitiveId = globalThreadId1D(); primitiveId < aNumPrimitives; primitiveId += numThreads())
     {
         const tPrimitive prim = aPrimitiveArray[primitiveId];
@@ -137,17 +133,17 @@ GLOBAL void writePairs(
         
         //float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
         float3 minCellIdf =
-            max(rep(0.f), (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP + rep(-EPSILON));
+            max(rep(0.f), (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP );
         const float3 maxCellIdf =
-            min(aGridRes - rep(1.f), (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP + rep(EPSILON));
+            min(aGridRes - rep(1.f), (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP );
 
-        const uint minCellIdX =  (uint)(minCellIdf.x);
-        const uint minCellIdY =  (uint)(minCellIdf.y);
-        const uint minCellIdZ =  (uint)(minCellIdf.z);
+        const int minCellIdX =   max(0, (int)(minCellIdf.x));
+        const int minCellIdY =   max(0, (int)(minCellIdf.y));
+        const int minCellIdZ =   max(0, (int)(minCellIdf.z));
 
-        const uint maxCellIdX =  (uint)(maxCellIdf.x);
-        const uint maxCellIdY =  (uint)(maxCellIdf.y);
-        const uint maxCellIdZ =  (uint)(maxCellIdf.z);
+        const int maxCellIdX =  min((int)aGridRes.x, (int)(maxCellIdf.x));
+        const int maxCellIdY =  min((int)aGridRes.y, (int)(maxCellIdf.y));
+        const int maxCellIdZ =  min((int)aGridRes.z, (int)(maxCellIdf.z));
 
         const uint numCells =
             (maxCellIdX - minCellIdX + 1u) *

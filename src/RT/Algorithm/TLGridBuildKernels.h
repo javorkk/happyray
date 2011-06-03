@@ -218,9 +218,9 @@ GLOBAL void countLeafLevelPairs(
         //float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
         //minCellIdf =
         const float3 minCellIdf =
-            (bounds.vtx[0] - topLvlCellOrigin + rep(-10E-5f)) * subCellSizeRCP;
+            (bounds.vtx[0] - topLvlCellOrigin ) * subCellSizeRCP;
         const float3 maxCellIdPlus1f =
-            (bounds.vtx[1] - topLvlCellOrigin + rep(10E-5f)) * subCellSizeRCP + rep(1.f);
+            (bounds.vtx[1] - topLvlCellOrigin ) * subCellSizeRCP + rep(1.f);
 
         const int minCellIdX =  max(0, (int)(minCellIdf.x));
         const int minCellIdY =  max(0, (int)(minCellIdf.y));
@@ -381,9 +381,9 @@ GLOBAL void writeLeafLevelPairs(
         const float3 subCellSizeRCP = topLvlCellRes / aCellSize;
 
         const float3 minCellIdf =
-            (bounds.vtx[0] - topLvlCellOrigin + rep(-10E-5f)) * subCellSizeRCP;
+            (bounds.vtx[0] - topLvlCellOrigin) * subCellSizeRCP;
         const float3 maxCellIdPlus1f =
-            (bounds.vtx[1] - topLvlCellOrigin + rep(10E-5f)) * subCellSizeRCP + rep(1.f);
+            (bounds.vtx[1] - topLvlCellOrigin) * subCellSizeRCP + rep(1.f);
 
         const int minCellIdX =  max(0, (int)(minCellIdf.x));
         const int minCellIdY =  max(0, (int)(minCellIdf.y));
