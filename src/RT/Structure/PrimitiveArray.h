@@ -290,7 +290,7 @@ public:
     //cleanup
     ////////////////////////////////////////////////////////////
     aArray.unbindVerticesTexture();
-    MemoryManager::allocateMappedDeviceArray(
+    MemoryManager::allocateHostDeviceArrayPair(
         (void**)&aArray.vertexBufferDevicePtr,
         (void**)&aArray.vertexBufferHostPtr,
         verticesNewSize,
@@ -299,6 +299,7 @@ public:
         aArray.vertexBufferSize);
 
     float4* verticesHost = aArray.vertexBufferHostPtr;
+    float4* verticesDevice = aArray.vertexBufferDevicePtr;
     
     //////////////////////////////////////////////////////////////////////////
     //Copy and transfer vertex data
@@ -333,6 +334,9 @@ public:
         oMaxBound.y = cudastd::max(verticesHost[it].y, oMaxBound.y);
         oMaxBound.z = cudastd::max(verticesHost[it].z, oMaxBound.z);
     }
+    
+    MY_CUDA_SAFE_CALL( cudaMemcpy( verticesDevice, verticesHost, verticesNewSize, cudaMemcpyHostToDevice) );
+
 
     aArray.bindVerticesTexture(aArray.vertexBufferDevicePtr, aArray.vertexBufferSize);
 }
@@ -351,7 +355,7 @@ HOST void ObjUploader::uploadObjFrameNormalData(
     ////////////////////////////////////////////////////////////
     //cleanup
     ////////////////////////////////////////////////////////////
-    MemoryManager::allocateMappedDeviceArray(
+    MemoryManager::allocateHostDeviceArrayPair(
         (void**)&aArray.dataBufferDevicePtr,
         (void**)&aArray.dataBufferHostPtr,
         normalsNewSize,
@@ -360,6 +364,7 @@ HOST void ObjUploader::uploadObjFrameNormalData(
         aArray.dataBufferSize);
 
     float3* normalsHost = aArray.dataBufferHostPtr;
+    float3* normalsDevice = aArray.dataBufferDevicePtr;
     
     //////////////////////////////////////////////////////////////////////////
     //Copy and transfer normal data
@@ -378,6 +383,9 @@ HOST void ObjUploader::uploadObjFrameNormalData(
         normalsHost[it].y = aKeyFrame2.getNormal(it).y;
         normalsHost[it].z = aKeyFrame2.getNormal(it).z;
     }
+
+    MY_CUDA_SAFE_CALL( cudaMemcpy( normalsDevice, normalsHost, normalsNewSize, cudaMemcpyHostToDevice) );
+
 }
 
 HOST void ObjUploader::uploadObjFrameVertexIndexData(
@@ -395,7 +403,7 @@ HOST void ObjUploader::uploadObjFrameVertexIndexData(
     //cleanup
     ////////////////////////////////////////////////////////////
     aArray.unbindIndicesTexture();
-    MemoryManager::allocateMappedDeviceArray(
+    MemoryManager::allocateHostDeviceArrayPair(
         (void**)&aArray.indicesBufferDevicePtr,
         (void**)&aArray.indicesBufferHostPtr,
         indicesNewSize,
@@ -404,6 +412,7 @@ HOST void ObjUploader::uploadObjFrameVertexIndexData(
         aArray.indicesBufferSize);
 
     uint* indicesHost = aArray.indicesBufferHostPtr;
+    uint* indicesDevice = aArray.indicesBufferDevicePtr;
 
     
     //////////////////////////////////////////////////////////////////////////
@@ -418,6 +427,8 @@ HOST void ObjUploader::uploadObjFrameVertexIndexData(
     {
         indicesHost[it]       = aKeyFrame2.getVertexIndex(it);
     }
+
+    MY_CUDA_SAFE_CALL( cudaMemcpy( indicesDevice, indicesHost, indicesNewSize, cudaMemcpyHostToDevice) );
 
     aArray.bindIndicesTexture(aArray.indicesBufferDevicePtr, aArray.indicesBufferSize);
 }
@@ -436,7 +447,7 @@ HOST void ObjUploader::uploadObjFrameNormalIndexData(
     ////////////////////////////////////////////////////////////
     //cleanup
     ////////////////////////////////////////////////////////////
-    MemoryManager::allocateMappedDeviceArray(
+    MemoryManager::allocateHostDeviceArrayPair(
         (void**)&aArray.indicesBufferDevicePtr,
         (void**)&aArray.indicesBufferHostPtr,
         indicesNewSize,
@@ -445,6 +456,7 @@ HOST void ObjUploader::uploadObjFrameNormalIndexData(
         aArray.indicesBufferSize);
 
     uint* normalIndicesHost = aArray.indicesBufferHostPtr;
+    uint* normalIndicesDevice = aArray.indicesBufferDevicePtr;
 
     
     //////////////////////////////////////////////////////////////////////////
@@ -460,6 +472,7 @@ HOST void ObjUploader::uploadObjFrameNormalIndexData(
         normalIndicesHost[it] = aKeyFrame2.getNormalIndex(it);
     }
 
+    MY_CUDA_SAFE_CALL( cudaMemcpy( normalIndicesDevice, normalIndicesHost, indicesNewSize, cudaMemcpyHostToDevice) );
 }
 
 };//class ObjUploader

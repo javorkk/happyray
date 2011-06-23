@@ -46,7 +46,30 @@ public:
         }
 
         MY_CUDA_SAFE_CALL(cudaHostGetDevicePointer(aOldDevicePtr, *aOldHostPtr, 0));
+
+        *aDevicePtr = *aOldDevicePtr;
+        *aHostPtr = *aOldHostPtr;
 #else
+        allocateHostDeviceArrayPair(aDevicePtr, aHostPtr, aSize,
+        aOldDevicePtr, aOldHostPtr, aOldSize);
+
+
+#endif
+
+    }
+
+    HOST static void freeMappedDeviceArray(void* aHostPtr, void* aDevicePtr)
+    {
+#if HAPPYRAY__CUDA_ARCH__ >= 120           
+        MY_CUDA_SAFE_CALL( cudaFreeHost(aHostPtr) );
+#else
+       freeHostDeviceArrayPair(aHostPtr, aDevicePtr);
+#endif
+    }
+
+    HOST static void allocateHostDeviceArrayPair(void** aDevicePtr, void** aHostPtr, size_t aSize,
+        void** aOldDevicePtr, void** aOldHostPtr, size_t& aOldSize)
+    {
         if (aOldSize < aSize)
         {
             MY_CUDA_SAFE_CALL( cudaFreeHost(*aOldHostPtr) );
@@ -56,20 +79,15 @@ public:
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldDevicePtr,aSize) );
         }
 
-#endif
         *aDevicePtr = *aOldDevicePtr;
         *aHostPtr = *aOldHostPtr;
-
     }
 
-    HOST static void freeMappedDeviceArray(void* aHostPtr, void* aDevicePtr)
+    HOST static void freeHostDeviceArrayPair(void* aHostPtr, void* aDevicePtr)
     {
-#if HAPPYRAY__CUDA_ARCH__ >= 120           
-        MY_CUDA_SAFE_CALL( cudaFreeHost(aHostPtr) );
-#else
+
         MY_CUDA_SAFE_CALL( cudaFreeHost(aHostPtr) );
         MY_CUDA_SAFE_CALL( cudaFree(aDevicePtr) );
-#endif
     }
 
     HOST static void allocateDeviceArray(void** aPtr, size_t aSize,
