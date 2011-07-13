@@ -106,7 +106,7 @@ float CUDAApplication::generateFrame(
     cudaEventCreate(&mStart);
     cudaEventCreate(&mEnd);
     cudaEventRecord(mStart, 0);
-    cudaEventSynchronize(mStart);
+    //cudaEventSynchronize(mStart);
 
     gRTEngine.renderFrame(gFrameBuffer, aImageId);
 
