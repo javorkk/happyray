@@ -125,8 +125,8 @@ public:
             aMemoryManager.refCountsBuffer);
 
         cudaEventRecord(mRefCount, 0);
-        cudaEventSynchronize(mRefCount);
-        MY_CUT_CHECK_ERROR("Counting primitive-cell pairs failed.\n");
+        //cudaEventSynchronize(mRefCount);
+        //MY_CUT_CHECK_ERROR("Counting primitive-cell pairs failed.\n");
         
         /////////////////////////////////////////////////////////////////////////
         //DEBUG
@@ -188,9 +188,9 @@ public:
         Sort radixSort;
         radixSort((uint2*)aMemoryManager.pairsBuffer, (uint2*)aMemoryManager.pairsPingBuffer, numPairs, numBits);
 
-        cudaEventRecord(mSort, 0);
-        cudaEventSynchronize(mSort);
-        MY_CUT_CHECK_ERROR("Sorting primitive-cell pairs failed.\n");
+        //cudaEventRecord(mSort, 0);
+        //cudaEventSynchronize(mSort);
+        //MY_CUT_CHECK_ERROR("Sorting primitive-cell pairs failed.\n");
 
 
         ////////////////////////////////////////////////////////////////////////////
@@ -266,9 +266,9 @@ public:
             );
 
         //////////////////////////////////////////////////////////////////////////
-        cudaEventRecord(mEnd, 0);
-        cudaEventSynchronize(mEnd);
-        MY_CUT_CHECK_ERROR("Setting up grid cells failed.\n");
+        //cudaEventRecord(mEnd, 0);
+        //cudaEventSynchronize(mEnd);
+        //MY_CUT_CHECK_ERROR("Setting up grid cells failed.\n");
         //////////////////////////////////////////////////////////////////////////
 
         ////////////////////////////////////////////////////////////////////////////

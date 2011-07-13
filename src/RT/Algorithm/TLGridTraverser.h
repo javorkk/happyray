@@ -36,83 +36,30 @@
 #include "RT/Structure/PrimitiveArray.h"
 
 /////////////////////////////////////////////////////////////////
-//Two-Level Grid Traversal Kernel
+//Two-Level Grid Traversal Classes
 /////////////////////////////////////////////////////////////////
 
 #define MIN_DIMENSION(aX, aY, aZ)	                           \
     (aX < aY) ? ((aX < aZ) ? 0 : 2)	: ((aY < aZ) ? 1 : 2)
 
-template<class tPrimitive, class tRayGenerator, class tRayBuffer,
-class tIntersector>
-    GLOBAL void trace(
-    PrimitiveArray<tPrimitive>  aPrimitiveArray,
-    tRayGenerator               aRayGenerator,
-    TwoLevelGrid                dcGrid,
-    tRayBuffer                  oBuffer,
-    uint                        aNumRays,
-    int*                        aGlobalMemoryPtr
-    )
+template<class tPrimitive, class tIntersector>
+class TLGridTraverser
 {
-    tIntersector intersector;
-
-    extern SHARED uint sharedMem[];
-#if __CUDA_ARCH__ >= 110
-    volatile uint*  nextRayArray = sharedMem;
-    volatile uint*  rayCountArray = nextRayArray + RENDERTHREADSY;
-
-    if (threadId1DInWarp32() == 0u)
+public:
+    DEVICE void operator()(
+        PrimitiveArray<tPrimitive>  aPrimitiveArray,
+        TwoLevelGrid                dcGrid,
+        float3&                     rayOrg,
+        float3&                     rayDirRCP,
+        float&                      rayT,
+        uint&                       bestHit,
+        bool                        traversalFlag,
+        uint*                       sharedMemNew
+        )
     {
-        rayCountArray[warpId32()] = 0u;
-    }
-
-    volatile uint& localPoolNextRay = nextRayArray[warpId32()];
-    volatile uint& localPoolRayCount = rayCountArray[warpId32()];
-
-    while (true)
-    {
-        if (localPoolRayCount==0 && threadId1DInWarp32() == 0)
-        {
-            localPoolNextRay = atomicAdd(&aGlobalMemoryPtr[0], BATCHSIZE);
-            localPoolRayCount = BATCHSIZE;
-        }
-        // get rays from local pool
-        uint myRayIndex = localPoolNextRay + threadId1DInWarp32();
-        if (ALL(myRayIndex >= aNumRays))
-        {
-            return;
-        }
-
-        if (myRayIndex >= aNumRays) //keep whole warp active
-        {
-            myRayIndex = aNumRays;
-        }
-
-        if (threadId1DInWarp32() == 0)
-        {
-            localPoolNextRay += WARPSIZE;
-            localPoolRayCount -= WARPSIZE;
-        }
-#else
-    for(uint myRayIndex = globalThreadId1D(); myRayIndex < aNumRays;
-        myRayIndex += numThreads())
-    {
-#endif
-        //////////////////////////////////////////////////////////////////////////
-        //Initialization
-
-        uint* sharedMemNew = sharedMem + RENDERTHREADSX * RENDERTHREADSY / WARPSIZE * 2;
-        float3 rayOrg;
-        float3& rayDirRCP = (((float3*)sharedMemNew)[threadId1D32()]);
-
-        float rayT  = aRayGenerator(rayOrg, rayDirRCP, myRayIndex, aNumRays);
-        rayDirRCP.x = 1.f / rayDirRCP.x;
-        rayDirRCP.y = 1.f / rayDirRCP.y;
-        rayDirRCP.z = 1.f / rayDirRCP.z;
-
-        uint  bestHit = aPrimitiveArray.numPrimitives;
+        tIntersector intersector;
         //////////////////////////////////////////////////////////////////////////
         //Traversal State
-        bool traversalFlag = (rayT >= 0.f) && myRayIndex < aNumRays;
         float tMax[3];
         int cellId[3];
         float tEntry;
@@ -161,7 +108,7 @@ class tIntersector>
             cellId[2] = static_cast<int>(cellIdf.z);
 
             traversalFlag = traversalFlag && (  
-                    (cellId[0] != ((rayDirRCP.x > 0.f) ? dcGrid.res[0] : -1)) 
+                (cellId[0] != ((rayDirRCP.x > 0.f) ? dcGrid.res[0] : -1)) 
                 &&  (cellId[1] != ((rayDirRCP.y > 0.f) ? dcGrid.res[1] : -1))
                 &&  (cellId[2] != ((rayDirRCP.z > 0.f) ? dcGrid.res[2] : -1)) 
                 );
@@ -242,8 +189,8 @@ class tIntersector>
                 if (secondLvlFlag)
                 {
                     cellRange = dcGrid.leaves[cell.getLeafRangeBegin()
-                            + cellIdLvl2[0] + cell[0] * cellIdLvl2[1]
-                            + cell[0] * cell[1] * cellIdLvl2[2]
+                        + cellIdLvl2[0] + cell[0] * cellIdLvl2[1]
+                    + cell[0] * cell[1] * cellIdLvl2[2]
                     ];
                 }
 
@@ -265,10 +212,10 @@ class tIntersector>
 
                     cellIdLvl2[tMinDimension] += (toPtr(rayDirRCP)[tMinDimension] > 0.f) ? 1 : -1;
                     tMaxLvl2[tMinDimension] += subCellSize[tMinDimension] * fabsf(toPtr(rayDirRCP)[tMinDimension]);
-                    
+
                     secondLvlFlag = secondLvlFlag &&
-                         cellIdLvl2[tMinDimension] != cell[tMinDimension]
-                         && cellIdLvl2[tMinDimension] != -1;
+                        cellIdLvl2[tMinDimension] != cell[tMinDimension]
+                    && cellIdLvl2[tMinDimension] != -1;
                     //////////////////////////////////////////////////////////////////////////
                 }
             }//end traversal inner loop
@@ -294,22 +241,8 @@ class tIntersector>
         }
         //end traversal outer loop
         ////////////////////////////////////////////////////////////////////////////
-
-        //////////////////////////////////////////////////////////////////////////
-        //Output
-        float3 rayDir;
-        rayDir.x = 1.f / rayDirRCP.x;
-        rayDir.y = 1.f / rayDirRCP.y;
-        rayDir.z = 1.f / rayDirRCP.z;
-
-        if(rayT < FLT_MAX)
-            bestHit = dcGrid.primitives[bestHit];
-
-        oBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, aNumRays);
-        //////////////////////////////////////////////////////////////////////////
-
     }
-}
+};
 
 
 #undef  MIN_DIMENSION

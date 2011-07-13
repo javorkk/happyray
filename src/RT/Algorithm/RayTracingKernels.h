@@ -31,4 +31,109 @@
 #include "RT/Algorithm/UGridTraverser.h"
 #include "RT/Algorithm/TLGridTraverser.h"
 
+#define RENDERTHREADSX  32
+#define RENDERTHREADSY  4
+#define RENDERBLOCKSX   60
+#define RENDERBLOCKSY   1
+#define BATCHSIZE       96
+
+#define SHARED_MEMORY_TRACE                                                    \
+    RENDERTHREADSX * RENDERTHREADSY * sizeof(float3) +                          \
+    RENDERTHREADSX * RENDERTHREADSY / WARPSIZE * 2 * sizeof(uint)              \
+    /*End Macro*/
+
+
+template<
+    class tPrimitive,
+    class tAccelerationStructure,
+    class tRayGenerator,
+    class tRayBuffer,
+    class tIntersector, 
+    template <class, class> class tTraverser >
+
+    GLOBAL void trace(
+    PrimitiveArray<tPrimitive>  aPrimitiveArray,
+    tRayGenerator               aRayGenerator,
+    tAccelerationStructure      dcGrid,
+    tRayBuffer                  oBuffer,
+    uint                        aNumRays,
+    int*                        aGlobalMemoryPtr
+    )
+{
+    extern SHARED uint sharedMem[];
+#if __CUDA_ARCH__ >= 110
+    volatile uint*  nextRayArray = sharedMem;
+    volatile uint*  rayCountArray = nextRayArray + RENDERTHREADSY;
+
+    if (threadId1DInWarp32() == 0u)
+    {
+        rayCountArray[warpId32()] = 0u;
+    }
+
+    volatile uint& localPoolNextRay = nextRayArray[warpId32()];
+    volatile uint& localPoolRayCount = rayCountArray[warpId32()];
+
+    while (true)
+    {
+        if (localPoolRayCount==0 && threadId1DInWarp32() == 0)
+        {
+            localPoolNextRay = atomicAdd(&aGlobalMemoryPtr[0], BATCHSIZE);
+            localPoolRayCount = BATCHSIZE;
+        }
+        // get rays from local pool
+        uint myRayIndex = localPoolNextRay + threadId1DInWarp32();
+        if (ALL(myRayIndex >= aNumRays))
+        {
+            return;
+        }
+
+        if (myRayIndex >= aNumRays) //keep whole warp active
+        {
+            myRayIndex = aNumRays;
+        }
+
+        if (threadId1DInWarp32() == 0)
+        {
+            localPoolNextRay += WARPSIZE;
+            localPoolRayCount -= WARPSIZE;
+        }
+#else
+    for(uint myRayIndex = globalThreadId1D(); myRayIndex < aNumRays;
+        myRayIndex += numThreads())
+    {
+#endif
+        //////////////////////////////////////////////////////////////////////////
+        //Initialization
+        uint* sharedMemNew = sharedMem + RENDERTHREADSX * RENDERTHREADSY / WARPSIZE * 2;
+        float3 rayOrg;
+        float3& rayDirRCP = (((float3*)sharedMemNew)[threadId1D32()]);
+
+        float rayT  = aRayGenerator(rayOrg, rayDirRCP, myRayIndex, aNumRays);
+        rayDirRCP.x = 1.f / rayDirRCP.x;
+        rayDirRCP.y = 1.f / rayDirRCP.y;
+        rayDirRCP.z = 1.f / rayDirRCP.z;
+
+        uint  bestHit = aPrimitiveArray.numPrimitives;
+        bool traversalFlag = (rayT >= 0.f) && myRayIndex < aNumRays;
+        //////////////////////////////////////////////////////////////////////////
+
+        tTraverser<tPrimitive, tIntersector> traverse;
+        traverse(aPrimitiveArray, dcGrid, rayOrg, rayDirRCP, rayT, bestHit, traversalFlag, sharedMemNew);
+
+        //////////////////////////////////////////////////////////////////////////
+        //Output
+        float3 rayDir;
+        rayDir.x = 1.f / rayDirRCP.x;
+        rayDir.y = 1.f / rayDirRCP.y;
+        rayDir.z = 1.f / rayDirRCP.z;
+
+        if(rayT < FLT_MAX)
+            bestHit = dcGrid.primitives[bestHit];
+
+        oBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, aNumRays);
+        //////////////////////////////////////////////////////////////////////////
+
+    }
+}
+
 #endif // RAYTRACINGKERNELS_H_0927D9A2_F4E0_41DF_9EFF_944EF97FA332

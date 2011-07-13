@@ -46,12 +46,14 @@ typedef Triangle    t_Primitive;
 typedef TLGridMemoryManager             t_MemoryManager;
 typedef TLGridSortBuilder<t_Primitive>  t_AccStructBuilder;
 typedef TwoLevelGrid                    t_AccStruct;
+#define Traverser_t                     TLGridTraverser
 float                                   sTopLevelDensity = 0.0625f;
 float                                   sLeafLevelDensity = 1.2f;
 #else
 typedef UGridMemoryManager              t_MemoryManager;
 typedef UGridSortBuilder<t_Primitive>   t_AccStructBuilder;
 typedef UniformGrid                     t_AccStruct;
+#define Traverser_t                     UGridTraverser
 float                                   sTopLevelDensity = 5.f;
 float                                   sLeafLevelDensity = 1.2f; //dummy
 #endif
@@ -76,6 +78,7 @@ SimpleIntegrator<
     Triangle,
     RegularPrimaryRayGenerator< RegularPixelSampler<2,2>, true >,
     t_AccStruct,
+    Traverser_t,
     MollerTrumboreIntersectionTest,
     MollerTrumboreIntersectionTest
 >                           sSimpleIntegratorReg;
@@ -84,6 +87,7 @@ SimpleIntegrator<
     Triangle,
     RandomPrimaryRayGenerator< GaussianPixelSampler, true >,
     t_AccStruct,
+    Traverser_t,
     MollerTrumboreIntersectionTest,
     MollerTrumboreIntersectionTest
 >                           sSimpleIntegratorRnd;

@@ -130,6 +130,7 @@ template<
     class tPrimitive,
     class tPrimaryRayGenerator,
     class tAccelerationStructure,
+    template <class, class> class tTraverser,
     class tPrimaryIntersector,
     class tAlternativeIntersector>
 
@@ -189,7 +190,7 @@ public:
 
         cudaEventCreate(&mTrace);
 
-        trace<tPrimitive, t_PrimaryRayGenerator, t_RayBuffer, tPrimaryIntersector >
+        trace<tPrimitive, tAccelerationStructure, t_PrimaryRayGenerator, t_RayBuffer, tPrimaryIntersector, tTraverser >
             <<< blockGridTrace, threadBlockTrace, sharedMemoryTrace>>>(
             aStorage,
             aRayGenerator,
