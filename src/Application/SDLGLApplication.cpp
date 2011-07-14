@@ -104,13 +104,13 @@ void SDLGLApplication::initScene()
         CONFIGURATION,
         CUDAApplication::sAnimationManager,
         mInitialCamera,
-        CUDAApplication::sAreaLightSource);
+        CUDAApplication::sAreaLightSources);
 
     mCamera = mInitialCamera;
 
     CUDAApplication::initScene();
     mRESX = mInitialCamera.getResX();
-    mRESY = mInitialCamera.getResX();
+    mRESY = mInitialCamera.getResY();
     //changeWindowSize();
 }
 

@@ -188,10 +188,10 @@ void SceneLoader::createLightSource( AreaLightSource& oLightSource, const WFObje
 }
 
 bool SceneLoader::loadScene(
-                const char*         CONFIGURATION,
-                AnimationManager&   oAnimation,
-                CameraManager&      oView,
-                AreaLightSource&    oLightSource)
+                const char*                 CONFIGURATION,
+                AnimationManager&           oAnimation,
+                CameraManager&              oView,
+                AreaLightSourceCollection&  oLightSources)
 {
     cudastd::logger::out << "Reading configuration file...\n";
 
@@ -245,36 +245,52 @@ bool SceneLoader::loadScene(
     {
         if(sceneConfig.hasLightsFileName)
         {
+            cudastd::logger::out << "Loading area lights...\n";
             LightSourceLoader loader;
-            oLightSource = loader.loadFromFile(sceneConfig.lightsFileName);
-            for (size_t it = 0; it < oAnimation.getNumKeyFrames(); ++it)
+            std::vector<AreaLightSource> lights = loader.loadFromFile(sceneConfig.lightsFileName);
+            for(size_t ls = 0; ls < lights.size(); ++ls)
             {
-                insertLightSourceGeometry(oLightSource, oAnimation.getFrame(it));
+                oLightSources.upload(lights[ls].getArea()*dot(lights[ls].intensity,lights[ls].intensity), lights[ls]);
+                for (size_t it = 0; it < oAnimation.getNumKeyFrames(); ++it)
+                {
+                    insertLightSourceGeometry(lights[ls], oAnimation.getFrame(it));
+                }
             }
         }
         else
-        {        
+        {   
+            AreaLightSource oLightSource;
             for (size_t it = 0; it < oAnimation.getNumKeyFrames(); ++it)
             {
                 createLightSource(oLightSource, oAnimation.getFrame(it));
             }
+            oLightSources.upload(oLightSource.getArea()*dot(oLightSource.intensity, oLightSource.intensity), oLightSource);
+
         }
     }
     else
     {
         if(sceneConfig.hasLightsFileName)
         {
-            cudastd::logger::out << "Loading area light...\n";
+            cudastd::logger::out << "Loading area lights...\n";
             LightSourceLoader loader;
-            oLightSource = loader.loadFromFile(sceneConfig.lightsFileName);
-            insertLightSourceGeometry(oLightSource, oAnimation.getFrame(0));
+            std::vector<AreaLightSource> lights = loader.loadFromFile(sceneConfig.lightsFileName);
+            for(size_t ls = 0; ls < lights.size(); ++ls)
+            {
+                oLightSources.upload(lights[ls].getArea()*dot(lights[ls].intensity,lights[ls].intensity), lights[ls]);
+                insertLightSourceGeometry(lights[ls], oAnimation.getFrame(0));
+            }
         }
         else
         {
+            AreaLightSource oLightSource;
             createLightSource(oLightSource, oAnimation.getFrame(0));
+            oLightSources.upload(oLightSource.getArea()*dot(oLightSource.intensity, oLightSource.intensity), oLightSource);
         }
 
     }
+
+    oLightSources.normalizeALSIntensities();
 
     if(retval == false)
     {

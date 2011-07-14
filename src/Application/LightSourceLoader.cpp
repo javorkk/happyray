@@ -26,16 +26,9 @@
 
 using namespace cudastd;
 
-AreaLightSource LightSourceLoader::loadFromFile(const char* aFileName)
+std::vector<AreaLightSource> LightSourceLoader::loadFromFile(const char* aFileName)
 {
-    AreaLightSource retval;
-
-    retval.position.x = retval.position.y = retval.position.z = 0.f;
-    retval.normal.x = retval.normal.y = retval.normal.z = 0.f;
-    retval.intensity.x = retval.intensity.y = retval.intensity.z = 0.f;
-    retval.edge1.x = retval.edge1.y = retval.edge1.z = 0.f;
-    retval.edge2.x = retval.edge2.y = retval.edge2.z = 0.f;
-
+    std::vector<AreaLightSource> lights;
 
     std::ifstream input;
     input.open(aFileName);
@@ -46,6 +39,19 @@ AreaLightSource LightSourceLoader::loadFromFile(const char* aFileName)
 
     std::string line, buff;
  
+    AreaLightSource current;
+    current.position.x = current.position.y = current.position.z = 0.f;
+    current.normal.x = current.normal.y = current.normal.z = 0.f;
+    current.intensity.x = current.intensity.y = current.intensity.z = 0.f;
+    current.edge1.x = current.edge1.y = current.edge1.z = 0.f;
+    current.edge2.x = current.edge2.y = current.edge2.z = 0.f;
+
+    bool hasPosition = false;
+    bool hasNormal = false;
+    bool hasIntensity = false;
+    bool hasEdge1 = false;
+    bool hasEdge2 = false;
+
     while ( !input.eof() )
     {
         std::getline(input, line);
@@ -56,33 +62,53 @@ AreaLightSource LightSourceLoader::loadFromFile(const char* aFileName)
 
         if (buff == "position")
         {
-            ss >> retval.position.x >> retval.position.y >> retval.position.z;
+            ss >> current.position.x >> current.position.y >> current.position.z;
+            hasPosition = true;
         } 
         else if (buff == "normal")
         {
-            ss >> retval.normal.x >> retval.normal.y >> retval.normal.z;
+            ss >> current.normal.x >> current.normal.y >> current.normal.z;
+            hasNormal = true;
         } 
         else if (buff == "intensity")
         {
-            ss >> retval.intensity.x >> retval.intensity.y >> retval.intensity.z;
+            ss >> current.intensity.x >> current.intensity.y >> current.intensity.z;
+            hasIntensity = true;
         }
         else if (buff == "edge1")
         {
-            ss >> retval.edge1.x >> retval.edge1.y >> retval.edge1.z;
+            ss >> current.edge1.x >> current.edge1.y >> current.edge1.z;
+            hasEdge1 = true;
         }
         else if (buff == "edge2")
         {
-            ss >> retval.edge2.x >> retval.edge2.y >> retval.edge2.z;
+            ss >> current.edge2.x >> current.edge2.y >> current.edge2.z;
+            hasEdge2 = true;
         }
-    }
 
-    if (retval.normal.x == 0.f && retval.normal.y == 0.f &&
-        retval.normal.z == 0.f)
-    {
-        retval.normal = ~(retval.edge1 % retval.edge2);
+        if(hasPosition && hasNormal && hasIntensity && hasEdge1 && hasEdge2)
+        {
+            if (!hasNormal)
+            {
+                current.normal = ~(current.edge1 % current.edge2);
+            }
+
+            lights.push_back(current);
+
+            hasPosition = false;
+            hasNormal = false;
+            hasIntensity = false;
+            hasEdge1 = false;
+            hasEdge2 = false;
+            current.position.x = current.position.y = current.position.z = 0.f;
+            current.normal.x = current.normal.y = current.normal.z = 0.f;
+            current.intensity.x = current.intensity.y = current.intensity.z = 0.f;
+            current.edge1.x = current.edge1.y = current.edge1.z = 0.f;
+            current.edge2.x = current.edge2.y = current.edge2.z = 0.f;
+        }
     }
 
     input.close();
 
-    return retval;
+    return lights;
 }

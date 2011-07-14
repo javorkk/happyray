@@ -47,9 +47,9 @@ class CUDAApplication
     static float sBACKGROUND_G;
     static float sBACKGROUND_B;
 public:
-    static SceneLoader      sSceneLoader;
-    static AnimationManager sAnimationManager;
-    static AreaLightSource  sAreaLightSource;
+    static SceneLoader                  sSceneLoader;
+    static AnimationManager             sAnimationManager;
+    static AreaLightSourceCollection    sAreaLightSources;
 
     static void allocateHostBuffer(const int aResX, const int aResY)
     {

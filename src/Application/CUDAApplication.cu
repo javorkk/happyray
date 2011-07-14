@@ -27,17 +27,17 @@
 #include "RT/Structure/FrameBuffer.h"
 
 
-float*              CUDAApplication::sFrameBufferFloatPtr;
-int                 CUDAApplication::sRESX;
-int                 CUDAApplication::sRESY;
-float               CUDAApplication::sBACKGROUND_R;
-float               CUDAApplication::sBACKGROUND_G;
-float               CUDAApplication::sBACKGROUND_B;
-SceneLoader         CUDAApplication::sSceneLoader;
-AnimationManager    CUDAApplication::sAnimationManager;
-AreaLightSource     CUDAApplication::sAreaLightSource;
-RTEngine            gRTEngine;
-FrameBuffer         gFrameBuffer;
+float*                      CUDAApplication::sFrameBufferFloatPtr;
+int                         CUDAApplication::sRESX;
+int                         CUDAApplication::sRESY;
+float                       CUDAApplication::sBACKGROUND_R;
+float                       CUDAApplication::sBACKGROUND_G;
+float                       CUDAApplication::sBACKGROUND_B;
+SceneLoader                 CUDAApplication::sSceneLoader;
+AnimationManager            CUDAApplication::sAnimationManager;
+AreaLightSourceCollection   CUDAApplication::sAreaLightSources;
+RTEngine                    gRTEngine;
+FrameBuffer                 gFrameBuffer;
 
 void CUDAApplication::initScene()
 {

@@ -31,11 +31,12 @@
 #include "CUDAStdAfx.h"
 #include "Core/Algebra.hpp"
 #include "RT/Primitive/LightSource.hpp"
+#include <vector>
 
 class LightSourceLoader
 {
 public:
-    AreaLightSource loadFromFile(const char* aFileName);
+   std::vector<AreaLightSource> loadFromFile(const char* aFileName);
 };
 
 #endif // LIGHTSOURCELOADER_HPP_INCLUDED_353F1AA1_EEB2_4B17_AD07_603C312F7943
