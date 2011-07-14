@@ -70,7 +70,7 @@ GLOBAL void simpleShade(
 
 
         float3 oRadiance;
-        if (rayT < FLT_MAX)
+        if (rayT < FLT_MAX && bestHit < aStorage.numPrimitives)
         {
             //oRadiance = rep(rayT);
             tPrimitive prim = aStorage[bestHit];

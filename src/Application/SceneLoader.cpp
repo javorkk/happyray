@@ -217,6 +217,7 @@ bool SceneLoader::loadScene(
     else if (sceneConfig.hasObjFileName)
     {
         cudastd::logger::out << "Loading scene...\n";
+        oAnimation.allocateFrames(1);
         oAnimation.getFrame(0).read(sceneConfig.objFileName);
 
         cudastd::logger::out << "Number of primitives: " << oAnimation.getFrame(0).getNumFaces() << "\n";

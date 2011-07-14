@@ -160,7 +160,7 @@
     <CudaCompile>
       <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MTd</Runtime>
     </CudaCompile>
@@ -234,7 +234,7 @@
     <CudaCompile>
       <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
     </CudaCompile>
@@ -312,7 +312,7 @@
     <ClCompile Include="src\Core\SSEAlgebra.cpp" />
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\RT\Primitive\Triangle.cpp" />
-    <CudaCompile Include="LightSource.cu" />
+    <CudaCompile Include="src\RT\Primitive\LightSource.cu" />
     <CudaCompile Include="src\RT\Structure\TLGridMemManager.cu" />
     <ClCompile Include="src\stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

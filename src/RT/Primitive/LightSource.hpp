@@ -141,8 +141,8 @@ public:
         MY_CUDA_SAFE_CALL( cudaMalloc((void**)&mWeights, sizeof(float)*mSize) );
         MY_CUDA_SAFE_CALL( cudaMalloc((void**)&mLights,  sizeof(AreaLightSource)*mSize) );
         //copy existing data
-        MY_CUDA_SAFE_CALL( cudaMemcpy(mWeights,oldWeights, sizeof(float)*(mSize-1), cudaMemcpyDeviceToDevice) );
-        MY_CUDA_SAFE_CALL( cudaMemcpy(mLights, &oldLights, sizeof(AreaLightSource)*(mSize-1), cudaMemcpyDeviceToDevice) );
+        MY_CUDA_SAFE_CALL( cudaMemcpy(mWeights, oldWeights, sizeof(float)*(mSize-1), cudaMemcpyDeviceToDevice) );
+        MY_CUDA_SAFE_CALL( cudaMemcpy(mLights, oldLights, sizeof(AreaLightSource)*(mSize-1), cudaMemcpyDeviceToDevice) );
         //free old storage
         MY_CUDA_SAFE_CALL( cudaFree(oldCDF) );
         MY_CUDA_SAFE_CALL( cudaFree(oldWeights) );

@@ -21,4 +21,6 @@ HOST void AreaLightSourceCollection::normalizeALSIntensities()
     dim3 block ( 128 );
     dim3 grid  ( 180 );
     normalizeIntensities<<< grid, block>>>(*this);
+    cudaThreadSynchronize();
+    MY_CUT_CHECK_ERROR("Normalize LS intensity failed!\n");
 }
