@@ -41,7 +41,7 @@ public:
         OperatorPlus()
         {}
 
-        DEVICE inline uint operator()(uint a, uint b)
+        DEVICE uint operator()(uint a, uint b)
         {
             return a + b;
         }
@@ -63,7 +63,7 @@ public:
         OperatorPlus()
         {}
 
-        DEVICE inline uint operator()(uint a, uint b)
+        DEVICE uint operator()(uint a, uint b)
         {
             return a + b;
         }
@@ -73,6 +73,29 @@ public:
     //currently limited to 31 million elements because of grid size restrictions
     void operator()(
         uint* aIn, 
+        const uint aNumElements
+        ) const;
+};
+
+class InclusiveFloatScan
+{
+public:
+    class OperatorPlus
+    {
+    public:
+        OperatorPlus()
+        {}
+
+        DEVICE float operator()(float a, float b)
+        {
+            return a + b;
+        }
+    };
+
+    //aIn must point to device memory
+    //currently limited to 31 million elements because of grid size restrictions
+    void operator()(
+        float* aIn, 
         const uint aNumElements
         ) const;
 };

@@ -195,7 +195,7 @@ public:
         //return fastDivide(getResolution(), vtx[1] - vtx[0]);
     }
 
-    DEVICE t_Cell getCell(uint aIdX, uint aIdY, uint aIdZ)
+    DEVICE t_Cell getCell(int aIdX, int aIdY, int aIdZ)
     {
         return *((t_Cell*)((char*)cells.ptr
             + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX);

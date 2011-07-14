@@ -61,4 +61,17 @@ void InclusiveScan::operator()(
 
 }
 
+void InclusiveFloatScan::operator()(
+                       float* aIn, 
+                       const uint aNumElements
+                       ) const
+{
+#ifdef USE_CHAG_PP_SCAN
+    chag::pp::prefix_inclusive(aIn, (aIn + aNumElements), aIn, (float*)0);
+#else
+    thrust::detail::device::cuda::inclusive_scan(aIn, (aIn + aNumElements), aIn, OperatorPlus());
+#endif
+
+}
+
 #undef USE_CHAG_PP_SCAN

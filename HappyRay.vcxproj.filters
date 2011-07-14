@@ -270,5 +270,8 @@
     <CudaCompile Include="src\RT\Structure\TLGridMemManager.cu">
       <Filter>RT\Structure</Filter>
     </CudaCompile>
+    <CudaCompile Include="LightSource.cu">
+      <Filter>RT\Primitive</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

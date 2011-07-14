@@ -312,6 +312,7 @@
     <ClCompile Include="src\Core\SSEAlgebra.cpp" />
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\RT\Primitive\Triangle.cpp" />
+    <CudaCompile Include="LightSource.cu" />
     <CudaCompile Include="src\RT\Structure\TLGridMemManager.cu" />
     <ClCompile Include="src\stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
