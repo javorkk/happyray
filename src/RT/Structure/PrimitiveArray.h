@@ -147,40 +147,37 @@ public:
 };//class Primitive Array
 
 template<class tPrimitive, class tType>
-class AttribStruct
+class VtxAttribStruct
 {
 public:
     tType data[tPrimitive::NUM_VERTICES];
 };
 
 template<class tPrimitive, class tType>
-class PrimitiveAttributeArray
+class VtxAttributeArray
 {
 public:
-    typedef AttribStruct<tPrimitive, tType> t_AttribStruct;
+    typedef VtxAttribStruct<tPrimitive, tType> t_AttribStruct;
 
     /////////////////////////////////////////////////////////////
     //Memory Managment
     /////////////////////////////////////////////////////////////
 
-    float3* dataBufferDevicePtr;
-    float3* dataBufferHostPtr;
+    tType* dataBufferDevicePtr;
+    tType* dataBufferHostPtr;
     size_t  dataBufferSize;
 
     uint*  indicesBufferDevicePtr;
     uint*  indicesBufferHostPtr;
     size_t indicesBufferSize;
 
-    size_t numPrimitives;
-
-    HOST PrimitiveAttributeArray():
+    HOST VtxAttributeArray():
         dataBufferDevicePtr(NULL),
         dataBufferHostPtr  (NULL),
         dataBufferSize(0u),
         indicesBufferDevicePtr(NULL),
         indicesBufferHostPtr  (NULL),
-        indicesBufferSize(0u),
-        numPrimitives(0u)
+        indicesBufferSize(0u)
     {}
 
     HOST void cleanup()
@@ -234,248 +231,71 @@ public:
         return result;
     }
 
-};//class Primitive Attribute Array
+};//class Vertex Attribute Array
 
-#include "RT/Primitive/Primitive.hpp"
-#include "Application/WFObject.hpp"
-#include "RT/Structure/MemoryManager.h"
-
-class ObjUploader
+template<class tType>
+class PrimitiveAttributeArray
 {
 public:
-    ////Vertex coordinates
-    //HOST void uploadObjFrameVertexData(
-    //    const WFObject& aKeyFrame1,
-    //    const WFObject& aKeyFrame2,
-    //    const float     aCoeff,
-    //    float3&         oMinBound,
-    //    float3&         oMaxBound,
-    //    PrimitiveArray<Primitive<3> >& aArray
-    //    );
-    ////Normal coordinates
-    //HOST void uploadObjFrameNormalData(
-    //    const WFObject& aKeyFrame1,
-    //    const WFObject& aKeyFrame2,
-    //    const float     aCoeff,
-    //    PrimitiveAttributeArray<Primitive<3>, float3 >& aArray
-    //    );
+    /////////////////////////////////////////////////////////////
+    //Memory Managment
+    /////////////////////////////////////////////////////////////
 
-    ////Vertex indices
-    //HOST void uploadObjFrameVertexIndexData(
-    //    const WFObject& aKeyFrame1,
-    //    const WFObject& aKeyFrame2,
-    //    PrimitiveArray<Primitive<3> >& aArray
-    //    );
+    tType* dataBufferDevicePtr;
+    tType* dataBufferHostPtr;
+    size_t  dataBufferSize;
 
-    ////Normal indices
-    //HOST void uploadObjFrameNormalIndexData(
-    //    const WFObject& aKeyFrame1,
-    //    const WFObject& aKeyFrame2,
-    //    PrimitiveAttributeArray<Primitive<3>, float3 >& aArray
-    //    );
-    HOST void ObjUploader::uploadObjFrameVertexData(
-    const WFObject& aKeyFrame1,
-    const WFObject& aKeyFrame2,
-    const float     aCoeff,
-    float3&         oMinBound,
-    float3&         oMaxBound,
-    PrimitiveArray<Primitive<3> >& aArray)
-{
-    const size_t numVertices1 = aKeyFrame1.getNumVertices();
-    const size_t numVertices2 = aKeyFrame2.getNumVertices();
-    const size_t numVertices  = numVertices2;
-    const size_t verticesNewSize = numVertices * sizeof(float4);
+    uint*  indicesBufferDevicePtr;
+    uint*  indicesBufferHostPtr;
+    size_t indicesBufferSize;
 
-    ////////////////////////////////////////////////////////////
-    //cleanup
-    ////////////////////////////////////////////////////////////
-    aArray.unbindVerticesTexture();
-    MemoryManager::allocateHostDeviceArrayPair(
-        (void**)&aArray.vertexBufferDevicePtr,
-        (void**)&aArray.vertexBufferHostPtr,
-        verticesNewSize,
-        (void**)&aArray.vertexBufferDevicePtr,
-        (void**)&aArray.vertexBufferHostPtr,
-        aArray.vertexBufferSize);
+#ifndef __CUDA_ARCH__
+    HOST PrimitiveAttributeArray():
+        dataBufferDevicePtr(NULL),
+        dataBufferHostPtr  (NULL),
+        dataBufferSize(0u),
+        indicesBufferDevicePtr(NULL),
+        indicesBufferHostPtr  (NULL),
+        indicesBufferSize(0u)
+    {}
+#endif
 
-    float4* verticesHost = aArray.vertexBufferHostPtr;
-    float4* verticesDevice = aArray.vertexBufferDevicePtr;
-    
-    //////////////////////////////////////////////////////////////////////////
-    //Copy and transfer vertex data
-    //////////////////////////////////////////////////////////////////////////
-    size_t it = 0;
-    for (; it < cudastd::min(numVertices1, numVertices2); ++it)
+    HOST void cleanup()
     {
-        verticesHost[it].x = aKeyFrame1.getVertex(it).x * (1.f - aCoeff) + aKeyFrame2.getVertex(it).x * aCoeff;
-        verticesHost[it].y = aKeyFrame1.getVertex(it).y * (1.f - aCoeff) + aKeyFrame2.getVertex(it).y * aCoeff;
-        verticesHost[it].z = aKeyFrame1.getVertex(it).z * (1.f - aCoeff) + aKeyFrame2.getVertex(it).z * aCoeff;
-        verticesHost[it].w = 0.f;
+#if HAPPYRAY__CUDA_ARCH__ >= 120
+        if(dataBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(dataBufferHostPtr) );
+        if(indicesBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
+#else
+        if(dataBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(dataBufferHostPtr) );
+        if(indicesBufferHostPtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
 
-        oMinBound.x = cudastd::min(verticesHost[it].x, oMinBound.x);
-        oMinBound.y = cudastd::min(verticesHost[it].y, oMinBound.y);
-        oMinBound.z = cudastd::min(verticesHost[it].z, oMinBound.z);
-        oMaxBound.x = cudastd::max(verticesHost[it].x, oMaxBound.x);
-        oMaxBound.y = cudastd::max(verticesHost[it].y, oMaxBound.y);
-        oMaxBound.z = cudastd::max(verticesHost[it].z, oMaxBound.z);
+        if(dataBufferDevicePtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFree(dataBufferDevicePtr) );
+        if(indicesBufferDevicePtr != NULL)
+            MY_CUDA_SAFE_CALL( cudaFree(indicesBufferDevicePtr) );
+#endif
     }
 
-    for (; it < numVertices2 ; ++it)
+    HOST DEVICE size_t getMemorySize()
     {
-        verticesHost[it].x = aKeyFrame2.getVertex(it).x;
-        verticesHost[it].y = aKeyFrame2.getVertex(it).y;
-        verticesHost[it].z = aKeyFrame2.getVertex(it).z;
-        verticesHost[it].w = 0.f;
-
-        oMinBound.x = cudastd::min(verticesHost[it].x, oMinBound.x);
-        oMinBound.y = cudastd::min(verticesHost[it].y, oMinBound.y);
-        oMinBound.z = cudastd::min(verticesHost[it].z, oMinBound.z);
-        oMaxBound.x = cudastd::max(verticesHost[it].x, oMaxBound.x);
-        oMaxBound.y = cudastd::max(verticesHost[it].y, oMaxBound.y);
-        oMaxBound.z = cudastd::max(verticesHost[it].z, oMaxBound.z);
+        return dataBufferSize + indicesBufferSize;
     }
-    
-    MY_CUDA_SAFE_CALL( cudaMemcpy( verticesDevice, verticesHost, verticesNewSize, cudaMemcpyHostToDevice) );
 
-
-    aArray.bindVerticesTexture(aArray.vertexBufferDevicePtr, aArray.vertexBufferSize);
-}
-
-HOST void ObjUploader::uploadObjFrameNormalData(
-    const WFObject& aKeyFrame1,
-    const WFObject& aKeyFrame2,
-    const float     aCoeff,
-    PrimitiveAttributeArray<Primitive<3>, float3 >& aArray)
-{
-    const size_t numNormals1 = aKeyFrame1.getNumNormals();
-    const size_t numNormals2 = aKeyFrame2.getNumNormals();
-    const size_t numNormals  = numNormals2;
-    const size_t normalsNewSize = numNormals * sizeof(float3);
 
     ////////////////////////////////////////////////////////////
-    //cleanup
+    //Device Functions
     ////////////////////////////////////////////////////////////
-    MemoryManager::allocateHostDeviceArrayPair(
-        (void**)&aArray.dataBufferDevicePtr,
-        (void**)&aArray.dataBufferHostPtr,
-        normalsNewSize,
-        (void**)&aArray.dataBufferDevicePtr,
-        (void**)&aArray.dataBufferHostPtr,
-        aArray.dataBufferSize);
-
-    float3* normalsHost = aArray.dataBufferHostPtr;
-    float3* normalsDevice = aArray.dataBufferDevicePtr;
-    
-    //////////////////////////////////////////////////////////////////////////
-    //Copy and transfer normal data
-    //////////////////////////////////////////////////////////////////////////
-    size_t it = 0;
-    for (; it < cudastd::min(numNormals1, numNormals2); ++it)
+ 
+    DEVICE tType  operator[](uint aIndex) const
     {
-        normalsHost[it].x = aKeyFrame1.getNormal(it).x * (1.f - aCoeff) + aKeyFrame2.getNormal(it).x * aCoeff;
-        normalsHost[it].y = aKeyFrame1.getNormal(it).y * (1.f - aCoeff) + aKeyFrame2.getNormal(it).y * aCoeff;
-        normalsHost[it].z = aKeyFrame1.getNormal(it).z * (1.f - aCoeff) + aKeyFrame2.getNormal(it).z * aCoeff;
+        return dataBufferDevicePtr[indicesBufferDevicePtr[aIndex]];
     }
 
-    for (; it < numNormals2 ; ++it)
-    {
-        normalsHost[it].x = aKeyFrame2.getNormal(it).x;
-        normalsHost[it].y = aKeyFrame2.getNormal(it).y;
-        normalsHost[it].z = aKeyFrame2.getNormal(it).z;
-    }
-
-    MY_CUDA_SAFE_CALL( cudaMemcpy( normalsDevice, normalsHost, normalsNewSize, cudaMemcpyHostToDevice) );
-
-}
-
-HOST void ObjUploader::uploadObjFrameVertexIndexData(
-    const WFObject& aKeyFrame1,
-    const WFObject& aKeyFrame2,
-    PrimitiveArray<Primitive<3> >& aArray)
-{
-    aArray.numPrimitives = aKeyFrame1.getNumFaces();
-    const size_t numIndices1 = aKeyFrame1.getNumFaces() * 3;
-    const size_t numIndices2 = aKeyFrame1.getNumFaces() * 3;
-    const size_t numIndices  = numIndices2;
-    const size_t indicesNewSize = numIndices * sizeof(uint);
-
-    ////////////////////////////////////////////////////////////
-    //cleanup
-    ////////////////////////////////////////////////////////////
-    aArray.unbindIndicesTexture();
-    MemoryManager::allocateHostDeviceArrayPair(
-        (void**)&aArray.indicesBufferDevicePtr,
-        (void**)&aArray.indicesBufferHostPtr,
-        indicesNewSize,
-        (void**)&aArray.indicesBufferDevicePtr,
-        (void**)&aArray.indicesBufferHostPtr,
-        aArray.indicesBufferSize);
-
-    uint* indicesHost = aArray.indicesBufferHostPtr;
-    uint* indicesDevice = aArray.indicesBufferDevicePtr;
-
-    
-    //////////////////////////////////////////////////////////////////////////
-    //Copy and transfer indices
-    //////////////////////////////////////////////////////////////////////////
-    size_t it = 0;
-    for (; it < cudastd::min(numIndices1, numIndices2); ++it)
-    {
-        indicesHost[it]       = aKeyFrame1.getVertexIndex(it);
-    }
-    for (; it < numIndices2 ; ++it)
-    {
-        indicesHost[it]       = aKeyFrame2.getVertexIndex(it);
-    }
-
-    MY_CUDA_SAFE_CALL( cudaMemcpy( indicesDevice, indicesHost, indicesNewSize, cudaMemcpyHostToDevice) );
-
-    aArray.bindIndicesTexture(aArray.indicesBufferDevicePtr, aArray.indicesBufferSize);
-}
-
-HOST void ObjUploader::uploadObjFrameNormalIndexData(
-    const WFObject& aKeyFrame1,
-    const WFObject& aKeyFrame2,
-    PrimitiveAttributeArray<Primitive<3>, float3 >& aArray)
-{
-    aArray.numPrimitives = aKeyFrame1.getNumFaces();
-    const size_t numIndices1 = aKeyFrame1.getNumFaces() * 3;
-    const size_t numIndices2 = aKeyFrame1.getNumFaces() * 3;
-    const size_t numIndices  = numIndices2;
-    const size_t indicesNewSize = numIndices * sizeof(uint);
-
-    ////////////////////////////////////////////////////////////
-    //cleanup
-    ////////////////////////////////////////////////////////////
-    MemoryManager::allocateHostDeviceArrayPair(
-        (void**)&aArray.indicesBufferDevicePtr,
-        (void**)&aArray.indicesBufferHostPtr,
-        indicesNewSize,
-        (void**)&aArray.indicesBufferDevicePtr,
-        (void**)&aArray.indicesBufferHostPtr,
-        aArray.indicesBufferSize);
-
-    uint* normalIndicesHost = aArray.indicesBufferHostPtr;
-    uint* normalIndicesDevice = aArray.indicesBufferDevicePtr;
-
-    
-    //////////////////////////////////////////////////////////////////////////
-    //Copy and transfer indices
-    //////////////////////////////////////////////////////////////////////////
-    size_t it = 0;
-    for (; it < cudastd::min(numIndices1, numIndices2); ++it)
-    {
-        normalIndicesHost[it] = aKeyFrame1.getNormalIndex(it);
-    }
-    for (; it < numIndices2 ; ++it)
-    {
-        normalIndicesHost[it] = aKeyFrame2.getNormalIndex(it);
-    }
-
-    MY_CUDA_SAFE_CALL( cudaMemcpy( normalIndicesDevice, normalIndicesHost, indicesNewSize, cudaMemcpyHostToDevice) );
-}
-
-};//class ObjUploader
+};//class Primitive Attribute Array
 
 
 #endif // PRIMITIVEARRAY_H_INCLUDED_4D30F730_121F_4E9F_915B_1814410DAEB0

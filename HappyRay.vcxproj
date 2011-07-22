@@ -160,7 +160,7 @@
     <CudaCompile>
       <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MTd</Runtime>
     </CudaCompile>
@@ -234,7 +234,7 @@
     <CudaCompile>
       <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
     </CudaCompile>
@@ -264,7 +264,9 @@
     <ClInclude Include="src\Application\SceneLoader.hpp" />
     <ClInclude Include="src\Application\SDLGLApplication.hpp" />
     <ClInclude Include="src\Application\WFObject.hpp" />
+    <ClInclude Include="src\application\wfobjectuploader.h" />
     <ClInclude Include="src\Core\Algebra.hpp" />
+    <ClInclude Include="src\Core\Flags.hpp" />
     <ClInclude Include="src\Core\SSEAlgebra.hpp" />
     <ClInclude Include="src\CUDAStdAfx.h" />
     <ClInclude Include="src\RT\Algorithm\RayGenerators.h" />
@@ -276,10 +278,12 @@
     <ClInclude Include="src\RT\Algorithm\UGridSortBuilder.h" />
     <ClInclude Include="src\RT\Algorithm\UGridTraverser.h" />
     <ClInclude Include="src\RT\Algorithm\UniformGridBuildKernels.h" />
+    <ClInclude Include="src\RT\Integrator\PathTracer.h" />
     <ClInclude Include="src\RT\Integrator\SimpleIntegrator.h" />
     <ClInclude Include="src\RT\Primitive\BBox.hpp" />
     <ClInclude Include="src\RT\Primitive\Camera.h" />
     <ClInclude Include="src\RT\Primitive\LightSource.hpp" />
+    <ClInclude Include="src\RT\Primitive\Material.hpp" />
     <ClInclude Include="src\RT\Primitive\Primitive.hpp" />
     <ClInclude Include="src\RT\Primitive\Triangle.hpp" />
     <ClInclude Include="src\RT\RTEngine.h" />

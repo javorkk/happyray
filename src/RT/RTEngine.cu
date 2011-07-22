@@ -25,10 +25,13 @@
 #include "Textures.h"
 #include "RT/RTEngine.h"
 
+#include "Application/WFObjectUploader.h"
+
 #include "RT/Primitive/LightSource.hpp"
 #include "RT/Structure/PrimitiveArray.h"
 #include "RT/Primitive/Triangle.hpp"
 #include "RT/Primitive/Camera.h"
+#include "RT/Primitive/Material.hpp"
 #include "RT/Structure/UGridMemoryManager.h"
 #include "RT/Algorithm/UGridSortBuilder.h"
 #include "RT/Structure/TLGridMemoryManager.h"
@@ -37,6 +40,8 @@
 #include "RT/Algorithm/RayTriangleIntersector.h"
 
 #include "RT/Integrator/SimpleIntegrator.h"
+#include "RT/Integrator/PathTracer.h"
+
 
 typedef Triangle    t_Primitive;
 
@@ -60,7 +65,9 @@ float                                   sLeafLevelDensity = 1.2f; //dummy
 
 int                                             sFrameId = 0;
 PrimitiveArray<t_Primitive>                     sTriangleArray;
-PrimitiveAttributeArray<t_Primitive, float3>    sTriangleNormalArray;
+VtxAttributeArray<t_Primitive, float3>          sTriangleNormalArray;
+PrimitiveAttributeArray<PhongMaterial>          sMaterialArray;
+AreaLightSourceCollection                       sLights;
 t_MemoryManager                                 sMemoryManager;
 t_AccStructBuilder                              sBuilder;
 
@@ -92,6 +99,14 @@ SimpleIntegrator<
     MollerTrumboreIntersectionTest
 >                           sSimpleIntegratorRnd;
 
+PathTracer<
+    Triangle,
+    t_AccStruct,
+    Traverser_t,
+    MollerTrumboreIntersectionTest,
+    MollerTrumboreIntersectionTest
+>                           sPathTracer;
+
 
 void RTEngine::init()
 {}
@@ -116,6 +131,8 @@ void RTEngine::upload(
 
     uploader.uploadObjFrameNormalIndexData(
         aFrame1, aFrame2, sTriangleNormalArray);
+
+    uploader.uploadObjFrameMaterialData(aFrame2, sMaterialArray);
 
 }
 
@@ -147,21 +164,38 @@ void RTEngine::setCamera(
 
 }
 
-void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId)
+void RTEngine::setLights(const AreaLightSourceCollection& aLights)
+{
+    sLights = aLights;
+}
+
+void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId, const int aRenderMode)
 {
     t_AccStruct grid = sMemoryManager.getParameters();
 
-    if(aImageId < 4)
+    switch ( aRenderMode ) 
     {
-        sRegularRayGen.dcImageId = aImageId;
-        sSimpleIntegratorReg.integrate(sTriangleArray, sTriangleNormalArray, grid, sRegularRayGen, aFrameBuffer, aImageId);
-    }
-    else
-    {
-        sRandomRayGen.dcImageId = aImageId;
-        sSimpleIntegratorRnd.integrate(sTriangleArray, sTriangleNormalArray, grid, sRandomRayGen, aFrameBuffer, aImageId);
+    case 0:
+        if(aImageId < 4)
+        {
+            sRegularRayGen.dcImageId = aImageId;
+            sSimpleIntegratorReg.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, grid, sRegularRayGen, aFrameBuffer, aImageId);
+        }
+        else
+        {
+            sRandomRayGen.dcImageId = aImageId;
+            sSimpleIntegratorRnd.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, grid, sRandomRayGen, aFrameBuffer, aImageId);
 
-    }
+        }
+        break;
+    case 1:
+        sRandomRayGen.dcImageId = aImageId;
+        sPathTracer.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, sLights, grid, sRandomRayGen, aFrameBuffer, aImageId);
+        break;
+    default:
+        break;
+    }//switch ( mRenderMode )
+
 }
 
 void RTEngine::cleanup()

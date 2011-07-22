@@ -81,7 +81,7 @@ public:
 
     static float generateFrame(
         CameraManager& aView,
-        int& aImageId);
+        int& aImageId, int aRenderMode);
 
     static void updateBackgroundColor(float aR, float aG, float aB)
     {

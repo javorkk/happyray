@@ -44,6 +44,7 @@ void CUDAApplication::initScene()
         gRTEngine.init();
         gRTEngine.upload(sAnimationManager.getFrame(0), sAnimationManager.getFrame(0), 1.f);
         gRTEngine.buildAccStruct();
+        gRTEngine.setLights(sAreaLightSources);
         gFrameBuffer.init(sRESX, sRESY);
 
 }
@@ -80,7 +81,7 @@ float CUDAApplication::nextFrame()
 }
 
 float CUDAApplication::generateFrame(
-           CameraManager& aView, int& aImageId)
+           CameraManager& aView, int& aImageId, int aRenderMode)
 {
     if(aView.getResX() != sRESX || aView.getResY() != sRESY)
     {
@@ -108,7 +109,7 @@ float CUDAApplication::generateFrame(
     cudaEventRecord(mStart, 0);
     //cudaEventSynchronize(mStart);
 
-    gRTEngine.renderFrame(gFrameBuffer, aImageId);
+    gRTEngine.renderFrame(gFrameBuffer, aImageId, aRenderMode);
 
     cudaEventRecord(mEnd, 0);
     cudaEventSynchronize(mEnd);

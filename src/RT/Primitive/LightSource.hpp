@@ -70,9 +70,12 @@ class AreaLightSourceCollection
     float* mWeights;
     AreaLightSource* mLights;
 public:
+
+#ifndef __CUDA_ARCH__
     AreaLightSourceCollection()
         :mSize(0u), mCDF(NULL), mWeights(NULL), mLights(NULL)
     {}
+#endif
 
     DEVICE AreaLightSource& getLight(float aRandNum)
     {

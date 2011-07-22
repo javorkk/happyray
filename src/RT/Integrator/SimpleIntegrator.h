@@ -30,6 +30,7 @@
 
 #include "CUDAStdAfx.h"
 #include "Core/Algebra.hpp"
+#include "RT/Primitive/Material.hpp"
 #include "RT/Structure/FrameBuffer.h"
 #include "RT/Structure/PrimitiveArray.h"
 #include "RT/Structure/RayBuffers.h"
@@ -43,7 +44,8 @@ template<
     class tInputBuffer >
 GLOBAL void simpleShade(
         PrimitiveArray<tPrimitive>      aStorage,
-        PrimitiveAttributeArray<tPrimitive, float3>      aNormalStorage,
+        VtxAttributeArray<tPrimitive, float3>      aNormalStorage,
+        PrimitiveAttributeArray<PhongMaterial>      aMaterialStorage,
         tInputBuffer                    aInputBuffer,
         FrameBuffer                     oFrameBuffer,
         const int                       aImageId,
@@ -92,7 +94,7 @@ GLOBAL void simpleShade(
             float u = len(n0) * twiceSabc_RCP;
             float v = len(n1) * twiceSabc_RCP;
 
-            AttribStruct<tPrimitive, float3> normals;
+            VtxAttribStruct<tPrimitive, float3> normals;
             normals = aNormalStorage[bestHit];
             float3& normal0 = normals.data[0];
             float3& normal1 = normals.data[1];
@@ -100,10 +102,10 @@ GLOBAL void simpleShade(
 
             float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
 
-            float3 diffReflectance;
-            diffReflectance.x = u;//1.f;// M_PI_RCP; //u;
-            diffReflectance.y = v;//1.f;//M_PI_RCP; //v;
-            diffReflectance.z = 1.f-u-v;//1.f;//M_PI_RCP; //1.f - u - v;
+            float3 diffReflectance = aMaterialStorage[bestHit].getDiffuseReflectance();
+            //diffReflectance.x = u;//1.f;// M_PI_RCP; //u;
+            //diffReflectance.y = v;//1.f;//M_PI_RCP; //v;
+            //diffReflectance.z = 1.f-u-v;//1.f;//M_PI_RCP; //1.f - u - v;
 
             oRadiance =  diffReflectance * fmaxf(0.f, fabsf(dot(-normal,~rayDir[threadId1D()])));
 
@@ -208,7 +210,8 @@ public:
 
     HOST void shade(
         PrimitiveArray<tPrimitive>&                     aStorage,
-        PrimitiveAttributeArray<tPrimitive, float3>     aNormalStorage,
+        VtxAttributeArray<tPrimitive, float3>           aNormalStorage,
+        PrimitiveAttributeArray<PhongMaterial>          aMaterialStorage,
         FrameBuffer&                                    aFrameBuffer,
         const int                                       aImageId
         )
@@ -230,6 +233,7 @@ public:
             <<< blockGridShade, threadBlockShade, sharedMemoryShade>>>(
             aStorage,
             aNormalStorage,
+            aMaterialStorage,
             rayBuffer,
             aFrameBuffer,
             aImageId,
@@ -244,7 +248,8 @@ public:
   
     HOST void integrate(
         PrimitiveArray<tPrimitive>&                     aStorage,
-        PrimitiveAttributeArray<tPrimitive, float3>     aNormalStorage,
+        VtxAttributeArray<tPrimitive, float3>           aNormalStorage,
+        PrimitiveAttributeArray<PhongMaterial>          aMaterialStorage,
         t_AccelerationStructure&                        aAccStruct,
         t_PrimaryRayGenerator&                          aRayGenerator,
         FrameBuffer&                                    aFrameBuffer,
@@ -253,7 +258,7 @@ public:
     {
         tracePrimary(aStorage, aAccStruct, aRayGenerator, aFrameBuffer);
 
-        shade(aStorage, aNormalStorage, aFrameBuffer, aImageId);
+        shade(aStorage, aNormalStorage, aMaterialStorage, aFrameBuffer, aImageId);
     }
 
 };

@@ -31,6 +31,7 @@
 #include "CUDAStdAfx.h"
 #include "Application/WFObject.hpp"
 #include "RT/Structure/FrameBuffer.h"
+#include "RT/Primitive/LightSource.hpp"
 
 class RTEngine
 {
@@ -53,7 +54,9 @@ public:
         const int     aX,
         const int     aY );
 
-    static void renderFrame(FrameBuffer& aFrameBuffer, const int aImageId);
+    static void setLights(const AreaLightSourceCollection&);
+
+    static void renderFrame(FrameBuffer& aFrameBuffer, const int aImageId, const int aRenderMode);
 
     static void cleanup();
 };

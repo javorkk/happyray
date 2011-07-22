@@ -719,7 +719,21 @@ void SDLGLApplication::displayFrame()
             buildTime = CUDAApplication::nextFrame();
         }
 
-        renderTime = CUDAApplication::generateFrame(mCamera, mNumImages);
+        switch ( mRenderMode ) 
+        {
+        case DEFAULT:
+            renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 0);
+            break;
+        case RENDERMODE1:
+            renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 1);
+            break;
+        case RENDERMODE2:
+        default:
+            renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 2);
+            break;
+        }//switch ( mRenderMode )
+
+        
 
         if(mPauseAnimation)
         {

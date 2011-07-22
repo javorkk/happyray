@@ -131,7 +131,7 @@ public:
         mVerticalRotationAngle(0.f), mHorizontalRotationAngle(0.f),
         mUpOrientationAngleChange(0.f), mNumImages(0), mNumScreenshots(0),
         mDumpFrames(false),mPauseAnimation(false),
-        mRenderMode(DEFAULT), mMinimizedWindowName("Happy Ray"),
+        mRenderMode(RENDERMODE1), mMinimizedWindowName("Happy Ray"),
         mActiveWindowName("Fps: "), CONFIGURATION("animation.cfg")
     {}
 

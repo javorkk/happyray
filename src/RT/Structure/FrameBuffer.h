@@ -36,8 +36,10 @@ struct FrameBuffer
     uint resX, resY;
     float3* deviceData;
 
+#ifndef __CUDA_ARCH__
     FrameBuffer():resX(0),resY(0),deviceData(NULL)
     {}
+#endif
 
     DEVICE float3& operator[](const uint aId)
     {
