@@ -41,7 +41,7 @@
 #define MIN_DIMENSION(aX, aY, aZ)	                           \
     (aX < aY) ? ((aX < aZ) ? 0 : 2)	: ((aY < aZ) ? 1 : 2)
 
-template<class tPrimitive, class tIntersector>
+template<class tPrimitive, class tIntersector, bool taIsShadowRay = false>
 class UGridTraverser
 {
 public:
@@ -62,6 +62,14 @@ public:
         float tMax[3];
         int cellId[3];
         //////////////////////////////////////////////////////////////////////////
+
+        if(taIsShadowRay)
+        {
+            if(rayT < 0.9999f)
+            {
+                traversalFlag = false;
+            }
+        }
 
         if (traversalFlag)
         {
@@ -136,6 +144,13 @@ public:
                 const int tMinDimension =
                     MIN_DIMENSION(tMax[0], tMax[1], tMax[2]);
 
+                if(taIsShadowRay)
+                {
+                    if(rayT < 0.9999f)
+                    {
+                        traversalFlag = false;
+                    }
+                }
 
                 traversalFlag = traversalFlag && rayT > tMax[tMinDimension];
 
@@ -145,7 +160,7 @@ public:
 
                 traversalFlag = traversalFlag &&
                     cellId[tMinDimension] != dcGrid.res[tMinDimension]
-                    && cellId[tMinDimension] != -1;
+                && cellId[tMinDimension] != -1;
                 //////////////////////////////////////////////////////////////////////////
             }
         }

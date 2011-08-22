@@ -42,7 +42,7 @@
 #define MIN_DIMENSION(aX, aY, aZ)	                           \
     (aX < aY) ? ((aX < aZ) ? 0 : 2)	: ((aY < aZ) ? 1 : 2)
 
-template<class tPrimitive, class tIntersector>
+template<class tPrimitive, class tIntersector, bool taIsShadowRay = false>
 class TLGridTraverser
 {
 public:
@@ -64,6 +64,14 @@ public:
         int cellId[3];
         float tEntry;
         //////////////////////////////////////////////////////////////////////////
+
+        if(taIsShadowRay)
+        {
+            if(rayT < 0.9999f)
+            {
+                traversalFlag = false;
+            }
+        }
 
         if (traversalFlag)
         {
@@ -203,6 +211,15 @@ public:
                     //Traverse to next leaf
                     const int tMinDimension =
                         MIN_DIMENSION(tMaxLvl2[0], tMaxLvl2[1], tMaxLvl2[2]);
+
+                    if(taIsShadowRay)
+                    {
+                        if(rayT < 0.9999f)
+                        {
+                            secondLvlFlag = false;
+                            traversalFlag = false;
+                        }
+                    }
 
                     if(rayT < tMaxLvl2[tMinDimension])
                     {

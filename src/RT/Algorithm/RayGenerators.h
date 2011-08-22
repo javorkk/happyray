@@ -34,6 +34,7 @@
 #include "Utils/HemisphereSamplers.hpp"
 #include "RT/Primitive/Camera.h"
 #include "RT/Primitive/LightSource.hpp"
+#include "RT/Structure/RayBuffers.h"
 
 template< class tPixelSampler, bool taSafe >
 class RegularPrimaryRayGenerator
@@ -114,38 +115,51 @@ public:
     }
 };
 
-template<class tRayBuffer, int taResX, int taResY>
+template<int taResX, int taResY>
 class AreaLightShadowRayGenerator
 {
-    tRayBuffer mBuffer;
+    SimpleRayBuffer mBuffer;
+    OcclusionRayBuffer mOcclusionBuffer;
 
 public:
-    AreaLightSource dcLightSource;
+    AreaLightSourceCollection lightSources;
     int dcImageId;
 
-    AreaLightShadowRayGenerator(const tRayBuffer& aBuffer,
-        const AreaLightSource& aLS):mBuffer(aBuffer), dcLightSource(aLS)
+    AreaLightShadowRayGenerator(
+        const SimpleRayBuffer& aBuffer,
+        const OcclusionRayBuffer& aOccBuff,
+        const AreaLightSourceCollection& aLSCollection,
+        int aImageId):mBuffer(aBuffer), mOcclusionBuffer(aOccBuff), lightSources(aLSCollection), dcImageId(aImageId)
     {}
 
     DEVICE float operator()(float3& oRayOrg, float3& oRayDir, const uint aRayId,
-        const uint aNumRays)
+        const uint aNumShadowRays)
     {
-        uint myPixelIndex = aRayId / dcSamples;
-        uint numPixels = dcNumPixels;
+        uint numPixels = aNumShadowRays / (taResX * taResY);
+        uint myPixelIndex = aRayId / (taResX * taResY);
 
         float rayT = mBuffer.loadDistance(myPixelIndex, numPixels);
 
-        //typedef KISSRandomNumberGenerator       t_RNG;
+        if (rayT >= FLT_MAX)
+        {
+            return 0.5f;
+        }
 
-        //t_RNG genRand(  3643u + aRayId * 4154207u + aRayId,
-        //    1761919u + aRayId * 2746753u + globalThreadId1D(8116093u),
-        //    331801u + aRayId + globalThreadId1D(91438197u),
-        //    10499029u );
+        typedef KISSRandomNumberGenerator       t_RNG;
+
+        t_RNG genRand(  3643u + aRayId * 4154207u * dcImageId + aRayId,
+            1761919u + aRayId * 2746753u + globalThreadId1D(8116093u),
+            331801u + aRayId + dcImageId + globalThreadId1D(91438197u),
+            10499029u );
+
+        int lightSourceId = 0;
+        AreaLightSource lightSource = lightSources.getLight(genRand(), lightSourceId);
+        mOcclusionBuffer.storeLSId(lightSourceId, aRayId, aNumShadowRays);
 
         StratifiedSampleGenerator<taResX,taResY> 
-            sampleGenerator( 3643u + aRayId * 4154207u * dcSeed + aRayId,
-            1761919u + aRayId * 2746753u * dcSeed /*+ globalThreadId1D(8116093u)*/,
-            331801u + aRayId + dcSeed /*+ globalThreadId1D(91438197u)*/,
+            sampleGenerator( 3643u + aRayId * 4154207u * dcImageId + aRayId,
+            1761919u + aRayId * 2746753u + dcImageId /*+ globalThreadId1D(8116093u)*/,
+            331801u + aRayId * dcImageId  + dcImageId/*+ globalThreadId1D(91438197u)*/,
             10499029u );
         
         float r1 = (float)(aRayId % taResX); 
@@ -153,21 +167,15 @@ public:
 
         sampleGenerator(r1, r2);
 
-        oRayDir = dcLightSource.getPoint(r1, r2);
+        oRayDir = lightSource.getPoint(r1, r2);
 
         oRayOrg = mBuffer.loadOrigin(myPixelIndex, numPixels);
         //+ (rayT - EPS) * mBuffer.loadDirection(myPixelIndex, numPixels);
 
         oRayDir = oRayDir - oRayOrg;
 
-        if (rayT >= FLT_MAX)
-        {
-            return 0.5f;
-        }
-        else
-        {
-            return FLT_MAX;
-        }
+        return FLT_MAX;
+
     }
 };
 

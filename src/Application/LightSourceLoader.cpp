@@ -86,7 +86,7 @@ std::vector<AreaLightSource> LightSourceLoader::loadFromFile(const char* aFileNa
             hasEdge2 = true;
         }
 
-        if(hasPosition && hasNormal && hasIntensity && hasEdge1 && hasEdge2)
+        if(hasPosition && hasIntensity && hasEdge1 && hasEdge2)
         {
             if (!hasNormal)
             {

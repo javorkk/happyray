@@ -20,28 +20,36 @@
 #include "Utils/RandomNumberGenerators.hpp"
 
 static const int RFRACTION_PATH_MAX_DEPTH = 16;
+static const int OCCLUSIONSAMPLESX = 1;
+static const int OCCLUSIONSAMPLESY = 1;
+static const int NUMOCCLUSIONSAMPLES  = OCCLUSIONSAMPLESX * OCCLUSIONSAMPLESY;
 
-DEVICE_NO_INLINE CONSTANT RandomPrimaryRayGenerator< GaussianPixelSampler, true >   dcRayGenerator;
+
 DEVICE_NO_INLINE CONSTANT FrameBuffer                                               dcFrameBuffer;
 DEVICE_NO_INLINE CONSTANT PrimitiveAttributeArray<PhongMaterial>                    dcMaterialStorage;
-DEVICE_NO_INLINE CONSTANT AreaLightSourceCollection                                 dcLightSources;
-DEVICE_NO_INLINE CONSTANT uint                                                      dcNumRays;
+//DEVICE_NO_INLINE CONSTANT AreaLightSourceCollection                                 dcLightSources;
+DEVICE_NO_INLINE CONSTANT uint                                                      dcNumPixels;
 
 DEVICE_NO_INLINE CONSTANT float dcPrimesRCP[] = {0.5f, 0.333333f, 0.2f, 0.142857f,
 0.09090909f, 0.07692307f, 0.058823529f, 0.0526315789f, 0.04347826f,
 0.034482758f, 0.032258064f};
 
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//Path Tracing Kernel
+//////////////////////////////////////////////////////////////////////////////////////////
 template< 
     class tPrimitive,
     class tAccelerationStructure,
-    template <class, class> class tTraverser,
-    class tIntersector>
+    template <class, class, bool> class tTraverser,
+    class tIntersector >
         GLOBAL void tracePath(
         PrimitiveArray<tPrimitive>                                  aStorage,
         VtxAttributeArray<tPrimitive, float3>                       aNormalStorage,
         tAccelerationStructure                                      dcGrid,
         SimpleRayBuffer                                             aRayBuffer,
         const int                                                   aImageId,
+        ImportanceBuffer                                            oImportanceBuffer,
         int*                                                        aGlobalMemoryPtr)
     {
         //typedef KISSRandomNumberGenerator                           t_RNG;
@@ -75,14 +83,14 @@ template<
             }
             // get rays from local pool
             uint myRayIndex = localPoolNextRay + threadId1DInWarp32();
-            if (ALL(myRayIndex >= dcNumRays))
+            if (ALL(myRayIndex >= dcNumPixels))
             {
                 return;
             }
 
-            if (myRayIndex >= dcNumRays) //keep whole warp active
+            if (myRayIndex >= dcNumPixels) //keep whole warp active
             {
-                myRayIndex = dcNumRays;
+                myRayIndex = dcNumPixels;
             }
 
             if (threadId1DInWarp32() == 0)
@@ -91,41 +99,10 @@ template<
                 localPoolRayCount -= WARPSIZE;
             }
 #else
-        for(uint myRayIndex = globalThreadId1D(); myRayIndex < dcNumRays;
+        for(uint myRayIndex = globalThreadId1D(); myRayIndex < dcNumPixels;
             myRayIndex += numThreads())
         {
 #endif
-            //////////////////////////////////////////////////////////////////////////
-            //Initialization
-            uint* sharedMemNew = sharedMem + RENDERTHREADSX * RENDERTHREADSY / WARPSIZE * 2;
-            float3 rayOrg;
-            float3& rayDirRCP = (((float3*)sharedMemNew)[threadId1D32()]);
-
-            float rayT  = dcRayGenerator(rayOrg, rayDirRCP, myRayIndex, dcNumRays);
-            rayDirRCP.x = 1.f / rayDirRCP.x;
-            rayDirRCP.y = 1.f / rayDirRCP.y;
-            rayDirRCP.z = 1.f / rayDirRCP.z;
-
-            uint  bestHit = aStorage.numPrimitives;
-            bool traversalFlag = (rayT >= 0.f) && myRayIndex < dcNumRays;
-            //////////////////////////////////////////////////////////////////////////
-
-            tTraverser<tPrimitive, tIntersector> traverse;
-            traverse(aStorage, dcGrid, rayOrg, rayDirRCP, rayT, bestHit, traversalFlag, sharedMemNew);
-
-            //////////////////////////////////////////////////////////////////////////
-            //Output
-            float3 rayDir;
-            rayDir.x = 1.f / rayDirRCP.x;
-            rayDir.y = 1.f / rayDirRCP.y;
-            rayDir.z = 1.f / rayDirRCP.z;
-
-            if(rayT < FLT_MAX)
-                bestHit = dcGrid.primitives[bestHit];
-            //TODO: remove this and connect ot the rest of the code
-            aRayBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, dcNumRays);
-            //////////////////////////////////////////////////////////////////////////
-
             //////////////////////////////////////////////////////////////////////////
             //Initialization
 
@@ -135,12 +112,21 @@ template<
             //4th flag: true = reflect, false = refract
             //data: path depth
             flag4 myFlags;
-            myFlags.setFlag1(myRayIndex < dcNumRays);
+
+            uint* sharedMemNew = sharedMem + RENDERTHREADSX * RENDERTHREADSY / WARPSIZE * 2;
+            float3 rayOrg = rep(0.f);
+            float3& rayDir = (((float3*)sharedMemNew)[threadId1D32()]);
+
+            float rayT = -1.f;
+            uint  bestHit = aStorage.numPrimitives;
+
+
+            myFlags.setFlag1(myRayIndex < dcNumPixels);
             if (myFlags.getFlag1())
             {
-                rayT = aRayBuffer.loadDistance(myRayIndex, dcNumRays);
-                myFlags.setFlag2(true);
-                myFlags.setFlag2(rayT < FLT_MAX);
+                rayT = aRayBuffer.loadDistance(myRayIndex, dcNumPixels);
+                bestHit = aRayBuffer.loadBestHit(myRayIndex, dcNumPixels);
+                myFlags.setFlag2(rayT < FLT_MAX && bestHit < aStorage.numPrimitives);
             }
 
             if (!myFlags.getFlag1() || !myFlags.getFlag2())
@@ -156,9 +142,9 @@ template<
             //    10499029u);
             t_RNG genRand(globalThreadId1D() * globalThreadId1D() * globalThreadId1D() + 
                 1761919u + myRayIndex * 2746753u * aImageId +
-                (myRayIndex + aImageId * dcNumRays) * 
-                (myRayIndex + aImageId * dcNumRays) *
-                (myRayIndex + aImageId * dcNumRays) );
+                (myRayIndex + aImageId * dcNumPixels) * 
+                (myRayIndex + aImageId * dcNumPixels) *
+                (myRayIndex + aImageId * dcNumPixels) );
 
             float3 attenuation = rep(1.f);
 
@@ -166,24 +152,23 @@ template<
 
             if (myFlags.getFlag2())
             {
-                rayOrg = aRayBuffer.loadOrigin(myRayIndex, dcNumRays);
-                bestHit = aRayBuffer.loadBestHit(myRayIndex, dcNumRays);
-                rayDir = aRayBuffer.loadDirection(myRayIndex, dcNumRays);
-
-                myFlags.setFlag3(dcMaterialStorage[bestHit].isTransparent(indexOfRefraction));
+                rayOrg = aRayBuffer.loadOrigin(myRayIndex, dcNumPixels);
+                rayDir = aRayBuffer.loadDirection(myRayIndex, dcNumPixels);
+                PhongMaterial material = dcMaterialStorage[bestHit];
+                myFlags.setFlag3(material.isTransparent(indexOfRefraction));
 
                 if (!myFlags.getFlag3())
                 {
-                    float3 diffReflectance = dcMaterialStorage[bestHit].getDiffuseReflectance();
+                    float3 diffReflectance = material.getDiffuseReflectance();
                     float albedoD = (diffReflectance.x * 0.222f +
                         diffReflectance.y * 0.7067f +
                         diffReflectance.z * 0.0713f) * M_PI;
-                    float3 specReflectance = dcMaterialStorage[bestHit].getSpecularReflectance();
-                    float specExponent = dcMaterialStorage[bestHit].getSpecularExponent();
+                    float3 specReflectance = material.getSpecularReflectance();
+                    float specExponent = material.getSpecularExponent();
                     float albedoS = (specReflectance.x * 0.222f +
                         specReflectance.y * 0.7067f +
                         specReflectance.z * 0.0713f) * 2.f * M_PI / (specExponent + 2);
-
+                    
                     float rnum = genRand();
                     if (rnum < albedoD)
                     {
@@ -212,9 +197,9 @@ template<
                 }
             }
 
+
             while(ANY(myFlags.getFlag2()))
             {
-
                 if(myFlags.getFlag2())
                 {
                     tPrimitive prim = aStorage[bestHit];
@@ -318,7 +303,7 @@ template<
 
                         rayOrg = rayOrg + normal * 5.f * EPS;
                     }
-                    else
+                    else if(bestHit < aStorage.numPrimitives)
                     {
                         //bounce specular
                         PowerCosineHemisphereSampler genDir;
@@ -349,7 +334,8 @@ template<
                 }//endif thread is active
 
                 //////////////////////////////////////////////////////////////////////////
-                traverse(aStorage, dcGrid, rayOrg, rayDirRCP, rayT, bestHit, traversalFlag, sharedMemNew);
+                tTraverser<tPrimitive, tIntersector, false> traverse;
+                traverse(aStorage, dcGrid, rayOrg, rayDir, rayT, bestHit, myFlags.getFlag2(), sharedMemNew);
                 //////////////////////////////////////////////////////////////////////////
 
                 if(myFlags.getFlag2())
@@ -363,27 +349,32 @@ template<
                     if(rayT >= FLT_MAX || myFlags.getData() >= RFRACTION_PATH_MAX_DEPTH)
                     {
                         //outside scene
-                        aRayBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, dcNumRays);
+                        if(rayT < FLT_MAX)
+                            bestHit = dcGrid.primitives[bestHit];
+
+                        aRayBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, dcNumPixels);
                         myFlags.setFlag2To0();
 
                         rayT = -1.f;
                     }
                     else
                     {
-                        myFlags.setFlag3(dcMaterialStorage[bestHit].isTransparent(indexOfRefraction));
+                        bestHit = dcGrid.primitives[bestHit];
+                        PhongMaterial material = dcMaterialStorage[bestHit];
+                        myFlags.setFlag3(material.isTransparent(indexOfRefraction));
                         if (!myFlags.getFlag3())
                         {
-                            float3 diffReflectance = dcMaterialStorage[bestHit].getDiffuseReflectance();
+                            float3 diffReflectance = material.getDiffuseReflectance();
                             float albedoD = (diffReflectance.x * 0.222f +
                                 diffReflectance.y * 0.7067f +
                                 diffReflectance.z * 0.0713f) * M_PI;
-                            float3 specReflectance = dcMaterialStorage[bestHit].getSpecularReflectance();
-                            float specExponent = dcMaterialStorage[bestHit].getSpecularExponent();
+                            float3 specReflectance = material.getSpecularReflectance();
+                            float specExponent = material.getSpecularExponent();
                             float albedoS = (specReflectance.x * 0.222f +
                                 specReflectance.y * 0.7067f +
                                 specReflectance.z * 0.0713f) * 2.f * M_PI / (specExponent + 2.f);
 
-                            albedoS = (albedoS > 0.f)  ? fminf(1.f - albedoD, 0.25f): 0.f;
+                            //albedoS = (albedoS > 0.f)  ? fminf(1.f - albedoD, 0.25f): 0.f;//TODO: remove
 
                             float rnum = genRand();
                             if (rnum < albedoD)
@@ -407,7 +398,7 @@ template<
                             else
                             {
                                 attenuation = attenuation / (1.f - albedoS - albedoD);
-                                aRayBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, dcNumRays);
+                                aRayBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, dcNumPixels);
                                 myFlags.setFlag2To0();
                                 rayT = -1.f;
                             }
@@ -418,22 +409,302 @@ template<
                     }
                 }//endif thread is active
 
-                //break; //TODO: remove
             }//end while continue path
-            
-            float newSampleWeight = 1.f / (float)(aImageId + 1);
-            float oldSamplesWeight = 1.f - newSampleWeight;
 
-            dcFrameBuffer.deviceData[myRayIndex] = 
-                dcFrameBuffer.deviceData[myRayIndex] * oldSamplesWeight +
-                attenuation * newSampleWeight;
+            if(myRayIndex < dcNumPixels)
+                oImportanceBuffer.store(attenuation, myRayIndex);
         }//end while persistent threads
     }
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//Direct Illumination Kernel
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//assumes that block size is multiple of number of samples per area light
+template< class tPrimitive >
+GLOBAL void computeDirectIllumination(
+                        PrimitiveArray<tPrimitive>              aStorage,
+                        VtxAttributeArray<tPrimitive, float3>   aNormalStorage,
+                        SimpleRayBuffer                         aInputBuffer,
+                        OcclusionRayBuffer                      aOcclusionBuffer,
+                        AreaLightSourceCollection               aLSCollection,
+                        FrameBuffer                             oFinalImage,
+                        int                                     dcNumRays, //shadow rays
+                        int                                     dcImageId,
+                        float3*                                 aAttenuation = NULL)
+{
+    extern SHARED float3 sharedVec[];
+    sharedVec[threadId1D()] = rep(FLT_MAX);
+
+    float3 rayOrg = rep(0.f);
+    float3 rayDir = rep(1.f);
+
+    for(uint myRayIndex = globalThreadId1D();
+        myRayIndex - threadId1D() < dcNumRays;
+        myRayIndex += numThreads())
+    {
+
+        //////////////////////////////////////////////////////////////////////////
+        //Initialization
+        float rayT = FLT_MAX;
+        uint  bestHit = 0u;
+        const uint myPixelIndex = min(dcNumPixels - 1, myRayIndex / NUMOCCLUSIONSAMPLES);
+
+        SYNCTHREADS;
+
+        //////////////////////////////////////////////////////////////////////////
+        //load occlusion information in shared memory
+        if (myRayIndex < dcNumRays)
+        {
+            sharedVec[threadId1D()] = aOcclusionBuffer.loadLigtVec(myRayIndex);
+            aInputBuffer.load(rayOrg, rayDir, rayT, bestHit, myPixelIndex, dcNumPixels);
+        }
+        //////////////////////////////////////////////////////////////////////////
+
+
+        SYNCTHREADS;
+
+        if (myRayIndex < dcNumRays && rayT < FLT_MAX )
+        {
+            if (sharedVec[threadId1D()].x < FLT_MAX && bestHit < aStorage.numPrimitives)
+            {
+                tPrimitive prim = aStorage[bestHit];
+                float3& vert0 = prim.vtx[0];
+                float3& vert1 = prim.vtx[1];
+                float3& vert2 = prim.vtx[2];
+
+                float3 realNormal = (vert1 - vert0) % (vert2 - vert0);
+
+                //Compute barycentric coordinates
+                vert0 = vert0 - rayOrg;
+                vert1 = vert1 - rayOrg;
+                vert2 = vert2 - rayOrg;
+
+                float3 n0 = vert1 % vert2;
+                float3 n1 = vert2 % vert0;
+
+                float twiceSabc_RCP = lenRCP(realNormal);
+                float u = len(n0) * twiceSabc_RCP;
+                float v = len(n1) * twiceSabc_RCP;
+
+                VtxAttribStruct<tPrimitive, float3> normals;
+                normals = aNormalStorage[bestHit];
+                float3& normal0 = normals.data[0];
+                float3& normal1 = normals.data[1];
+                float3& normal2 = normals.data[2];
+
+                float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
+
+                PhongMaterial material = dcMaterialStorage[bestHit];
+                float3 diffReflectance = material.getDiffuseReflectance();
+                float3 specReflectance = material.getSpecularReflectance();
+                float  specExp = material.getSpecularExponent();
+
+
+                float attenuation = 1.f /
+                    dot(sharedVec[threadId1D()],sharedVec[threadId1D()]);
+
+                //normalize
+                sharedVec[threadId1D()] = sharedVec[threadId1D()] * sqrtf(attenuation);
+
+                AreaLightSource dcLightSource = aLSCollection.getLightWithID(aOcclusionBuffer.loadLSId(myRayIndex,dcNumRays));
+
+                float cosLightNormal = dot(-dcLightSource.normal,
+                    sharedVec[threadId1D()]);
+
+                float cosNormalEyeDir = dot(normal,sharedVec[threadId1D()]);
+
+                float cosHalfVecLightDir = fmaxf(0.f,
+                    dot((~(sharedVec[threadId1D()] - rayDir)),sharedVec[threadId1D()]));
+
+                if (dcLightSource.isOnLS(rayOrg))
+                {
+                    cosLightNormal= dot(rayDir,dcLightSource.normal);
+                    float receivesEnergy = (cosLightNormal < 0.f) ? 1.f : 0.f;
+                    sharedVec[threadId1D()].x = dcLightSource.intensity.x * receivesEnergy;
+                    sharedVec[threadId1D()].y = dcLightSource.intensity.y * receivesEnergy;
+                    sharedVec[threadId1D()].z = dcLightSource.intensity.z * receivesEnergy;
+                }
+                else
+                {
+                    float3 lsRadiance = dcLightSource.intensity *
+                        dcLightSource.getArea() *
+                        attenuation * 
+                        fmaxf(0.f, cosLightNormal);
+                    
+                    sharedVec[threadId1D()] = lsRadiance * fmaxf(0.f, cosNormalEyeDir);
+
+                    sharedVec[threadId1D()].x *= diffReflectance.x;
+                    sharedVec[threadId1D()].y *= diffReflectance.y;
+                    sharedVec[threadId1D()].z *= diffReflectance.z;
+
+                    float3 tmp = lsRadiance * fmaxf(0.f, cosNormalEyeDir) *
+                            cosHalfVecLightDir *
+                           fmaxf(0.f, fastPow(cosHalfVecLightDir, specExp));
+
+                    tmp.x *= specReflectance.x;
+                    tmp.y *= specReflectance.y;
+                    tmp.z *= specReflectance.z;
+
+                    sharedVec[threadId1D()] += tmp;
+                }
+
+            }
+            else if (sharedVec[threadId1D()].x == FLT_MAX)
+            {
+                sharedVec[threadId1D()] = rep(0.f);
+            }//endif point receives direct illumination
+        }
+        else if (myRayIndex < dcNumRays)
+        {
+            sharedVec[threadId1D()] = rep(0.f);
+        }//endif hit point exists
+
+        SYNCTHREADS;
+
+        //one thread per pixel instead of per occlusion sample
+        if (myRayIndex < dcNumRays && myRayIndex % NUMOCCLUSIONSAMPLES == 0u )
+        {
+            float3 oRadiance = rep(0.f);
+
+            for(uint i = 0; i < NUMOCCLUSIONSAMPLES; ++i)
+            {
+                oRadiance =  oRadiance + sharedVec[threadId1D() + i] 
+                * 1.f / (float)NUMOCCLUSIONSAMPLES;
+            }
+
+            float newSampleWeight = 1.f / (float)(dcImageId + 1);
+            float oldSamplesWeight = 1.f - newSampleWeight;
+
+            if (aAttenuation == NULL)
+            {
+                oFinalImage[myPixelIndex] =
+                    oFinalImage[myPixelIndex] * oldSamplesWeight +
+                    oRadiance * newSampleWeight;
+            }
+            else
+            {
+                oFinalImage[myPixelIndex] =
+                    oFinalImage[myPixelIndex] * oldSamplesWeight +
+                    oRadiance * aAttenuation[myPixelIndex] * newSampleWeight;
+            }
+        }
+
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//Final Image Assembly
+//////////////////////////////////////////////////////////////////////////////////////////
+
+static const int NUMTHREADS_ADD_II_X = 16;
+static const int NUMTHREADS_ADD_II_Y = 16;
+
+GLOBAL void addIndirectIllumination(
+    float3* oFrameBuffer, //image to display
+    float3* oResidue, //stores difference between image to display and the unbiased image
+    float3* aAttenuation, //normalization factors for new illumination
+    float3* aNewContribution, //new contribution
+    int dcImageId,
+    int dcResX,
+    int dcResY
+    )
+{
+    //first and last row and column are for padding
+    SHARED float3 sharedMem[NUMTHREADS_ADD_II_X * NUMTHREADS_ADD_II_Y];
+
+    uint mySharedMemIndex = threadId1D();
+
+    //Coordinates of the input pixel of thread (0,0)
+    uint2 blockOffset2D = make_uint2(
+        blockIdx.x * (blockDim.x - 2),
+        blockIdx.y * (blockDim.y - 2));
+
+    //Coordinates of the input pixel
+    uint2 threadOffset2D = make_uint2(
+        max(1, threadIdx.x + blockOffset2D.x) - 1 ,
+        max(1, threadIdx.y + blockOffset2D.y) - 1 );
+
+    bool isInsideImage = threadOffset2D.x < dcResX + 1 && threadOffset2D.y < dcResY + 1;
+
+    threadOffset2D = make_uint2(
+        min(threadOffset2D.x, dcResX - 1),
+        min(threadOffset2D.y, dcResY - 1));
+
+    //linear index of the input pixel
+    uint threadOffset1D = 
+        threadOffset2D.x + threadOffset2D.y * dcResX;
+
+    float3 pixelValue = rep(0.f);
+    float3 newContribution = rep(0.f);
+    float3 intensity = rep(1.f);
+    float newIntensity = 0.f;
+
+
+    if (threadOffset1D < dcNumPixels && isInsideImage)
+    {
+        pixelValue = oFrameBuffer[threadOffset1D];
+        newContribution = aAttenuation[threadOffset1D] * aNewContribution[threadOffset1D];
+        newContribution += oResidue[threadOffset1D];
+    }
+
+    newIntensity = dot(newContribution,intensity);
+    sharedMem[mySharedMemIndex] = newContribution;
+
+    SYNCTHREADS;
+
+    bool writeOutput = 
+        threadIdx.x > 0u && threadIdx.x < blockDim.x - 1 &&
+        threadIdx.y > 0u && threadIdx.y < blockDim.y - 1 &&
+        threadOffset1D < dcNumPixels &&
+        isInsideImage;
+
+    if (writeOutput)
+    {
+        //Gaussian blurr with 3x3 kernel
+        int bottom = threadId1D(threadIdx.x, threadIdx.y - 1);
+        int top = threadId1D(threadIdx.x, threadIdx.y + 1);
+        int bottomLeft = threadId1D(threadIdx.x - 1,threadIdx.y - 1);
+        int bottomRight= threadId1D(threadIdx.x + 1, threadIdx.y - 1);
+        int topLeft = threadId1D(threadIdx.x - 1, threadIdx.y + 1);
+        int topRight = threadId1D(threadIdx.x + 1, threadIdx.y + 1);
+        int Left =  threadId1D(threadIdx.x - 1, threadIdx.y);
+        int Right = threadId1D(threadIdx.x + 1, threadIdx.y);
+
+        float3 blurredIntensity = (
+            1.f * sharedMem[topLeft]    +   2.f * sharedMem[top]    + 1.f * sharedMem[topRight] +
+            2.f * sharedMem[Left]       +   4.f * sharedMem[top]    + 2.f * sharedMem[Right]    +
+            1.f * sharedMem[bottomLeft] +   2.f * sharedMem[bottom] + 1.f * sharedMem[bottomRight]
+        )/ 16.f;
+
+        //float3 unbiasedPixelValue = pixelValue + indirectContribution;
+        float variance = newIntensity;
+        variance *= variance;
+
+        const float newSampleWeight = 1.f / (float)(dcImageId + 1);
+        const float oldSampleWeight = 1.f - newSampleWeight;
+
+        if (variance < fmaxf(0.1f / static_cast<float>(dcImageId), 0.005f))
+        {
+            oFrameBuffer[threadOffset1D] = pixelValue * oldSampleWeight + newContribution * newSampleWeight;
+            oResidue[threadOffset1D] = rep(0.f);
+        }
+        else
+        {
+            float3 val = min(blurredIntensity, newContribution); 
+            oFrameBuffer[threadOffset1D] = pixelValue * oldSampleWeight + val * newSampleWeight;
+            oResidue[threadOffset1D] = newContribution - val;
+        }
+
+    }
+
+}
+
 
     template<
         class tPrimitive,
         class tAccelerationStructure,
-            template <class, class> class tTraverser,
+            template <class, class, bool> class tTraverser,
         class tPrimaryIntersector,
         class tAlternativeIntersector>
 
@@ -442,15 +713,22 @@ template<
         int* mGlobalMemoryPtr;
         size_t mGlobalMemorySize;
         cudaEvent_t mTrace, mShade;
+        
+        FrameBuffer mNewRadianceBuffer, mResidueBuffer;
     public:
         typedef RandomPrimaryRayGenerator< GaussianPixelSampler, true > t_PrimaryRayGenerator;
         typedef SimpleRayBuffer                                         t_RayBuffer;
         typedef tPrimaryIntersector                                     t_Intersector;
         typedef tAccelerationStructure                                  t_AccelerationStructure;
+        typedef AreaLightShadowRayGenerator < OCCLUSIONSAMPLESX, OCCLUSIONSAMPLESY>  t_ShadowRayGenerator;
+        typedef ImportanceBuffer                                        t_ImportanceBuffer;
+        typedef OcclusionRayBuffer                                      t_OcclusionBuffer;
 
-        t_RayBuffer rayBuffer;
+        t_RayBuffer             rayBuffer;
+      
 
-        PathTracer():rayBuffer(t_RayBuffer(NULL)), mGlobalMemorySize(0u)
+        PathTracer():rayBuffer(t_RayBuffer(NULL)), 
+            mGlobalMemorySize(0u)
         {}
 
         ~PathTracer()
@@ -459,60 +737,19 @@ template<
             {
                 MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
             }
-
+            mNewRadianceBuffer.cleanup();
+            mResidueBuffer.cleanup();
         }
 
-        HOST void traceNextPath(
-            PrimitiveArray<tPrimitive>&                     aStorage,
-            VtxAttributeArray<tPrimitive, float3>&          aNormalStorage,
-            PrimitiveAttributeArray<PhongMaterial>&         aMaterialStorage,
-            AreaLightSourceCollection&                      aLightSources,
-            t_AccelerationStructure&                        aAccStruct,
-            t_PrimaryRayGenerator&                          aRayGenerator,
-            FrameBuffer&                                    aFrameBuffer,
-            const int                                       aImageId
-            )
-        {
-
-            const uint sharedMemoryTrace = SHARED_MEMORY_TRACE;
-
-            const uint numRays = aFrameBuffer.resX * aFrameBuffer.resY;
-            const uint globalMemorySize = sizeof(uint) +    //Persistent threads
-                numRays * sizeof(float3) +                   //rayOrg
-                numRays * sizeof(float3) +                   //rayDir
-                numRays * sizeof(float) +                   //rayT
-                numRays * sizeof(uint) +                    //primitive Id
-                0u;
-
-            MemoryManager::allocateDeviceArray((void**)&mGlobalMemoryPtr, globalMemorySize, (void**)&mGlobalMemoryPtr, mGlobalMemorySize);
-
-            MY_CUDA_SAFE_CALL( cudaMemset( mGlobalMemoryPtr, 0, sizeof(uint)) );
-
-            dim3 threadBlockTrace( RENDERTHREADSX, RENDERTHREADSY );
-            dim3 blockGridTrace  ( RENDERBLOCKSX, RENDERBLOCKSY );
-
-            rayBuffer.setMemPtr(mGlobalMemoryPtr + 1);
-            //MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcGrid", &aAccStruct, sizeof(UniformGrid)) );
-            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcRayGenerator", &aRayGenerator, sizeof(t_PrimaryRayGenerator)) );
-            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcFrameBuffer", &aFrameBuffer, sizeof(FrameBuffer)) );
-            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcMaterialStorage", &aMaterialStorage, sizeof(PrimitiveAttributeArray<PhongMaterial>)) );
-            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcLightSources", &aLightSources, sizeof(AreaLightSourceCollection)) );
-            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcNumRays", &numRays, sizeof(uint)) );
-            
-            cudaEventCreate(&mTrace);
-
-            tracePath< tPrimitive, tAccelerationStructure, tTraverser, tPrimaryIntersector >
-                <<< blockGridTrace, threadBlockTrace, sharedMemoryTrace>>>
-                (aStorage, aNormalStorage, aAccStruct, rayBuffer, aImageId, mGlobalMemoryPtr);
-
-            cudaEventRecord(mTrace, 0);
-            cudaEventSynchronize(mTrace);
-            MY_CUT_CHECK_ERROR("Tracing path failed!\n");
-            cudaEventDestroy(mTrace);
-
+        HOST void setResolution(const int     aX, const int     aY)
+        {            
+            mNewRadianceBuffer.init(aX, aY);
+            mNewRadianceBuffer.setZero();
+           
+            mResidueBuffer.init(aX, aY);
+            mResidueBuffer.setZero();
         }
 
-       
         HOST void integrate(
             PrimitiveArray<tPrimitive>&                     aStorage,
             VtxAttributeArray<tPrimitive, float3>&          aNormalStorage,
@@ -524,7 +761,151 @@ template<
             const int                                       aImageId
             )
         {
-            traceNextPath(aStorage, aNormalStorage, aMaterialStorage, aLightSources, aAccStruct, aRayGenerator, aFrameBuffer, aImageId);
+            
+            const uint sharedMemoryTrace = SHARED_MEMORY_TRACE;
+
+            const uint numPixels = aFrameBuffer.resX * aFrameBuffer.resY;
+            const uint globalMemorySize = sizeof(uint) +    //Persistent threads
+                numPixels * sizeof(float3) +                //rayBuffer : rayOrg
+                numPixels * sizeof(float3) +                //rayBuffer : rayDir
+                numPixels * sizeof(float) +                 //rayBuffer : rayT
+                numPixels * sizeof(uint) +                  //rayBuffer : primitive Id
+                numPixels * sizeof(float3) +                //importanceBuffer : importance
+                numPixels * NUMOCCLUSIONSAMPLES * (sizeof(float3) + sizeof(int)) + //occlusion buffer: light vector + light source id                
+                0u;
+
+            MemoryManager::allocateDeviceArray((void**)&mGlobalMemoryPtr, globalMemorySize, (void**)&mGlobalMemoryPtr, mGlobalMemorySize);
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////////
+            //primary rays
+            //////////////////////////////////////////////////////////////////////////////////////////////////////
+            MY_CUDA_SAFE_CALL( cudaMemset( mGlobalMemoryPtr, 0, sizeof(uint)) );
+            rayBuffer.setMemPtr(mGlobalMemoryPtr + 1);
+
+            dim3 threadBlockTrace( RENDERTHREADSX, RENDERTHREADSY );
+            dim3 blockGridTrace  ( RENDERBLOCKSX, RENDERBLOCKSY );
+
+            cudaEventCreate(&mTrace);
+
+            trace<tPrimitive, tAccelerationStructure, t_PrimaryRayGenerator, t_RayBuffer, tTraverser, tPrimaryIntersector, false>
+                <<< blockGridTrace, threadBlockTrace, sharedMemoryTrace>>>(
+                aStorage,
+                aRayGenerator,
+                aAccStruct,
+                rayBuffer,
+                numPixels,
+                mGlobalMemoryPtr);
+
+            cudaEventRecord(mTrace, 0);
+            cudaEventSynchronize(mTrace);
+            MY_CUT_CHECK_ERROR("Tracing primary rays failed!\n");
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////////
+            //secondary rays (paths from hitpoints)
+            //////////////////////////////////////////////////////////////////////////////////////////////////////
+
+            MY_CUDA_SAFE_CALL( cudaMemset( mGlobalMemoryPtr, 0, sizeof(uint)) );
+
+            //MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcGrid", &aAccStruct, sizeof(UniformGrid)) );
+            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcFrameBuffer", &aFrameBuffer, sizeof(FrameBuffer)) );
+            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcMaterialStorage", &aMaterialStorage, sizeof(PrimitiveAttributeArray<PhongMaterial>)) );
+            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcNumPixels", &numPixels, sizeof(uint)) );
+
+            t_ImportanceBuffer     importanceBuffer(mGlobalMemoryPtr + 
+                1 +                                                         //Persistent threads
+                numPixels * 3 + numPixels * 3 + numPixels + numPixels +     //rayBuffer
+                0u);
+
+            tracePath< tPrimitive, tAccelerationStructure, tTraverser, tPrimaryIntersector >
+                <<< blockGridTrace, threadBlockTrace, sharedMemoryTrace>>>
+                (aStorage, aNormalStorage, aAccStruct, rayBuffer, aImageId, importanceBuffer, mGlobalMemoryPtr);
+
+            cudaEventRecord(mTrace, 0);
+            cudaEventSynchronize(mTrace);
+            MY_CUT_CHECK_ERROR("Tracing (paths of)secondary rays  failed!\n");
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////////
+            //shadow rays
+            //////////////////////////////////////////////////////////////////////////////////////////////////////
+            t_OcclusionBuffer occlusionBuffer(mGlobalMemoryPtr + 
+                1 +                             //Persistent threads
+                numPixels * 3 +                 //rayBuffer : rayOrg
+                numPixels * 3 +                 //rayBuffer : rayDir
+                numPixels +                     //rayBuffer : rayT
+                numPixels +                     //rayBuffer : primitive Id
+                numPixels * 3 +                 //importanceBuffer : importance
+                0u);
+
+            t_ShadowRayGenerator   shadowRayGenerator(rayBuffer, occlusionBuffer, aLightSources, aImageId);
+
+
+            MY_CUDA_SAFE_CALL( cudaMemset( mGlobalMemoryPtr, 0, sizeof(uint)) );
+            const uint numShadowRays = numPixels * NUMOCCLUSIONSAMPLES;
+            
+            trace<tPrimitive, tAccelerationStructure, t_ShadowRayGenerator, t_OcclusionBuffer, tTraverser, tPrimaryIntersector, true>
+                <<< blockGridTrace, threadBlockTrace, sharedMemoryTrace>>>(
+                aStorage,
+                shadowRayGenerator,
+                aAccStruct,
+                occlusionBuffer,
+                numShadowRays,
+                mGlobalMemoryPtr);
+
+            cudaEventRecord(mTrace, 0);
+            cudaEventSynchronize(mTrace);
+            MY_CUT_CHECK_ERROR("Tracing shadow rays failed!\n");
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////////
+            //direct illumination at the end of each path
+            //////////////////////////////////////////////////////////////////////////////////////////////////////
+
+            dim3 threadBlockDI( 24*NUMOCCLUSIONSAMPLES );
+            dim3 blockGridDI  ( 120 );
+
+            const uint sharedMemoryShade =
+                threadBlockDI.x * sizeof(float3) +   //light vector   
+                0u;
+
+            computeDirectIllumination < tPrimitive >
+                <<< blockGridDI, threadBlockDI, sharedMemoryShade>>>(
+                aStorage,
+                aNormalStorage,
+                rayBuffer,
+                occlusionBuffer,
+                aLightSources,
+                mNewRadianceBuffer,
+                numShadowRays,
+                aImageId,
+                (float3*)importanceBuffer.getData());
+
+            cudaEventRecord(mTrace, 0);
+            cudaEventSynchronize(mTrace);
+            MY_CUT_CHECK_ERROR("Computing direct illumination failed!\n");
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////////
+            //merge sample images
+            //////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+            dim3 threadBlockAdd( NUMTHREADS_ADD_II_X, NUMTHREADS_ADD_II_Y );
+            dim3 blockGridAdd ( 
+                aFrameBuffer.resX  / (NUMTHREADS_ADD_II_X - 2) + 1,
+                aFrameBuffer.resY  / (NUMTHREADS_ADD_II_Y - 2) + 1);
+
+            addIndirectIllumination
+                <<< blockGridAdd, threadBlockAdd>>>(
+                (float3*)aFrameBuffer.deviceData,
+                (float3*)mResidueBuffer.deviceData,
+                (float3*)importanceBuffer.getData(),
+                (float3*)mNewRadianceBuffer.deviceData,
+                aImageId,
+                aFrameBuffer.resX,
+                aFrameBuffer.resY);
+            
+            cudaEventRecord(mTrace, 0);
+            cudaEventSynchronize(mTrace);
+            MY_CUT_CHECK_ERROR("Merging images failed!\n");
+            cudaEventDestroy(mTrace);
         }
 
     };

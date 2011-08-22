@@ -281,6 +281,12 @@ public:
             current.specularReflectance.y = aKeyFrame2.getMaterial(it).specularCoeff.y;
             current.specularReflectance.z = aKeyFrame2.getMaterial(it).specularCoeff.z;
             current.specularReflectance.w = aKeyFrame2.getMaterial(it).specularExp;
+
+            current.emission.x = aKeyFrame2.getMaterial(it).emission.x;
+            current.emission.y = aKeyFrame2.getMaterial(it).emission.y;
+            current.emission.z = aKeyFrame2.getMaterial(it).emission.z;
+            current.emission.w = 0.f;
+
             matHost[it] = current;
         }
 

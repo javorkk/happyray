@@ -121,6 +121,7 @@ float CUDAApplication::generateFrame(
     
     cudaEventDestroy(mStart);
     cudaEventDestroy(mEnd);
+    MY_CUT_CHECK_ERROR("Error after frame buffer downloat (dev-host)!\n");
 
     return oRenderTime;
 }

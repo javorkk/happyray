@@ -109,7 +109,10 @@ PathTracer<
 
 
 void RTEngine::init()
-{}
+{
+    sResX = 0;
+    sResY = 0;
+}
 
 void RTEngine::upload(
     const WFObject& aFrame1,
@@ -152,6 +155,7 @@ void RTEngine::setCamera(
     const int     aY )
 {
     sCamera.init(aPosition, aOrientation, aUp, aFOV, aX, aY);
+
     sResX = aX;
     sResY = aY;
 
@@ -161,6 +165,7 @@ void RTEngine::setCamera(
     sRandomRayGen.dcCamera  = sCamera;
     sRandomRayGen.dcRandomPixelSampler.resX = (float)aX;
     sRandomRayGen.dcRandomPixelSampler.resY = (float)aY;
+    sPathTracer.setResolution(aX,aY); //TODO: Only reserve memory if the integrator is used
 
 }
 

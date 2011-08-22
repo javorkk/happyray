@@ -38,18 +38,15 @@
 
 #include "RT/Algorithm/RayTracingKernels.h"
 
-template< 
-    class tPrimitive,
-    class tMaterialStorage,
-    class tInputBuffer >
+template< class tPrimitive >
 GLOBAL void simpleShade(
-        PrimitiveArray<tPrimitive>      aStorage,
-        VtxAttributeArray<tPrimitive, float3>      aNormalStorage,
-        PrimitiveAttributeArray<PhongMaterial>      aMaterialStorage,
-        tInputBuffer                    aInputBuffer,
-        FrameBuffer                     oFrameBuffer,
-        const int                       aImageId,
-        int*                            aGlobalMemoryPtr)
+        PrimitiveArray<tPrimitive>              aStorage,
+        VtxAttributeArray<tPrimitive, float3>   aNormalStorage,
+        PrimitiveAttributeArray<PhongMaterial>  aMaterialStorage,
+        SimpleRayBuffer                         aInputBuffer,
+        FrameBuffer                             oFrameBuffer,
+        const int                               aImageId,
+        int*                                    aGlobalMemoryPtr)
 {
     extern SHARED uint sharedMem[];
 
@@ -132,7 +129,7 @@ template<
     class tPrimitive,
     class tPrimaryRayGenerator,
     class tAccelerationStructure,
-    template <class, class> class tTraverser,
+    template <class, class, bool> class tTraverser,
     class tPrimaryIntersector,
     class tAlternativeIntersector>
 
@@ -192,7 +189,7 @@ public:
 
         cudaEventCreate(&mTrace);
 
-        trace<tPrimitive, tAccelerationStructure, t_PrimaryRayGenerator, t_RayBuffer, tPrimaryIntersector, tTraverser >
+        trace<tPrimitive, tAccelerationStructure, t_PrimaryRayGenerator, t_RayBuffer, tTraverser, tPrimaryIntersector, false >
             <<< blockGridTrace, threadBlockTrace, sharedMemoryTrace>>>(
             aStorage,
             aRayGenerator,
@@ -227,9 +224,7 @@ public:
 
         cudaEventCreate(&mShade);
 
-        simpleShade<
-            tPrimitive,
-            t_RayBuffer>
+        simpleShade<tPrimitive>
             <<< blockGridShade, threadBlockShade, sharedMemoryShade>>>(
             aStorage,
             aNormalStorage,

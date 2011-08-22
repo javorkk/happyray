@@ -251,7 +251,7 @@ bool SceneLoader::loadScene(
             std::vector<AreaLightSource> lights = loader.loadFromFile(sceneConfig.lightsFileName);
             for(size_t ls = 0; ls < lights.size(); ++ls)
             {
-                oLightSources.upload(lights[ls].getArea()*dot(lights[ls].intensity,lights[ls].intensity), lights[ls]);
+                oLightSources.upload(lights[ls].getArea()*len(lights[ls].intensity), lights[ls]);
                 for (size_t it = 0; it < oAnimation.getNumKeyFrames(); ++it)
                 {
                     insertLightSourceGeometry(lights[ls], oAnimation.getFrame(it));
@@ -265,7 +265,7 @@ bool SceneLoader::loadScene(
             {
                 createLightSource(oLightSource, oAnimation.getFrame(it));
             }
-            oLightSources.upload(oLightSource.getArea()*dot(oLightSource.intensity, oLightSource.intensity), oLightSource);
+            oLightSources.upload(oLightSource.getArea()*len(oLightSource.intensity), oLightSource);
 
         }
     }
@@ -278,7 +278,7 @@ bool SceneLoader::loadScene(
             std::vector<AreaLightSource> lights = loader.loadFromFile(sceneConfig.lightsFileName);
             for(size_t ls = 0; ls < lights.size(); ++ls)
             {
-                oLightSources.upload(lights[ls].getArea()*dot(lights[ls].intensity,lights[ls].intensity), lights[ls]);
+                oLightSources.upload(lights[ls].getArea()*len(lights[ls].intensity), lights[ls]);
                 insertLightSourceGeometry(lights[ls], oAnimation.getFrame(0));
             }
         }
@@ -286,7 +286,7 @@ bool SceneLoader::loadScene(
         {
             AreaLightSource oLightSource;
             createLightSource(oLightSource, oAnimation.getFrame(0));
-            oLightSources.upload(oLightSource.getArea()*dot(oLightSource.intensity, oLightSource.intensity), oLightSource);
+            oLightSources.upload(oLightSource.getArea()*len(oLightSource.intensity), oLightSource);
         }
 
     }

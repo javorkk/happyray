@@ -191,13 +191,13 @@ public:
     OcclusionRayBuffer(void* aMemPtr): mMemoryPtr(aMemPtr)
     {}
 
-    HOST DEVICE void* getData()
+    HOST DEVICE void* getData() const
     {
         return mMemoryPtr;
     }
 
     HOST DEVICE void store(const float3& aRayOrg, const float3& aRayDir, const float aRayT,
-        const uint aBestHit, const uint aRayId, const uint aNumRays)
+        const uint aBestHit, const uint aRayId, const uint aNumRays)  const
     {
         //if not occluded, store distance to light source
         float3* rayOut = ((float3*)mMemoryPtr) + aRayId;
@@ -211,33 +211,45 @@ public:
         }
     }
 
-    HOST DEVICE float3 loadLigtVec(const uint aSampleId)
+    HOST DEVICE void storeLSId(const int aVal, const uint aSampleId, const uint aNumSamples)  const
+    {
+        //if not occluded, store distance to light source
+        int* rayOut = (int*)((char*)mMemoryPtr + aNumSamples * sizeof(float3)) + aSampleId;
+        *rayOut = aVal;
+    }
+
+    HOST DEVICE int loadLSId(const uint aSampleId, const uint aNumSamples) const
+    {
+        return *((int*)((char*)mMemoryPtr + aNumSamples * sizeof(float3)) + aSampleId);
+    }
+
+    HOST DEVICE float3 loadLigtVec(const uint aSampleId) const
     {
         return *((float3*)mMemoryPtr + aSampleId);
     }    
     
 };
 
-class RefractionRayBuffer
+class ImportanceBuffer
 {
     void* mMemoryPtr;
 public:
-    RefractionRayBuffer(void* aMemPtr): mMemoryPtr(aMemPtr)
+    ImportanceBuffer(void* aMemPtr): mMemoryPtr(aMemPtr)
     {}
 
-    HOST DEVICE void* getData()
+    HOST DEVICE void* getData() const
     {
         return mMemoryPtr;
     }
 
-    HOST DEVICE void store(const float3& aAttenuation, const uint aRayId)
+    HOST DEVICE void store(const float3& aImportance, const uint aRayId) const
     {
         //if not occluded, store distance to light source
         float3* out = ((float3*)mMemoryPtr) + aRayId;
-        *out = aAttenuation;
+        *out = aImportance;
     }
 
-    HOST DEVICE float3 loadAttenuation(const uint aSampleId)
+    HOST DEVICE float3 loadImportance(const uint aSampleId) const
     {
         return *((float3*)mMemoryPtr + aSampleId);
     }    

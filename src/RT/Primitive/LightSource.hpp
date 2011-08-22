@@ -32,15 +32,32 @@
 #include "Core/Algebra.hpp"
 #include "Utils/Scan.h"
 
+#define MAX_DIMENSION(aX, aY, aZ)	                           \
+    (aX > aY) ? ((aX > aZ) ? 0 : 2)	: ((aY > aZ) ? 1 : 2)
+
 struct AreaLightSource
 {
     float3 position, normal, intensity, edge1, edge2;
+    float e1x, e2x, e1y, e2y;
 
     DEVICE HOST float3 AreaLightSource::getPoint(float aXCoord, float aYCoord) const
     {
         float3 result;
         result = position + aXCoord * edge1 + aYCoord * edge2;
         return result;
+    }
+
+    DEVICE HOST bool AreaLightSource::isOnLS(float3 aPt) const
+    {
+        bool onPlane = dot(aPt - position, normal) < 0.0001f;
+
+        if(!onPlane) return false;
+
+        float beta = (aPt.y - position.y) - (e1y / e1x) * (aPt.x - position.x);
+        beta = beta / (e2y - e2x * e1y / e1x);
+        float alpha = ((aPt.x - position.x) - beta * e2x) / e1x;
+        bool inside = alpha > -0.1f && alpha < 1.1f && beta > -0.1f && beta < 1.1f; 
+        return inside;
     }
 
     DEVICE HOST float AreaLightSource::getArea() const
@@ -58,6 +75,14 @@ struct AreaLightSource
         edge1 = aVtx1 - aVtx0;
         edge2 = aVtx3 - aVtx0;
         intensity = aIntensity;
+        
+        //precomputed values for isOnLS
+        const int e1MaxDimension = MAX_DIMENSION(fabsf(edge1.x), fabsf(edge1.y), fabsf(edge1.z));
+        const int e2MaxDimension = MAX_DIMENSION(fabsf(edge2.x), fabsf(edge2.y), fabsf(edge2.z));
+        e1x = toPtr(edge1)[e1MaxDimension];
+        e1y = toPtr(edge1)[e2MaxDimension];
+        e2x = toPtr(edge2)[e1MaxDimension];
+        e2y = toPtr(edge2)[e2MaxDimension];
     }
 
 };
@@ -65,7 +90,7 @@ struct AreaLightSource
 
 class AreaLightSourceCollection
 {
-    size_t mSize;
+    int mSize;
     float* mCDF;
     float* mWeights;
     AreaLightSource* mLights;
@@ -77,18 +102,21 @@ public:
     {}
 #endif
 
-    DEVICE AreaLightSource& getLight(float aRandNum)
+    DEVICE AreaLightSource getLight(float aRandNum, int& oId)
     {
         for(int i=0; i < mSize - 1; ++i)
         {
             if(aRandNum < mCDF[i] / mCDF[mSize - 1])
+            {
+                oId = i;
                 return mLights[i];
+            }
         }
-
+        oId = mSize-1;
         return mLights[mSize-1];
     }
 
-    DEVICE AreaLightSource& getLightWithID(size_t aId)
+    DEVICE AreaLightSource getLightWithID(int aId)
     {
         if(aId >= mSize)
             return mLights[0];
@@ -96,7 +124,7 @@ public:
         return mLights[aId];
     }
 
-    DEVICE float getWeight(size_t aId)
+    DEVICE float getWeight(int aId)
     {
         if(aId >= mSize)
             return 0.f;
@@ -123,7 +151,7 @@ public:
 
     HOST void upload(float aWeight, AreaLightSource& aLS)
     {
-        if(mSize == 0u)
+        if(mSize == 0)
         {
             mSize = 1u;
             MY_CUDA_SAFE_CALL( cudaMalloc((void**)&mCDF,     sizeof(float)) );
@@ -163,5 +191,6 @@ public:
 
 };
 
+#undef MAX_DIMENSION
 
 #endif // LIGHTSOURCE_HPP_INCLUDED_AE49484E_6EEA_49A3_BBF7_AA1E175B4CB9

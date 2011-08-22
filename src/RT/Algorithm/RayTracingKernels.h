@@ -48,8 +48,9 @@ template<
     class tAccelerationStructure,
     class tRayGenerator,
     class tRayBuffer,
+    template <class, class, bool> class tTraverser,
     class tIntersector, 
-    template <class, class> class tTraverser >
+    bool  taIsShadowRay >
 
     GLOBAL void trace(
     PrimitiveArray<tPrimitive>  aPrimitiveArray,
@@ -117,7 +118,7 @@ template<
         bool traversalFlag = (rayT >= 0.f) && myRayIndex < aNumRays;
         //////////////////////////////////////////////////////////////////////////
 
-        tTraverser<tPrimitive, tIntersector> traverse;
+        tTraverser<tPrimitive, tIntersector, taIsShadowRay> traverse;
         traverse(aPrimitiveArray, dcGrid, rayOrg, rayDirRCP, rayT, bestHit, traversalFlag, sharedMemNew);
 
         //////////////////////////////////////////////////////////////////////////
@@ -127,8 +128,11 @@ template<
         rayDir.y = 1.f / rayDirRCP.y;
         rayDir.z = 1.f / rayDirRCP.z;
 
-        if(rayT < FLT_MAX)
-            bestHit = dcGrid.primitives[bestHit];
+        if(!taIsShadowRay)
+        {
+            if(rayT < FLT_MAX)
+                bestHit = dcGrid.primitives[bestHit];
+        }
 
         oBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, aNumRays);
         //////////////////////////////////////////////////////////////////////////
