@@ -525,7 +525,7 @@ GLOBAL void computeDirectIllumination(
                 if (dcLightSource.isOnLS(rayOrg))
                 {
                     cosLightNormal= dot(rayDir,dcLightSource.normal);
-                    float receivesEnergy = (cosLightNormal < 0.f) ? 1.f : 0.f;
+                    float receivesEnergy = (cosLightNormal < 0.f) ? .5f : 0.f; //0.5f is power heuristic n = 0
                     sharedVec[threadId1D()].x = dcLightSource.intensity.x * receivesEnergy;
                     sharedVec[threadId1D()].y = dcLightSource.intensity.y * receivesEnergy;
                     sharedVec[threadId1D()].z = dcLightSource.intensity.z * receivesEnergy;
@@ -535,7 +535,7 @@ GLOBAL void computeDirectIllumination(
                     float3 lsRadiance = dcLightSource.intensity *
                         dcLightSource.getArea() *
                         attenuation * 
-                        fmaxf(0.f, cosLightNormal);
+                        fmaxf(0.f, cosLightNormal) * 0.5f; //0.5f is power heuristic n = 0
                     
                     sharedVec[threadId1D()] = lsRadiance * fmaxf(0.f, cosNormalEyeDir);
 
