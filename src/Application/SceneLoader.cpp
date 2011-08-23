@@ -177,7 +177,7 @@ void SceneLoader::createLightSource( AreaLightSource& oLightSource, const WFObje
                 const float3 v3 = aScene.getVertex(vtxIds[2]);
                 const float3 v4 = aScene.getVertex(vtxIds[3]);
                 const float3 normal = ~((v2 - v1) % (v3 - v1));
-                oLightSource.init(v1, v2, v3, v4, emission, normal);
+                oLightSource.create(v1, v2, v3, v4, emission, normal);
                 
                 return;
             }

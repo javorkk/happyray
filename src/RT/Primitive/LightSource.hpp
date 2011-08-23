@@ -38,7 +38,7 @@
 struct AreaLightSource
 {
     float3 position, normal, intensity, edge1, edge2;
-    float e1x, e2x, e1y, e2y;
+    int e1MaxDimension, e2MaxDimension;
 
     DEVICE HOST float3 AreaLightSource::getPoint(float aXCoord, float aYCoord) const
     {
@@ -53,10 +53,24 @@ struct AreaLightSource
 
         if(!onPlane) return false;
 
-        float beta = (aPt.y - position.y) - (e1y / e1x) * (aPt.x - position.x);
-        beta = beta / (e2y - e2x * e1y / e1x);
-        float alpha = ((aPt.x - position.x) - beta * e2x) / e1x;
-        bool inside = alpha > -0.1f && alpha < 1.1f && beta > -0.1f && beta < 1.1f; 
+        //precomputed values for isOnLS
+        const int e1MaxDimension = MAX_DIMENSION(fabsf(edge1.x), fabsf(edge1.y), fabsf(edge1.z));
+        const int e2MaxDimension = MAX_DIMENSION(fabsf(edge2.x), fabsf(edge2.y), fabsf(edge2.z));
+
+
+        float e1x = toPtr(edge1)[e1MaxDimension];
+        float e1y = toPtr(edge1)[e2MaxDimension];
+        float e2x = toPtr(edge2)[e1MaxDimension];
+        float e2y = toPtr(edge2)[e2MaxDimension];
+        float px = toPtr(position)[e1MaxDimension];
+        float py = toPtr(position)[e2MaxDimension];
+        float xx = toPtr(aPt)[e1MaxDimension];
+        float xy = toPtr(aPt)[e2MaxDimension]; 
+
+        float beta = (xy - py) - (e1y / e1x) * (xx - px);
+        beta /= e2y - e2x * (e1y / e1x);
+        float alpha = ((xx - px) - beta * e2x) / e1x;
+        bool inside = alpha > -0.0001f && alpha < 1.0001f && beta > -0.001f && beta < 1.0001f; 
         return inside;
     }
 
@@ -65,7 +79,7 @@ struct AreaLightSource
         return len((edge1 % edge2));
     }
 
-    DEVICE HOST void AreaLightSource::init(
+    DEVICE HOST void AreaLightSource::create(
         const float3& aVtx0, const float3& aVtx1,
         const float3& aVtx2, const float3& aVtx3,
         const float3& aIntensity, const float3& aNormal)
@@ -75,15 +89,11 @@ struct AreaLightSource
         edge1 = aVtx1 - aVtx0;
         edge2 = aVtx3 - aVtx0;
         intensity = aIntensity;
-        
-        //precomputed values for isOnLS
-        const int e1MaxDimension = MAX_DIMENSION(fabsf(edge1.x), fabsf(edge1.y), fabsf(edge1.z));
-        const int e2MaxDimension = MAX_DIMENSION(fabsf(edge2.x), fabsf(edge2.y), fabsf(edge2.z));
-        e1x = toPtr(edge1)[e1MaxDimension];
-        e1y = toPtr(edge1)[e2MaxDimension];
-        e2x = toPtr(edge2)[e1MaxDimension];
-        e2y = toPtr(edge2)[e2MaxDimension];
+        init();
     }
+
+    DEVICE HOST void init()
+    {}
 
 };
 

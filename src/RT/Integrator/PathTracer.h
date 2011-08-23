@@ -19,7 +19,7 @@
 #include "RT/Algorithm/RayTracingKernels.h"
 #include "Utils/RandomNumberGenerators.hpp"
 
-static const int RFRACTION_PATH_MAX_DEPTH = 16;
+static const int RFRACTION_PATH_MAX_DEPTH = 8;
 static const int OCCLUSIONSAMPLESX = 1;
 static const int OCCLUSIONSAMPLESY = 1;
 static const int NUMOCCLUSIONSAMPLES  = OCCLUSIONSAMPLESX * OCCLUSIONSAMPLESY;
@@ -259,10 +259,15 @@ template<
                         //choose the largest contribution
                         myFlags.setFlag4(sinNormalRefrDirSQR > 1.f);
 
-                        if (sinNormalRefrDirSQR <= 1.f && genRand() < fresnelCoeff)
+                        if (sinNormalRefrDirSQR <= 1.f && aImageId > 0)
                         {
-                            //TODO: use Halton numbers here
-                            myFlags.setFlag4(true);
+                            HaltonNumberGenerator genQuasiRand;
+                            float qrand = genQuasiRand(aImageId, myFlags.getData(),
+                                dcPrimesRCP);
+                            if (qrand < fresnelCoeff)
+                            {
+                                myFlags.setFlag4(true);
+                            }
                         }
 
                         if (myFlags.getFlag4())
@@ -640,6 +645,8 @@ GLOBAL void addIndirectIllumination(
     float3 intensity = rep(1.f);
     float newIntensity = 0.f;
 
+    const float newSampleWeight = 1.f / (float)(dcImageId + 1);
+    const float oldSampleWeight = 1.f - newSampleWeight;
 
     if (threadOffset1D < dcNumPixels && isInsideImage)
     {
@@ -649,7 +656,7 @@ GLOBAL void addIndirectIllumination(
     }
 
     newIntensity = dot(newContribution,intensity);
-    sharedMem[mySharedMemIndex] = newContribution;
+    sharedMem[mySharedMemIndex] = pixelValue * oldSampleWeight + newContribution * newSampleWeight;
 
     SYNCTHREADS;
 
@@ -681,10 +688,8 @@ GLOBAL void addIndirectIllumination(
         float variance = newIntensity;
         variance *= variance;
 
-        const float newSampleWeight = 1.f / (float)(dcImageId + 1);
-        const float oldSampleWeight = 1.f - newSampleWeight;
 
-        if (variance < fmaxf(0.1f / static_cast<float>(dcImageId), 0.005f))
+        if (variance < fmaxf(0.1f / static_cast<float>(dcImageId), 0.00005f))
         {
             oFrameBuffer[threadOffset1D] = pixelValue * oldSampleWeight + newContribution * newSampleWeight;
             oResidue[threadOffset1D] = rep(0.f);
