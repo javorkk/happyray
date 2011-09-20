@@ -49,7 +49,7 @@ struct AreaLightSource
 
     DEVICE HOST bool AreaLightSource::isOnLS(float3 aPt) const
     {
-        bool onPlane = dot(aPt - position, normal) < 0.0001f;
+        bool onPlane = dot(aPt - position, normal) < 0.00001f;
 
         if(!onPlane) return false;
 
@@ -70,7 +70,7 @@ struct AreaLightSource
         float beta = (xy - py) - (e1y / e1x) * (xx - px);
         beta /= e2y - e2x * (e1y / e1x);
         float alpha = ((xx - px) - beta * e2x) / e1x;
-        bool inside = alpha > -0.0001f && alpha < 1.0001f && beta > -0.001f && beta < 1.0001f; 
+        bool inside = alpha > -0.00001f && alpha < 1.00001f && beta > -0.00001f && beta < 1.00001f; 
         return inside;
     }
 
