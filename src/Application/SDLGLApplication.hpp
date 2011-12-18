@@ -132,7 +132,7 @@ public:
         mUpOrientationAngleChange(0.f), mNumImages(0), mNumScreenshots(0),
         mDumpFrames(false),mPauseAnimation(false),
         mRenderMode(RENDERMODE1), mMinimizedWindowName("Happy Ray"),
-        mActiveWindowName("Fps: "), CONFIGURATION("animation.cfg")
+        mActiveWindowName("Fps: "), CONFIGURATION("scene.cfg")
     {}
 
     ~SDLGLApplication();
