@@ -30,7 +30,7 @@
 #ifdef USE_CHAG_PP_SORT
 #   include "chag/pp/sort.cuh"
 #else
-#   include "thrust/detail/device/cuda/sort.h"
+#   include "thrust/detail/backend/cuda/sort.h"
 #endif
 
 
@@ -91,7 +91,7 @@ void Sort::operator()(uint2 *pData0,
     thrust::device_ptr<uint2> itBegin = thrust::device_pointer_cast(pData0);
     thrust::device_ptr<uint2> itEnd = thrust::device_pointer_cast(pData0 + aNumElements);
 
-    thrust::detail::device::cuda::stable_sort(itBegin, itEnd, PairsCompare());
+    thrust::detail::backend::cuda::stable_sort(itBegin, itEnd, PairsCompare());
 #endif
 }
 

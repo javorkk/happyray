@@ -30,7 +30,7 @@
 #ifdef USE_CHAG_PP_SCAN
 #   include "chag/pp/prefix.cuh"
 #else
-#   include <thrust/detail/device/cuda/scan.h>
+#   include <thrust/detail/backend/cuda/scan.h>
 #endif
 
 
@@ -44,7 +44,7 @@ void ExclusiveScan::operator()(
 #ifdef USE_CHAG_PP_SCAN
     chag::pp::prefix(aIn, (aIn + aNumElements), aIn, (uint*)0);
 #else
-    thrust::detail::device::cuda::exclusive_scan(aIn, (aIn + aNumElements), aIn, 0u, OperatorPlus());
+    thrust::detail::backend::cuda::exclusive_scan(aIn, (aIn + aNumElements), aIn, 0u, OperatorPlus());
 #endif
 }
 
@@ -56,7 +56,7 @@ void InclusiveScan::operator()(
 #ifdef USE_CHAG_PP_SCAN
     chag::pp::prefix_inclusive(aIn, (aIn + aNumElements), aIn, (uint*)0);
 #else
-    thrust::detail::device::cuda::inclusive_scan(aIn, (aIn + aNumElements), aIn, OperatorPlus());
+    thrust::detail::backend::cuda::inclusive_scan(aIn, (aIn + aNumElements), aIn, OperatorPlus());
 #endif
 
 }
@@ -69,7 +69,7 @@ void InclusiveFloatScan::operator()(
 #ifdef USE_CHAG_PP_SCAN
     chag::pp::prefix_inclusive(aIn, (aIn + aNumElements), aIn, (float*)0);
 #else
-    thrust::detail::device::cuda::inclusive_scan(aIn, (aIn + aNumElements), aIn, OperatorPlus());
+    thrust::detail::backend::cuda::inclusive_scan(aIn, (aIn + aNumElements), aIn, OperatorPlus());
 #endif
 
 }
