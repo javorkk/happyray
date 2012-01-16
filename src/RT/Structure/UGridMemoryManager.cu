@@ -140,9 +140,20 @@ HOST void UGridMemoryManager::allocateRefCountsBuffer(const size_t aNumSlots)
 
 HOST void UGridMemoryManager::allocatePairsBufferPair(const size_t aNumPairs)
 {
+//#if HAPPYRAY__CUDA_ARCH__ < 200
+    //use double buffers and store pairs (chag::pp radix sort)
     MemoryManager::allocateDeviceArrayPair(
-        (void**)&pairsBuffer, (void**)&pairsPingBuffer, aNumPairs * sizeof(uint2),
-        (void**)&pairsBuffer, (void**)&pairsPingBuffer, pairsBufferSize);
+        (void**)&pairsBuffer, (void**)&pairsPingBufferKeys, aNumPairs * sizeof(uint2),
+        (void**)&pairsBuffer, (void**)&pairsPingBufferKeys, pairsBufferSize);
+//#else
+//    //allocate extra buffers to split keys and values (thrust radix sort)
+//    MemoryManager::allocateDeviceArrayTriple(
+//        (void**)&pairsBuffer, (void**)&pairsPingBufferKeys, (void**)&pairsPingBufferValues,
+//        aNumPairs * sizeof(uint2), aNumPairs * sizeof(uint), aNumPairs * sizeof(uint),
+//        (void**)&pairsBuffer, (void**)&pairsPingBufferKeys, (void**)&pairsPingBufferValues,
+//        pairsBufferSize, pairsPingBufferKeysSize, pairsPingBufferValuesSize );
+//
+//#endif
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -182,7 +193,7 @@ HOST void UGridMemoryManager::freePairsBufferPair()
     {
         pairsBufferSize = 0u;
         MY_CUDA_SAFE_CALL( cudaFree(pairsBuffer) );
-        MY_CUDA_SAFE_CALL( cudaFree(pairsPingBuffer) );
+        MY_CUDA_SAFE_CALL( cudaFree(pairsPingBufferKeys) );
     }
 }
 

@@ -51,7 +51,7 @@ public:
 
     };
 
-    void operator()(uint2 *pData0, uint2 *pData1, uint aNumElements,
+    void operator()(uint *&pData0, uint *&pData1, uint aNumElements,
         uint aNumBits
         ) const;
 

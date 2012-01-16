@@ -58,16 +58,20 @@ public:
     size_t refCountsBufferSize;
 
     uint* pairsBuffer;
-    uint* pairsPingBuffer;
+    uint* pairsPingBufferKeys;
+    uint* pairsPingBufferValues;
     size_t pairsBufferSize;
+    size_t pairsPingBufferKeysSize;
+    size_t pairsPingBufferValuesSize;
 
 
     UGridMemoryManager()
         :resX(0), resY(0), resZ(0), oldResX(0), oldResY(0), oldResZ(0), bounds(BBox::empty()),
         cpuCells(NULL), gpuCells(NULL), cellArray(NULL), primitiveIndices(NULL),
         primitiveIndicesSize(0u), refCountsBuffer(NULL), refCountsBufferHost(NULL),
-        refCountsBufferSize(0u),pairsBuffer(NULL), pairsPingBuffer(NULL),
-        pairsBufferSize(0u)
+        refCountsBufferSize(0u),pairsBuffer(NULL), pairsPingBufferKeys(NULL),
+        pairsPingBufferValues(NULL), pairsBufferSize(0u), pairsPingBufferKeysSize(0u),
+        pairsPingBufferValuesSize(0u)
     {}
 
     //////////////////////////////////////////////////////////////////////////

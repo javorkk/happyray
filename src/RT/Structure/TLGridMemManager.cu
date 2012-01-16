@@ -188,15 +188,15 @@ HOST void TLGridMemoryManager::allocateCellCountsBuffer(const size_t aNumCells)
 HOST void TLGridMemoryManager::allocateTopLevelPairsBufferPair(const size_t aNumPairs)
 {
     MemoryManager::allocateDeviceArrayPair(
-        (void**)&topLevelPairsBuffer, (void**)&topLevelPairsPingBuffer, aNumPairs * sizeof(uint2),
-        (void**)&topLevelPairsBuffer, (void**)&topLevelPairsPingBuffer, topLevelPairsBufferSize);
+        (void**)&topLevelPairsBuffer, (void**)&topLevelPairsPingBufferKeys, aNumPairs * sizeof(uint2),
+        (void**)&topLevelPairsBuffer, (void**)&topLevelPairsPingBufferKeys, topLevelPairsBufferSize);
 }
 
 HOST void TLGridMemoryManager::allocateLeafLevelPairsBufferPair(const size_t aNumPairs)
 {
     MemoryManager::allocateDeviceArrayPair(
-        (void**)&leafLevelPairsBuffer, (void**)&leafLevelPairsPingBuffer, aNumPairs * sizeof(uint2),
-        (void**)&leafLevelPairsBuffer, (void**)&leafLevelPairsPingBuffer, leafLevelPairsBufferSize);
+        (void**)&leafLevelPairsBuffer, (void**)&leafLevelPairsPingBufferKeys, aNumPairs * sizeof(uint2),
+        (void**)&leafLevelPairsBuffer, (void**)&leafLevelPairsPingBufferKeys, leafLevelPairsBufferSize);
 }
 
 
@@ -256,7 +256,7 @@ HOST void TLGridMemoryManager::freeTopLevelPairsBufferPair()
     {
         topLevelPairsBufferSize = 0u;
         MY_CUDA_SAFE_CALL( cudaFree(topLevelPairsBuffer) );
-        MY_CUDA_SAFE_CALL( cudaFree(topLevelPairsPingBuffer) );
+        MY_CUDA_SAFE_CALL( cudaFree(topLevelPairsPingBufferKeys) );
     }
 }
 
@@ -266,7 +266,7 @@ HOST void TLGridMemoryManager::freeLeafLevelPairsBufferPair()
     {
         topLevelPairsBufferSize = 0u;
         MY_CUDA_SAFE_CALL( cudaFree(leafLevelPairsBuffer) );
-        MY_CUDA_SAFE_CALL( cudaFree(leafLevelPairsPingBuffer) );
+        MY_CUDA_SAFE_CALL( cudaFree(leafLevelPairsPingBufferKeys) );
     }
 }
 

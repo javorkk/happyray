@@ -30,7 +30,64 @@
 #ifdef USE_CHAG_PP_SORT
 #   include "chag/pp/sort.cuh"
 #else
-#   include "thrust/detail/backend/cuda/sort.h"
+#   include <thrust/detail/backend/cuda/detail/b40c/radixsort_api.h>
+#   include <thrust/detail/util/align.h>
+
+/**
+ * Kernels to convert between arrays of uint2 and uint arrays 
+ */
+GLOBAL void PairsToSingles(
+    uint2*  aPairs,
+    uint*   oKeys,
+    uint*   oValues,
+    uint    aNumElements)
+    {
+        for(uint myIndex = globalThreadId1D(); myIndex < aNumElements;
+            myIndex += numThreads())
+        {
+            uint2 input = aPairs[myIndex];
+            oKeys[myIndex] = input.x;
+            oValues[myIndex] = input.y;
+        }
+
+    }
+GLOBAL void SinglesToPairs(
+    uint2*  oPairs,
+    uint*   aKeys,
+    uint*   aValues,
+    uint    aNumElements)
+{
+    for(uint myIndex = globalThreadId1D(); myIndex < aNumElements;
+        myIndex += numThreads())
+    {
+        uint2 input;
+        input.x = aKeys[myIndex];
+        input.y = aValues[myIndex];
+        oPairs[myIndex] = input;
+    }
+
+}
+
+/**
+ * Custom sorting storage-management structure for device vectors
+ */
+struct PersistentRadixSortStorage : public thrust::detail::backend::cuda::detail::b40c_thrust::RadixSortStorage<uint, uint>
+{
+    PersistentRadixSortStorage(uint* keys = NULL, uint* values = NULL): RadixSortStorage<uint,uint>(keys, values)
+    {}
+
+    // DO NOT Clean up non-results storage !!!
+	cudaError_t CleanupTempStorage() 
+	{
+        //if (d_alt_keys) cudaFree(d_alt_keys);
+        //if (d_alt_values) cudaFree(d_alt_values);
+		if (d_spine) cudaFree(d_spine);
+		if (d_from_alt_storage) cudaFree(d_from_alt_storage);
+		
+		return cudaSuccess;
+	}
+};
+
 #endif
 
 
@@ -51,8 +108,8 @@ Sort::~Sort()
 #endif
 }
 
-void Sort::operator()(uint2 *pData0, 
-                      uint2 *pData1,
+void Sort::operator()(uint *&pData0, 
+                      uint *&pData1,
                       uint aNumElements,
                       uint aNumBits
                       ) const
@@ -88,10 +145,111 @@ void Sort::operator()(uint2 *pData0,
 #	undef DO_PASS_
 
 #else
-    thrust::device_ptr<uint2> itBegin = thrust::device_pointer_cast(pData0);
-    thrust::device_ptr<uint2> itEnd = thrust::device_pointer_cast(pData0 + aNumElements);
 
-    thrust::detail::backend::cuda::stable_sort(itBegin, itEnd, PairsCompare());
+    //cudaEvent_t sortEvent;
+    //cudaEventCreate(&sortEvent);
+
+    //uint* keys = (uint*)pData1;
+    //uint* values = (uint*)pData2;
+    //
+    //dim3 blockSize = 256;
+    //dim3 gridSize  = 128;
+    //PairsToSingles<<< gridSize, blockSize>>>(pData0, keys, values, aNumElements);
+
+    //cudaEventSynchronize(sortEvent);
+
+    //thrust::device_ptr<uint> thrustKeys(keys);
+    //thrust::device_ptr<uint> thrustVals(values);
+
+    //thrust::detail::backend::cuda::detail::stable_radix_sort_by_key(keys, keys + aNumElements, values);
+
+    //cudaEventSynchronize(sortEvent);
+    //MY_CUT_CHECK_ERROR("Sort failed!\n");
+
+    //SinglesToPairs<<< gridSize, blockSize>>>(pData0, keys, values, aNumElements);
+    //
+    //cudaEventSynchronize(sortEvent);    
+    //cudaEventDestroy(sortEvent);
+
+
+    uint* keys = pData1;
+    uint* values = pData1 + aNumElements;
+
+    //align values pointer if necessary
+    if (!thrust::detail::util::is_aligned(thrust::raw_pointer_cast(&*values), 2*sizeof(uint)))
+    {
+        size_t rem = thrust::detail::uintptr_t(values) % (2*sizeof(uint));
+        values = reinterpret_cast<uint*>(thrust::detail::uintptr_t(values) + 2*sizeof(uint) - rem);
+    }
+
+    uint* alt_keys = pData0;
+    uint* alt_values = pData0 + aNumElements;
+
+    //align values pointer if necessary
+    if (!thrust::detail::util::is_aligned(thrust::raw_pointer_cast(&*alt_values), 2*sizeof(uint)))
+    {
+        size_t rem = thrust::detail::uintptr_t(alt_values) % (2*sizeof(uint));
+        alt_values = reinterpret_cast<uint*>(thrust::detail::uintptr_t(alt_values) + 2*sizeof(uint) - rem);
+    }
+
+    dim3 blockSize = 256;
+    dim3 gridSize  = 128;
+    PairsToSingles<<< gridSize, blockSize>>>((uint2*)alt_keys, keys, values, aNumElements);
+
+    //if (!thrust::detail::util::is_aligned(thrust::raw_pointer_cast(&*alt_values), 2*sizeof(uint)))
+    //{
+    //    cudastd::logger::out << "Error: Radix Sort Ping Values : pointer is not aligned!\n";
+    //}
+
+    //if (!thrust::detail::util::is_aligned(thrust::raw_pointer_cast(&*values), 2*sizeof(uint)))
+    //{
+    //    cudastd::logger::out << "Error: Radix Sort Values :  Pointer is not aligned!\n";
+    //}
+
+    thrust::detail::backend::cuda::detail::b40c_thrust::RadixSortingEnactor<uint,uint> sorter(aNumElements);
+    PersistentRadixSortStorage  storage;
+
+    typedef thrust::detail::cuda_device_space_tag space;
+    // allocate temporary buffers
+    //thrust::detail::uninitialized_array<uint,    space> temp_keys(num_elements);
+    //thrust::detail::uninitialized_array<uint,    space> temp_values(num_elements);
+    thrust::detail::uninitialized_array<int,  space> temp_spine(sorter.SpineElements());
+    thrust::detail::uninitialized_array<bool, space> temp_from_alt(2);
+
+    // define storage
+    storage.d_keys             = thrust::raw_pointer_cast(&*keys);
+    storage.d_values           = thrust::raw_pointer_cast(&*values);
+    storage.d_alt_keys         = thrust::raw_pointer_cast(&*alt_keys);
+    storage.d_alt_values       = thrust::raw_pointer_cast(&*alt_values);
+    storage.d_spine            = thrust::raw_pointer_cast(&temp_spine[0]);
+    storage.d_from_alt_storage = thrust::raw_pointer_cast(&temp_from_alt[0]);
+
+    // perform the sort
+    sorter.EnactSort(storage);
+
+    //cudaEventSynchronize(sortEvent);
+    //MY_CUT_CHECK_ERROR("Sort failed!\n");
+
+    uint* pData2;
+    // radix sort sometimes leaves results in the alternate buffers
+    if (storage.using_alternate_storage)
+    {
+        pData0 = keys;
+        pData1 = alt_keys;
+        pData2 = alt_values;
+    }
+    else
+    {
+        pData0 = alt_keys;
+        pData1 = keys;
+        pData2 = values;
+    }
+
+    SinglesToPairs<<< gridSize, blockSize>>>((uint2*)pData0, pData1, pData2, aNumElements);
+
+    //cudaEventSynchronize(sortEvent);    
+    //cudaEventDestroy(sortEvent);
+
 #endif
 }
 

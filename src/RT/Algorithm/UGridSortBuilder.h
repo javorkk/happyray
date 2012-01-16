@@ -186,7 +186,7 @@ public:
         numBits = cudastd::min(32u, numBits + 1u);
 
         Sort radixSort;
-        radixSort((uint2*)aMemoryManager.pairsBuffer, (uint2*)aMemoryManager.pairsPingBuffer, numPairs, numBits);
+        radixSort(aMemoryManager.pairsBuffer, aMemoryManager.pairsPingBufferKeys, numPairs, numBits);
 
         //cudaEventRecord(mSort, 0);
         //cudaEventSynchronize(mSort);

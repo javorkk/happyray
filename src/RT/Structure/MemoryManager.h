@@ -33,6 +33,7 @@
 
 class MemoryManager
 {
+    static const size_t OFFSET_FOR_ALIGNMENT = 32*sizeof(size_t);
 public:
     HOST static void allocateMappedDeviceArray(void** aDevicePtr, void** aHostPtr, size_t aSize,
         void** aOldDevicePtr, void** aOldHostPtr, size_t& aOldSize)
@@ -106,17 +107,47 @@ public:
     HOST static void allocateDeviceArrayPair(void** aPtr1, void** aPtr2,
         size_t aSize, void** aOldPtr1, void** aOldPtr2, size_t& aOldSize)
     {
-        if (aOldSize < aSize)
+        if (aOldSize < aSize + OFFSET_FOR_ALIGNMENT)
         {
             MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr1) );
             MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr2) );
-            aOldSize = aSize;
+            aOldSize = aSize + OFFSET_FOR_ALIGNMENT;
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr1, aSize));
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr2, aSize));
         }
 
         *aPtr1 = *aOldPtr1;
         *aPtr2 = *aOldPtr2;
+    }
+
+    HOST static void allocateDeviceArrayTriple(
+        void** aPtr1, void** aPtr2, void** aPtr3,
+        size_t aSize1, size_t aSize2, size_t aSize3,
+        void** aOldPtr1, void** aOldPtr2, void** aOldPtr3,
+        size_t& aOldSize1,size_t& aOldSize2,size_t& aOldSize3)
+    {
+        if (aOldSize1 < aSize1 + OFFSET_FOR_ALIGNMENT)
+        {
+            MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr1) );
+            aOldSize1 = aSize1 + OFFSET_FOR_ALIGNMENT;
+            MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr1, aSize1));
+        }
+        if (aOldSize2 < aSize2 + OFFSET_FOR_ALIGNMENT)
+        {
+            MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr2) );
+            aOldSize2 = aSize2 + OFFSET_FOR_ALIGNMENT;
+            MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr2, aSize2));
+        }
+        if (aOldSize3 < aSize3 + OFFSET_FOR_ALIGNMENT)
+        {
+            MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr3) );
+            aOldSize3 = aSize3 + OFFSET_FOR_ALIGNMENT;
+            MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr3, aSize3));
+        }
+
+        *aPtr1 = *aOldPtr1;
+        *aPtr2 = *aOldPtr2;
+        *aPtr3 = *aOldPtr3;
     }
 
 

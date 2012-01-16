@@ -200,7 +200,7 @@ public:
         numBits = cudastd::min(32u, numBits + 1u);
 
         Sort radixSort;
-        radixSort((uint2*)aMemoryManager.topLevelPairsBuffer, (uint2*)aMemoryManager.topLevelPairsPingBuffer, numTopLevelPairs, numBits);
+        radixSort(aMemoryManager.topLevelPairsBuffer, aMemoryManager.topLevelPairsPingBufferKeys, numTopLevelPairs, numBits);
 
         MY_CUT_CHECK_ERROR("Sorting primitive-cell pairs failed.\n");
 
@@ -343,7 +343,7 @@ public:
         while (numLeafCells >> numBits != 0u){numBits += 1u;}
         numBits = cudastd::min(32u, numBits + 1u);
 
-        radixSort((uint2*)aMemoryManager.leafLevelPairsBuffer, (uint2*)aMemoryManager.leafLevelPairsPingBuffer, numLeafLevelPairs, numBits);
+        radixSort(aMemoryManager.leafLevelPairsBuffer, aMemoryManager.leafLevelPairsPingBufferKeys, numLeafLevelPairs, numBits);
 
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mSortLeafPairs, 0);

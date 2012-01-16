@@ -64,11 +64,17 @@ public:
     uint* cellCountsBufferHost;
     size_t cellCountsBufferSize;
     uint* topLevelPairsBuffer;
-    uint* topLevelPairsPingBuffer;
+    uint* topLevelPairsPingBufferKeys;
+    uint* topLevelPairsPingBufferValues;
     size_t topLevelPairsBufferSize;
+    size_t topLevelPairsPingBufferKeysSize;
+    size_t topLevelPairsPingBufferValuesSize;
     uint* leafLevelPairsBuffer;
-    uint* leafLevelPairsPingBuffer;
+    uint* leafLevelPairsPingBufferKeys;
+    uint* leafLevelPairsPingBufferValues;
     size_t leafLevelPairsBufferSize;
+    size_t leafLevelPairsPingBufferKeysSize;
+    size_t leafLevelPairsPingBufferValuesSize;
 
 
     TLGridMemoryManager()
@@ -76,9 +82,11 @@ public:
         leavesDevice(NULL), leavesSize(0), primitiveIndices(NULL),
         primitiveIndicesSize(0u), refCountsBuffer(NULL), refCountsBufferHost(NULL),
         refCountsBufferSize(0u),cellCountsBuffer(NULL),cellCountsBufferHost(NULL),
-        cellCountsBufferSize(0u), topLevelPairsBuffer(NULL), topLevelPairsPingBuffer(NULL),
-        topLevelPairsBufferSize(0u), leafLevelPairsBuffer(NULL),
-        leafLevelPairsPingBuffer(NULL), leafLevelPairsBufferSize(0u)
+        cellCountsBufferSize(0u),
+        topLevelPairsBuffer(NULL), topLevelPairsPingBufferKeys(NULL), topLevelPairsPingBufferValues(NULL),
+        topLevelPairsBufferSize(0u), topLevelPairsPingBufferKeysSize(0u), topLevelPairsPingBufferValuesSize(0u),
+        leafLevelPairsBuffer(NULL), leafLevelPairsPingBufferKeys(NULL), leafLevelPairsPingBufferValues(NULL),
+        leafLevelPairsBufferSize(0u), leafLevelPairsPingBufferKeysSize(0u), leafLevelPairsPingBufferValuesSize(0u)
     {}
 
     //////////////////////////////////////////////////////////////////////////
