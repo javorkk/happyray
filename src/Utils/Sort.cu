@@ -125,7 +125,7 @@ void Sort::operator()(uint *&pData0,
 			sort::Predicate<BitUnsetForPairs>, \
 			sort::LimitLow<Low_>, \
 			sort::LimitHigh<High_> \
-		>::sort( pData0, pData0+aNumElements, pData1, pData0, \
+		>::sort( (uint2*)pData0, (uint2*)pData0+aNumElements, (uint2*)pData1, (uint2*)pData0, \
 			(chag::pp::SizeType*)offsets, (chag::pp::SizeType*)counts) \
 		/*ENDM*/
 
