@@ -61,12 +61,7 @@ public:
 
     HOST void cleanup()
     {
-#if HAPPYRAY__CUDA_ARCH__ >= 120
-        if(vertexBufferHostPtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFreeHost(vertexBufferHostPtr) );
-        if(indicesBufferHostPtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
-#else
+
         if(vertexBufferHostPtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFreeHost(vertexBufferHostPtr) );
         if(indicesBufferHostPtr != NULL)
@@ -76,7 +71,15 @@ public:
             MY_CUDA_SAFE_CALL( cudaFree(vertexBufferDevicePtr) );
         if(indicesBufferDevicePtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFree(indicesBufferDevicePtr) );
-#endif
+
+        vertexBufferDevicePtr = NULL;
+        vertexBufferHostPtr = NULL;
+        vertexBufferSize = 0u;
+        indicesBufferDevicePtr= NULL;
+        indicesBufferHostPtr= NULL;
+        indicesBufferSize = 0u;
+        numPrimitives = 0u;
+
     }
 
     HOST DEVICE size_t getMemorySize()
@@ -182,12 +185,7 @@ public:
 
     HOST void cleanup()
     {
-#if HAPPYRAY__CUDA_ARCH__ >= 120
-        if(dataBufferHostPtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFreeHost(dataBufferHostPtr) );
-        if(indicesBufferHostPtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
-#else
+
         if(dataBufferHostPtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFreeHost(dataBufferHostPtr) );
         if(indicesBufferHostPtr != NULL)
@@ -197,7 +195,13 @@ public:
             MY_CUDA_SAFE_CALL( cudaFree(dataBufferDevicePtr) );
         if(indicesBufferDevicePtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFree(indicesBufferDevicePtr) );
-#endif
+
+        dataBufferDevicePtr = NULL;
+        dataBufferHostPtr   = NULL;
+        dataBufferSize      = 0u;
+        indicesBufferDevicePtr = NULL;
+        indicesBufferHostPtr   = NULL;
+        indicesBufferSize   = 0u;
     }
 
     HOST DEVICE size_t getMemorySize()
@@ -262,12 +266,7 @@ public:
 
     HOST void cleanup()
     {
-#if HAPPYRAY__CUDA_ARCH__ >= 120
-        if(dataBufferHostPtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFreeHost(dataBufferHostPtr) );
-        if(indicesBufferHostPtr != NULL)
-            MY_CUDA_SAFE_CALL( cudaFreeHost(indicesBufferHostPtr) );
-#else
+
         if(dataBufferHostPtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFreeHost(dataBufferHostPtr) );
         if(indicesBufferHostPtr != NULL)
@@ -277,7 +276,13 @@ public:
             MY_CUDA_SAFE_CALL( cudaFree(dataBufferDevicePtr) );
         if(indicesBufferDevicePtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFree(indicesBufferDevicePtr) );
-#endif
+
+        dataBufferDevicePtr = NULL;
+        dataBufferHostPtr   = NULL;
+        dataBufferSize      = 0u;
+        indicesBufferDevicePtr = NULL;
+        indicesBufferHostPtr   = NULL;
+        indicesBufferSize   = 0u;
     }
 
     HOST DEVICE size_t getMemorySize()

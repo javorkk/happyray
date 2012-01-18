@@ -98,6 +98,7 @@ struct FrameBuffer
         resX = 0;
         resY = 0;
         MY_CUDA_SAFE_CALL( cudaFree(deviceData) );
+        deviceData = NULL;
     }
 };
 

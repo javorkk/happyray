@@ -91,18 +91,18 @@ GLOBAL void simpleShade(
             float u = len(n0) * twiceSabc_RCP;
             float v = len(n1) * twiceSabc_RCP;
 
-            VtxAttribStruct<tPrimitive, float3> normals;
-            normals = aNormalStorage[bestHit];
-            float3& normal0 = normals.data[0];
-            float3& normal1 = normals.data[1];
-            float3& normal2 = normals.data[2];
+            //VtxAttribStruct<tPrimitive, float3> normals;
+            //normals = aNormalStorage[bestHit];
+            //float3& normal0 = normals.data[0];
+            //float3& normal1 = normals.data[1];
+            //float3& normal2 = normals.data[2];
 
-            float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
+            float3 normal = ~realNormal;// ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
 
-            float3 diffReflectance = aMaterialStorage[bestHit].getDiffuseReflectance();
-            //diffReflectance.x = u;//1.f;// M_PI_RCP; //u;
-            //diffReflectance.y = v;//1.f;//M_PI_RCP; //v;
-            //diffReflectance.z = 1.f-u-v;//1.f;//M_PI_RCP; //1.f - u - v;
+            float3 diffReflectance;// = aMaterialStorage[bestHit].getDiffuseReflectance();
+            diffReflectance.x = u;//1.f;// M_PI_RCP; //u;
+            diffReflectance.y = v;//1.f;//M_PI_RCP; //v;
+            diffReflectance.z = 1.f-u-v;//1.f;//M_PI_RCP; //1.f - u - v;
 
             oRadiance =  diffReflectance * fmaxf(0.f, fabsf(dot(-normal,~rayDir[threadId1D()])));
 
@@ -151,11 +151,7 @@ public:
 
     ~SimpleIntegrator()
     {
-        if(mGlobalMemorySize != 0u)
-        {
-            MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
-        }
-
+        cleanup();
     }
 
     HOST void tracePrimary(
@@ -254,6 +250,17 @@ public:
         tracePrimary(aStorage, aAccStruct, aRayGenerator, aFrameBuffer);
 
         shade(aStorage, aNormalStorage, aMaterialStorage, aFrameBuffer, aImageId);
+    }
+
+    HOST void cleanup()
+    {
+        if(mGlobalMemorySize != 0u)
+        {
+            MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
+            mGlobalMemorySize = 0u;
+            mGlobalMemoryPtr = NULL;
+        }
+
     }
 
 };

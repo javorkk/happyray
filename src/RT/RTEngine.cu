@@ -207,4 +207,8 @@ void RTEngine::cleanup()
 {
     sMemoryManager.cleanup();
     sTriangleArray.cleanup();
+    sTriangleNormalArray.cleanup();
+    sSimpleIntegratorReg.cleanup();
+    sSimpleIntegratorRnd.cleanup();
+    sPathTracer.cleanup();
 }

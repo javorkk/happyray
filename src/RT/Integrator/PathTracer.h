@@ -738,12 +738,7 @@ GLOBAL void addIndirectIllumination(
 
         ~PathTracer()
         {
-            if(mGlobalMemorySize != 0u)
-            {
-                MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
-            }
-            mNewRadianceBuffer.cleanup();
-            mResidueBuffer.cleanup();
+            cleanup();
         }
 
         HOST void setResolution(const int     aX, const int     aY)
@@ -911,6 +906,18 @@ GLOBAL void addIndirectIllumination(
             cudaEventSynchronize(mTrace);
             MY_CUT_CHECK_ERROR("Merging images failed!\n");
             cudaEventDestroy(mTrace);
+        }
+
+        HOST void cleanup()
+        {
+            if(mGlobalMemorySize != 0u)
+            {
+                MY_CUDA_SAFE_CALL( cudaFree(mGlobalMemoryPtr));
+                mGlobalMemoryPtr = NULL;
+                mGlobalMemorySize = 0u;
+            }
+            mNewRadianceBuffer.cleanup();
+            mResidueBuffer.cleanup();
         }
 
     };

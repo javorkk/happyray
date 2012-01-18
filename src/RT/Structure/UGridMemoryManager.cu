@@ -162,11 +162,13 @@ HOST void UGridMemoryManager::allocatePairsBufferPair(const size_t aNumPairs)
 HOST void UGridMemoryManager::freeCellMemoryDevice()
 {
     MY_CUDA_SAFE_CALL( cudaFree((char*)cellsPtrDevice.ptr) );
+    cellsPtrDevice.ptr = NULL;
 }
 
 HOST void UGridMemoryManager::freeCellMemoryHost()
 {
     MY_CUDA_SAFE_CALL( cudaFreeHost((char*)cellsPtrHost.ptr) );
+    cellsPtrHost.ptr = NULL;
 }
 
 HOST void UGridMemoryManager::freePrimitiveIndicesBuffer()
@@ -175,6 +177,7 @@ HOST void UGridMemoryManager::freePrimitiveIndicesBuffer()
     {
         primitiveIndicesSize = 0u;
         MY_CUDA_SAFE_CALL( cudaFree(primitiveIndices) );
+        primitiveIndices = NULL;
     }
 }
 
@@ -184,6 +187,8 @@ HOST void UGridMemoryManager::freeRefCountsBuffer()
     {
         refCountsBufferSize = 0u;
         MemoryManager::freeMappedDeviceArray(refCountsBufferHost, refCountsBuffer);
+        refCountsBufferHost = NULL;
+        refCountsBuffer = NULL;
     }
 }
 
@@ -194,12 +199,20 @@ HOST void UGridMemoryManager::freePairsBufferPair()
         pairsBufferSize = 0u;
         MY_CUDA_SAFE_CALL( cudaFree(pairsBuffer) );
         MY_CUDA_SAFE_CALL( cudaFree(pairsPingBufferKeys) );
+        pairsBuffer = NULL;
+        pairsPingBufferKeys = NULL;
+
     }
 }
 
 
 HOST void UGridMemoryManager::cleanup()
 {
+    oldResX = 0;
+    oldResY = 0;
+    oldResZ = 0;
+    freeCellMemoryDevice();
+
     if(cellArray != NULL)
         MY_CUDA_SAFE_CALL( cudaFreeArray(cellArray) );
 
