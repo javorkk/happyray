@@ -186,7 +186,7 @@ namespace objLoaderUtil
 				if(curMtl == -1)
 					goto parse_err_found;
 
-				float3 color;
+				float3 color = rep(0.f);
 				cmd += 2;
 
 				char *newCmdString;

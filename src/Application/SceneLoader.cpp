@@ -91,95 +91,94 @@ void SceneLoader::insertLightSourceGeometry(const AreaLightSource& aLightSource,
     oScene.insertFace(face2);
 }
 
-void SceneLoader::createLightSource( AreaLightSource& oLightSource, const WFObject& aScene)
+void SceneLoader::createLightSources( AreaLightSourceCollection&     oLightSources, const WFObject& aScene)
 {
-    bool sceneHasEmitters = false;
-    size_t material = 0u;
+
     float3 emission = rep(0.f);
-
-    for(WFObject::t_MaterialIterator it = aScene.materialsBegin(); it != aScene.materialsEnd(); ++it)
-    {
-        if (it->emission.x + it->emission.y + it->emission.z >= 
-            emission.x + emission.y + emission.z)
-        {
-            sceneHasEmitters = true;
-            material = it - aScene.materialsBegin();
-            emission = it->emission;
-        }
-    }
-
-    if (!sceneHasEmitters)
-    {
-        return;
-    }
-
+    size_t material = aScene.getNumMaterials();
     size_t vtxIds[4];
     vtxIds[0] = vtxIds[1] = vtxIds[2] = vtxIds[3] = aScene.getNumVertices();
 
     for (WFObject::t_FaceIterator faceIt = aScene.facesBegin(); faceIt != aScene.facesEnd(); ++faceIt)
     {
         //is this a light source
-        if(faceIt->material == material && vtxIds[0] == aScene.getNumVertices())
+        WFObject::t_MaterialIterator materialIt = aScene.materialsBegin() + faceIt->material;
+        if(materialIt->emission.x + materialIt->emission.y + materialIt->emission.z > 0 
+            && vtxIds[0] == aScene.getNumVertices())
         {
             //this is an emitting triangle, put it in the array
             vtxIds[0] = faceIt->vert1;
             vtxIds[1] = faceIt->vert2;
             vtxIds[2] = faceIt->vert3;
+            material = faceIt->material;
+            emission = materialIt->emission;
         }
-        else if (faceIt->material == material)
+        else if (faceIt->material == material && vtxIds[3] == aScene.getNumVertices())
         {
             uint numMatches = 0u;
-            uint id[3];
-            uint fid[3];
-            id[0] = id[1] = id[2] = fid[0] = fid[1] = fid[2] = 4u;
+            uint commonVtxIdFirstFace[3];
+            uint commonVtxIdThisFace[3];
+            commonVtxIdFirstFace[0] = commonVtxIdFirstFace[1] = commonVtxIdThisFace[0] = commonVtxIdThisFace[1] = 4u;
             for(uint i = 0; i < 3; ++i)
             {
                 if (faceIt->vert1 == vtxIds[i])
                 {
-                    fid[numMatches] = 0u;
-                    id[numMatches] = i;
+                    commonVtxIdThisFace[numMatches] = 0u;
+                    commonVtxIdFirstFace[numMatches] = i;
                     ++numMatches;
 
                 }
                 else if( faceIt->vert2 == vtxIds[i])
                 {
-                    fid[numMatches] = 1u;
-                    id[numMatches] = i;
+                    commonVtxIdThisFace[numMatches] = 1u;
+                    commonVtxIdFirstFace[numMatches] = i;
                     ++numMatches;
 
                 }
                 else if(faceIt->vert3 == vtxIds[i])
                 {
-                    fid[numMatches] = 2u;
-                    id[numMatches] = i;
+                    commonVtxIdThisFace[numMatches] = 2u;
+                    commonVtxIdFirstFace[numMatches] = i;
                     ++numMatches;
                 }
             }
 
             if (numMatches == 2)
             {
-                //rotate clockwise until the two shared vertices are 2nd and 3rd in the array
-                uint nonMatchedId = 3u - id[0] - id[1];
-                while (nonMatchedId != 0u)
-                {
-                    size_t tmp = vtxIds[nonMatchedId];
-                    const uint nextId = (nonMatchedId + 1) % 3;
-                    vtxIds[nonMatchedId] = vtxIds[nextId];
-                    vtxIds[nextId] = tmp;
-                    nonMatchedId = nextId;
-                }
+                uint nonMatchedId = 3u - commonVtxIdFirstFace[0] - commonVtxIdFirstFace[1];
                 //add the fourth vertex
-                const uint lastVtxId = 3u - fid[0] - fid[1];
-                vtxIds[3] = * ((uint*)&(faceIt->vert1) + 3 * lastVtxId);
+                const uint lastVtxId = 3u - commonVtxIdThisFace[0] - commonVtxIdThisFace[1];
+                switch(lastVtxId)
+                {
+                case 0:
+                    vtxIds[3] = faceIt->vert1;
+                    break;
+                case 1:
+                    vtxIds[3] = faceIt->vert2;
+                    break;
+                case 2:
+                    vtxIds[3] = faceIt->vert3;
+                    break;
+                default:
+                    cudastd::logger::out << "Could not find valid id of the 4th light-source vertex. Skipping this emissive pair\n";
+                    vtxIds[0] = vtxIds[1] = vtxIds[2] = vtxIds[3] = aScene.getNumVertices();
+                    material = aScene.getNumMaterials();
+                    emission = rep(0.f);
+                    continue;
+                };
                 
-                const float3 v1 = aScene.getVertex(vtxIds[0]);
-                const float3 v2 = aScene.getVertex(vtxIds[1]);
-                const float3 v3 = aScene.getVertex(vtxIds[2]);
-                const float3 v4 = aScene.getVertex(vtxIds[3]);
-                const float3 normal = ~((v2 - v1) % (v3 - v1));
-                oLightSource.create(v1, v2, v3, v4, emission, normal);
-                
-                return;
+                const float3 v1 = aScene.getVertex(vtxIds[nonMatchedId]);
+                const float3 v2 = aScene.getVertex(vtxIds[(nonMatchedId + 1) % 3]);
+                const float3 v3 = aScene.getVertex(vtxIds[3]);
+                const float3 v4 = aScene.getVertex(vtxIds[(nonMatchedId + 2) % 3]);
+                const float3 normal = aScene.getNormal(faceIt->norm1);
+                AreaLightSource ls;
+                ls.create(v1, v2, v3, v4, emission, normal);
+                oLightSources.upload(ls.getArea()*len(ls.intensity), ls);                
+                //re-initialize temporary variables
+                vtxIds[0] = vtxIds[1] = vtxIds[2] = vtxIds[3] = aScene.getNumVertices();
+                material = aScene.getNumMaterials();
+                emission = rep(0.f);
             }
         }
     }
@@ -260,13 +259,8 @@ bool SceneLoader::loadScene(
         }
         else
         {   
-            AreaLightSource oLightSource;
-            for (size_t it = 0; it < oAnimation.getNumKeyFrames(); ++it)
-            {
-                createLightSource(oLightSource, oAnimation.getFrame(it));
-            }
-            oLightSources.upload(oLightSource.getArea()*len(oLightSource.intensity), oLightSource);
-
+            createLightSources(oLightSources, oAnimation.getFrame(0));
+            cudastd::logger::out << "Found " << oLightSources.size() <<" area lights.\n";
         }
     }
     else
@@ -284,9 +278,8 @@ bool SceneLoader::loadScene(
         }
         else
         {
-            AreaLightSource oLightSource;
-            createLightSource(oLightSource, oAnimation.getFrame(0));
-            oLightSources.upload(oLightSource.getArea()*len(oLightSource.intensity), oLightSource);
+            createLightSources(oLightSources, oAnimation.getFrame(0));
+            cudastd::logger::out << "Found " << oLightSources.size() <<" area lights.\n";
         }
 
     }

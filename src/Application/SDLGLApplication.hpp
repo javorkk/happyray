@@ -125,13 +125,13 @@ public:
         mBACKGROUND_G(0.5f), mBACKGROUND_B(0.5f),
         mMinimized(false), mQuit(false), mUpdateMouseCoords(false),
         mHasMouse(false), mCtrlDown(false),
-        mMoveStep(2.f),
+        mMoveStep(16.f),
         mMoveLeft(false), mMoveRight(false), mMoveForward(false),
         mMoveBackward(false), mMoveUp(false), mMoveDown(false),
         mVerticalRotationAngle(0.f), mHorizontalRotationAngle(0.f),
         mUpOrientationAngleChange(0.f), mNumImages(0), mNumScreenshots(0),
         mDumpFrames(false),mPauseAnimation(false),
-        mRenderMode(RENDERMODE1), mMinimizedWindowName("Happy Ray"),
+        mRenderMode(DEFAULT), mMinimizedWindowName("Happy Ray"),
         mActiveWindowName("Fps: "), CONFIGURATION("scene.cfg")
     {}
 
