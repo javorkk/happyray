@@ -168,9 +168,9 @@ void SceneLoader::createLightSources( AreaLightSourceCollection&     oLightSourc
                 };
                 
                 const float3 v1 = aScene.getVertex(vtxIds[nonMatchedId]);
-                const float3 v2 = aScene.getVertex(vtxIds[(nonMatchedId + 1) % 3]);
+                const float3 v2 = aScene.getVertex(vtxIds[(nonMatchedId + 2) % 3]);
                 const float3 v3 = aScene.getVertex(vtxIds[3]);
-                const float3 v4 = aScene.getVertex(vtxIds[(nonMatchedId + 2) % 3]);
+                const float3 v4 = aScene.getVertex(vtxIds[(nonMatchedId + 1) % 3]);
                 const float3 normal = aScene.getNormal(faceIt->norm1);
                 AreaLightSource ls;
                 ls.create(v1, v2, v3, v4, emission, normal);
@@ -262,8 +262,10 @@ bool SceneLoader::loadScene(
             createLightSources(oLightSources, oAnimation.getFrame(0));
             cudastd::logger::out << "Found " << oLightSources.size() <<" area lights.\n";
         }
+
+        oLightSources.normalizeALSIntensities();
     }
-    else
+    else if(retval)
     {
         if(sceneConfig.hasLightsFileName)
         {
@@ -281,13 +283,14 @@ bool SceneLoader::loadScene(
             createLightSources(oLightSources, oAnimation.getFrame(0));
             cudastd::logger::out << "Found " << oLightSources.size() <<" area lights.\n";
         }
-
+        
+        oLightSources.normalizeALSIntensities();
     }
 
-    oLightSources.normalizeALSIntensities();
 
     if(retval == false)
     {
+        oAnimation.allocateFrames(1);
         loadDefaultScene(oAnimation.getFrame(0), oView);
     }
 

@@ -191,6 +191,12 @@ void SDLGLApplication::KeyUp		(const int& iKeyEnum)
 {
     switch(iKeyEnum) 
     {
+    case SDLK_LEFTBRACKET:
+        mMoveStep = std::max(0.00001f, mMoveStep / 2.f);
+        break;           
+    case SDLK_RIGHTBRACKET:
+        mMoveStep = std::min(1024.f, mMoveStep * 2.f);
+        break;           
     case SDLK_UP:
     case SDLK_w:
         mMoveForward = false;

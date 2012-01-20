@@ -761,7 +761,11 @@ GLOBAL void addIndirectIllumination(
             const int                                       aImageId
             )
         {
-            
+            if(aLightSources.size() == 0u)
+            {
+                //Nothing to do
+                return;
+            }
             const uint sharedMemoryTrace = SHARED_MEMORY_TRACE;
 
             const uint numPixels = aFrameBuffer.resX * aFrameBuffer.resY;
