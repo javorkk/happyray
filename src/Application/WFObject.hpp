@@ -105,10 +105,10 @@ public:
         //emission (light source only)
         float3 emission;
 
-
         float specularExp;
-
         float indexOfRefraction;
+        bool isRefractive;
+
 
         Material():
             diffuseCoeff(C0),
@@ -116,14 +116,16 @@ public:
             ambientCoeff(C0),
             emission(C0),
             specularExp(1.f),
-            indexOfRefraction(1.f) //non-transparent
+            indexOfRefraction(1.f),
+            isRefractive(false) //non-transparent
         {}
         Material(const char* _name) : name(_name),
             diffuseCoeff(C0),
             specularCoeff(C0),
             ambientCoeff(C0),
             specularExp(1.f),
-            indexOfRefraction(1.f)
+            indexOfRefraction(1.f),
+            isRefractive(false)
         {}
 
         void setupPhongCoefficients();

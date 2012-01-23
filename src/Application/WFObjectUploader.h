@@ -276,7 +276,8 @@ public:
             current.diffuseReflectance.y = aKeyFrame2.getMaterial(it).diffuseCoeff.y;
             current.diffuseReflectance.z = aKeyFrame2.getMaterial(it).diffuseCoeff.z;
             current.diffuseReflectance.w = aKeyFrame2.getMaterial(it).indexOfRefraction;
-
+            if(aKeyFrame2.getMaterial(it).isRefractive)
+                current.diffuseReflectance.w += 10.f;
             current.specularReflectance.x = aKeyFrame2.getMaterial(it).specularCoeff.x;
             current.specularReflectance.y = aKeyFrame2.getMaterial(it).specularCoeff.y;
             current.specularReflectance.z = aKeyFrame2.getMaterial(it).specularCoeff.z;

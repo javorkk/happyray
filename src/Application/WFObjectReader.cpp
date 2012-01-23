@@ -240,6 +240,23 @@ namespace objLoaderUtil
                 cmd = newCmdString;
                 aMatVector[curMtl].indexOfRefraction = coeff;
             }
+            else if(_strnicmp(cmd,  "illum", 5) == 0)
+            {
+                if(curMtl == -1)
+                    goto parse_err_found;
+
+                cmd += 5;
+
+                char *newCmdString;
+                skipWS(cmd);
+                long coeff = (long)strtol(cmd, &newCmdString, 10);
+                if(newCmdString == cmd) goto parse_err_found;
+                cmd = newCmdString;
+                if(coeff > 3)
+                    aMatVector[curMtl].isRefractive = true;
+
+
+            }
 
 			continue;
 parse_err_found:
