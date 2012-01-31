@@ -1,27 +1,26 @@
 /*
-    SDL - Simple DirectMedia Layer
-    Copyright (C) 1997-2010 Sam Lantinga
+  Simple DirectMedia Layer
+  Copyright (C) 1997-2012 Sam Lantinga <slouken@libsdl.org>
 
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Lesser General Public
-    License as published by the Free Software Foundation; either
-    version 2.1 of the License, or (at your option) any later version.
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
 
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Lesser General Public License for more details.
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
 
-    You should have received a copy of the GNU Lesser General Public
-    License along with this library; if not, write to the Free Software
-    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-
-    Sam Lantinga
-    slouken@libsdl.org
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
 */
 
-#ifndef _SDL_config_win32_h
-#define _SDL_config_win32_h
+#ifndef _SDL_config_windows_h
+#define _SDL_config_windows_h
 
 #include "SDL_platform.h"
 
@@ -76,7 +75,6 @@ typedef unsigned int uintptr_t;
 #else
 # define SIZEOF_VOIDP 4
 #endif
-#define SDL_HAS_64BIT_TYPE	1
 
 /* Enabled for SDL 1.2 (binary compatibility) */
 //#define HAVE_LIBC     1
@@ -147,8 +145,9 @@ typedef unsigned int uintptr_t;
 /* Enable various audio drivers */
 #ifndef _WIN32_WCE
 #define SDL_AUDIO_DRIVER_DSOUND	1
+#define SDL_AUDIO_DRIVER_XAUDIO2	0
 #endif
-#define SDL_AUDIO_DRIVER_WINWAVEOUT	1
+#define SDL_AUDIO_DRIVER_WINMM	1
 #define SDL_AUDIO_DRIVER_DISK	1
 #define SDL_AUDIO_DRIVER_DUMMY	1
 
@@ -162,30 +161,39 @@ typedef unsigned int uintptr_t;
 #endif
 
 /* Enable various shared object loading systems */
-#define SDL_LOADSO_WIN32	1
+#define SDL_LOADSO_WINDOWS	1
 
 /* Enable various threading systems */
-#define SDL_THREAD_WIN32	1
+#define SDL_THREAD_WINDOWS	1
 
 /* Enable various timer systems */
 #ifdef _WIN32_WCE
 #define SDL_TIMER_WINCE	1
 #else
-#define SDL_TIMER_WIN32	1
+#define SDL_TIMER_WINDOWS	1
 #endif
 
 /* Enable various video drivers */
 #define SDL_VIDEO_DRIVER_DUMMY	1
-#define SDL_VIDEO_DRIVER_WIN32	1
+#define SDL_VIDEO_DRIVER_WINDOWS	1
 
+#ifndef _WIN32_WCE
+#ifndef SDL_VIDEO_RENDER_D3D
 #define SDL_VIDEO_RENDER_D3D	1
-#define SDL_VIDEO_RENDER_GDI	1
+#endif
+#endif
 
 /* Enable OpenGL support */
 #ifndef _WIN32_WCE
+#ifndef SDL_VIDEO_OPENGL
 #define SDL_VIDEO_OPENGL	1
+#endif
+#ifndef SDL_VIDEO_OPENGL_WGL
 #define SDL_VIDEO_OPENGL_WGL	1
+#endif
+#ifndef SDL_VIDEO_RENDER_OGL
 #define SDL_VIDEO_RENDER_OGL	1
+#endif
 #endif
 
 /* Enable system power support */
@@ -196,4 +204,4 @@ typedef unsigned int uintptr_t;
 #define SDL_ASSEMBLY_ROUTINES	1
 #endif
 
-#endif /* _SDL_config_win32_h */
+#endif /* _SDL_config_windows_h */
