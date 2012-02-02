@@ -67,33 +67,33 @@
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include</IncludePath>
-    <LibraryPath>$(LIB32);$(LibraryPath);$(ProjectDir)contrib/lib/x86</LibraryPath>
-    <ExecutablePath>$(BIN32);$(ExecutablePath);$(ProjectDir)contrib/bin/x86</ExecutablePath>
+    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
+    <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x86;$(LIB32)</LibraryPath>
+    <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x86;$(BIN32)</ExecutablePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include</IncludePath>
-    <LibraryPath>$(LIB64);$(LibraryPath);$(ProjectDir)contrib/lib/x64</LibraryPath>
-    <ExecutablePath>$(BIN64);$(ExecutablePath);$(ProjectDir)contrib/bin/x64</ExecutablePath>
+    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
+    <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x64;$(LIB64)</LibraryPath>
+    <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x64;$(BIN64)</ExecutablePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include</IncludePath>
-    <LibraryPath>$(LIB32);$(LibraryPath);$(ProjectDir)contrib/lib/x86</LibraryPath>
-    <ExecutablePath>$(BIN32);$(ExecutablePath);$(ProjectDir)contrib/bin/x86</ExecutablePath>
+    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
+    <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x86;$(LIB32)</LibraryPath>
+    <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x86;$(BIN32)</ExecutablePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(INCLUDE);$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include</IncludePath>
-    <LibraryPath>$(LIB64);$(LibraryPath);$(ProjectDir)contrib/lib/x64</LibraryPath>
-    <ExecutablePath>$(BIN64);$(ExecutablePath);$(ProjectDir)contrib/bin/x64</ExecutablePath>
+    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
+    <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x64;$(LIB64)</LibraryPath>
+    <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x64;$(BIN64)</ExecutablePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -108,7 +108,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>cudart.lib;SDL.lib;opengl32.lib;glew32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cudart.lib;SDL.lib;opengl32.lib;glew32.lib;gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
     </Link>
@@ -124,7 +124,7 @@
     </Cudart_Build_Rule>
     <CudaCompile>
       <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
-      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MTd</Runtime>
     </CudaCompile>
@@ -160,7 +160,7 @@
     <CudaCompile>
       <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MTd</Runtime>
     </CudaCompile>
@@ -176,13 +176,14 @@
       <PrecompiledHeaderFile>StdAfx.hpp</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)contrib/include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>cudart.lib;SDL.lib;opengl32.lib;glew32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cudart.lib;SDL.lib;opengl32.lib;glew32.lib;gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
     </Link>
@@ -196,7 +197,7 @@
     </Cudart_Build_Rule>
     <CudaCompile>
       <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
-      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
     </CudaCompile>
@@ -212,6 +213,7 @@
       <PrecompiledHeaderFile>StdAfx.hpp</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)contrib/include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -234,7 +236,7 @@
     <CudaCompile>
       <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
     </CudaCompile>

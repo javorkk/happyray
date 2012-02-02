@@ -23,9 +23,9 @@
 
 #include "Sort.h"
 
-#if HAPPYRAY__CUDA_ARCH__ < 200
-#   define USE_CHAG_PP_SORT
-#endif
+//#if HAPPYRAY__CUDA_ARCH__ < 200
+//#   define USE_CHAG_PP_SORT
+//#endif
 
 #ifdef USE_CHAG_PP_SORT
 #   include "chag/pp/sort.cuh"
@@ -145,32 +145,9 @@ void Sort::operator()(uint *&pData0,
 #	undef DO_PASS_
 
 #else
-
+    //DEBUG
     //cudaEvent_t sortEvent;
     //cudaEventCreate(&sortEvent);
-
-    //uint* keys = (uint*)pData1;
-    //uint* values = (uint*)pData2;
-    //
-    //dim3 blockSize = 256;
-    //dim3 gridSize  = 128;
-    //PairsToSingles<<< gridSize, blockSize>>>(pData0, keys, values, aNumElements);
-
-    //cudaEventSynchronize(sortEvent);
-
-    //thrust::device_ptr<uint> thrustKeys(keys);
-    //thrust::device_ptr<uint> thrustVals(values);
-
-    //thrust::detail::backend::cuda::detail::stable_radix_sort_by_key(keys, keys + aNumElements, values);
-
-    //cudaEventSynchronize(sortEvent);
-    //MY_CUT_CHECK_ERROR("Sort failed!\n");
-
-    //SinglesToPairs<<< gridSize, blockSize>>>(pData0, keys, values, aNumElements);
-    //
-    //cudaEventSynchronize(sortEvent);    
-    //cudaEventDestroy(sortEvent);
-
 
     uint* keys = pData1;
     uint* values = pData1 + aNumElements;
@@ -196,11 +173,12 @@ void Sort::operator()(uint *&pData0,
     dim3 gridSize  = 128;
     PairsToSingles<<< gridSize, blockSize>>>((uint2*)alt_keys, keys, values, aNumElements);
 
+    //DEBUG
     //if (!thrust::detail::util::is_aligned(thrust::raw_pointer_cast(&*alt_values), 2*sizeof(uint)))
     //{
     //    cudastd::logger::out << "Error: Radix Sort Ping Values : pointer is not aligned!\n";
     //}
-
+    //DEBUG
     //if (!thrust::detail::util::is_aligned(thrust::raw_pointer_cast(&*values), 2*sizeof(uint)))
     //{
     //    cudastd::logger::out << "Error: Radix Sort Values :  Pointer is not aligned!\n";
@@ -227,6 +205,7 @@ void Sort::operator()(uint *&pData0,
     // perform the sort
     sorter.EnactSort(storage);
 
+    //DEBUG
     //cudaEventSynchronize(sortEvent);
     //MY_CUT_CHECK_ERROR("Sort failed!\n");
 
@@ -247,6 +226,7 @@ void Sort::operator()(uint *&pData0,
 
     SinglesToPairs<<< gridSize, blockSize>>>((uint2*)pData0, pData1, pData2, aNumElements);
 
+    //DEBUG
     //cudaEventSynchronize(sortEvent);    
     //cudaEventDestroy(sortEvent);
 

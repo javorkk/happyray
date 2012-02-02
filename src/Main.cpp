@@ -42,7 +42,7 @@ int main(int argc, char* argv[])
     {
         app.displayFrame();
         app.fetchEvents();
-        SDL_Delay(100);
+        //SDL_Delay(100);
     }
 
 	return 0;

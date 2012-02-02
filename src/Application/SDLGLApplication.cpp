@@ -27,6 +27,8 @@
 
 #include "../Utils/ImagePNG.hpp"
 
+//#define USE_OPEN_GL
+
 SDL_Window* SDLGLApplication::mainwindow;
 
 SDL_GLContext SDLGLApplication::maincontext;
@@ -70,7 +72,23 @@ const float ROTATEUPSCALEFACTOR = 0.01f;
 
 SDLGLApplication::~SDLGLApplication()
 {
-    cleanup();
+#ifdef USE_OPEN_GL
+    //texture
+    glDeleteTextures(1, &sFBTextureId);
+    //shader & buffers
+    glUseProgram(0);
+    glDetachShader(shaderprogram, vertexshader);
+    glDetachShader(shaderprogram, fragmentshader);
+    glDeleteProgram(shaderprogram);
+    glDeleteShader(vertexshader);
+    glDeleteShader(fragmentshader);
+    glDeleteBuffers(3, vbo);
+    glDeleteVertexArrays(1, &vao);
+
+    SDL_GL_DeleteContext(maincontext);
+#endif
+
+    CUDAApplication::cleanup();
     SDL_Quit();
 }
 
@@ -82,12 +100,12 @@ void SDLGLApplication::init(int argc, char* argv[])
     //initScene();
 
     
-#ifdef _WIN32
-    if(!SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS))
-    {
-        cudastd::logger::out << "Failed to set process priority.\n" ;
-    }
-#endif
+//#ifdef _WIN32
+//    if(!SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS))
+//    {
+//        cudastd::logger::out << "Failed to set process priority.\n" ;
+//    }
+//#endif
 
     if (argc > 1)
     {
@@ -187,9 +205,12 @@ void SDLGLApplication::cameraChanged()
     mNumImages = 0;
 }
 
-void SDLGLApplication::KeyUp		(const int& iKeyEnum)
+void SDLGLApplication::KeyUp		(SDL_Keysym& aSym)
 {
-    switch(iKeyEnum) 
+    if(!aSym.sym)
+        return;
+
+    switch(SDL_GetKeyFromScancode(aSym.scancode)) 
     {
     case SDLK_LEFTBRACKET:
         mMoveStep = std::max(0.00001f, mMoveStep / 2.f);
@@ -258,9 +279,12 @@ void SDLGLApplication::KeyUp		(const int& iKeyEnum)
     }
 }
 
-void SDLGLApplication::KeyDown		(const int& iKeyEnum)
+void SDLGLApplication::KeyDown		(SDL_Keysym& aSym)
 {
-    switch(iKeyEnum) 
+    if(!aSym.sym)
+        return;
+
+    switch(SDL_GetKeyFromScancode(aSym.scancode)) 
     {
     case SDLK_UP:
     case SDLK_w:
@@ -400,23 +424,22 @@ void SDLGLApplication::fetchEvents()
 {
     // Poll for events, and handle the ones we care about.
     SDL_Event event;
-    while ( SDL_PollEvent( &event ) ) 
+    
+    while ( SDL_PollEvent(&event) ) 
     {
         switch ( event.type ) 
         {
         case SDL_KEYDOWN:
+            KeyDown( event.key.keysym);
+            break;
+        case SDL_KEYUP:
             // If escape is pressed set the Quit-flag
-            if (event.key.keysym.sym == SDLK_ESCAPE)
+            if (SDL_GetKeyFromScancode(event.key.keysym.scancode) == SDLK_ESCAPE)
             {
                 mQuit = true;
                 break;
             }
-
-            KeyDown( event.key.keysym.sym );
-            break;
-
-        case SDL_KEYUP:
-            KeyUp( event.key.keysym.sym );
+            KeyUp( event.key.keysym);
             break;
 
         case SDL_QUIT:
@@ -644,7 +667,8 @@ void SDLGLApplication::pauseAnimation()
 
 void SDLGLApplication::initVideo()
 {
-        mSDLVideoModeFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE ;
+#ifdef USE_OPEN_GL
+        mSDLVideoModeFlags = SDL_WINDOW_OPENGL| SDL_WINDOW_SHOWN | SDL_WINDOW_INPUT_FOCUS;
         
         // Request an opengl 3.2 context.
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -653,6 +677,10 @@ void SDLGLApplication::initVideo()
         // Enable multisampling for a nice antialiased effect
         //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
         //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+
+        //SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+        //SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+        //SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
 
         // Turn on double buffering with a 24bit Z buffer.
         // You may need to change this to 16, 24 or 32 for your system
@@ -668,7 +696,7 @@ void SDLGLApplication::initVideo()
         }
 
         /* Create our window centered at RESX x RESY resolution */
-        mainwindow = SDL_CreateWindow(mActiveWindowName, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        mainwindow = SDL_CreateWindow(mActiveWindowName,  SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
             mRESX, mRESY, mSDLVideoModeFlags );
         if (!mainwindow) /* Die if creation failed */
             std::cerr << "Unable to create window\n";
@@ -704,10 +732,28 @@ void SDLGLApplication::initVideo()
 
         initGLSL();
         initFrameBufferTexture(&sFBTextureId, mRESX, mRESY);
+
+        SDL_ShowWindow(mainwindow);
+
        
         glClearColor ( 1.0f, 0.0f, 0.0f, 1.0f );
         glClear ( GL_COLOR_BUFFER_BIT );
-        SDL_GL_SwapWindow(mainwindow);
+        SDL_GL_SwapWindow(mainwindow)
+#else //Do not use OpenGL
+
+    mSDLVideoModeFlags = SDL_SWSURFACE | SDL_RESIZABLE ;
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) // Initialize SDL's Video subsystem
+    {
+        std::cerr << "Unable to initialize SDL\n";
+    }
+
+    /* Create our window centered at RESX x RESY resolution */
+    mainwindow = SDL_CreateWindow(mActiveWindowName,  SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        mRESX, mRESY, mSDLVideoModeFlags );
+    if (!mainwindow) /* Die if creation failed */
+        std::cerr << "Unable to create window\n";
+
+#endif
 }
 
 void SDLGLApplication::displayFrame()
@@ -771,8 +817,11 @@ void SDLGLApplication::displayFrame()
 
 
         SDL_SetWindowTitle(mainwindow, windowName.c_str());
-        
+#ifdef USE_OPEN_GL        
         runGLSLShader();
+#else
+        drawFrameBuffer();
+#endif
 
         if(!mPauseAnimation && mDumpFrames)
             writeScreenShot();
@@ -804,6 +853,111 @@ void SDLGLApplication::initFrameBufferTexture(GLuint *aTextureId, const int aRes
         TEXTURE_FORMAT,
         GL_FLOAT,
         0);
+}
+
+void SDLGLApplication::drawFrameBuffer(void)
+{
+    if ( SDL_MUSTLOCK(SDL_GetWindowSurface(mainwindow)) ) {
+        if ( SDL_LockSurface(SDL_GetWindowSurface(mainwindow)) < 0 ) {
+            return;
+        }
+    }
+
+    float* frameBufferFloatPtr = CUDAApplication::getFrameBuffer();
+    const float gammaRCP = 1.f/2.2f;
+
+    switch (SDL_GetWindowSurface(mainwindow)->format->BytesPerPixel) {
+    case 1: { /* Assuming 8-bpp */
+        for(int y = 0; y < mRESY; ++y)
+        {
+            for(int x = 0; x < mRESX; ++x)
+            {
+                int i = 3 * (x + mRESX * y);
+                uint R = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i    ], gammaRCP));
+                uint G = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i + 1], gammaRCP));
+                uint B = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i + 2], gammaRCP));
+                uint color = SDL_MapRGB(SDL_GetWindowSurface(mainwindow)->format, R,G,B);
+
+                Uint8 *bufp;
+                bufp = (Uint8 *)SDL_GetWindowSurface(mainwindow)->pixels + y*SDL_GetWindowSurface(mainwindow)->pitch + x;
+                *bufp = color;
+            }
+        }        
+            }
+            break;
+
+    case 2: { /* Probably 15-bpp or 16-bpp */
+        for(int y = 0; y < mRESY; ++y)
+        {
+            for(int x = 0; x < mRESX; ++x)
+            {
+                int i = 3 * (x + mRESX * y);
+                uint R = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i    ], gammaRCP));
+                uint G = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i + 1], gammaRCP));
+                uint B = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i + 2], gammaRCP));
+                uint color = SDL_MapRGB(SDL_GetWindowSurface(mainwindow)->format, R,G,B);
+
+                Uint16 *bufp;
+
+                bufp = (Uint16 *)SDL_GetWindowSurface(mainwindow)->pixels + y*SDL_GetWindowSurface(mainwindow)->pitch/2 + x;
+                *bufp = color;
+            }
+        }        
+
+            }
+            break;
+
+    case 3: { /* Slow 24-bpp mode, usually not used */
+        for(int y = 0; y < mRESY; ++y)
+        {
+            for(int x = 0; x < mRESX; ++x)
+            {
+                int i = 3 * (x + mRESX * y);
+                uint R = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i    ], gammaRCP));
+                uint G = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i + 1], gammaRCP));
+                uint B = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i + 2], gammaRCP));
+                uint color = SDL_MapRGB(SDL_GetWindowSurface(mainwindow)->format, R,G,B);
+
+                Uint8 *bufp;
+
+                bufp = (Uint8 *)SDL_GetWindowSurface(mainwindow)->pixels + y*SDL_GetWindowSurface(mainwindow)->pitch + x;
+                *(bufp+SDL_GetWindowSurface(mainwindow)->format->Rshift/8) = R;
+                *(bufp+SDL_GetWindowSurface(mainwindow)->format->Gshift/8) = G;
+                *(bufp+SDL_GetWindowSurface(mainwindow)->format->Bshift/8) = B;
+            }
+        }        
+
+            }
+            break;
+
+    case 4: { /* Probably 32-bpp */
+        for(int y = 0; y < mRESY; ++y)
+        {
+            for(int x = 0; x < mRESX; ++x)
+            {
+                int i = 3 * (x + mRESX * y);
+                uint R = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i    ], gammaRCP));
+                uint G = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i + 1], gammaRCP));
+                uint B = static_cast<uint>(255.f * powf(frameBufferFloatPtr[i + 2], gammaRCP));
+                uint color = SDL_MapRGB(SDL_GetWindowSurface(mainwindow)->format, R,G,B);
+
+                Uint32 *bufp;
+
+                bufp = (Uint32 *)SDL_GetWindowSurface(mainwindow)->pixels + y*SDL_GetWindowSurface(mainwindow)->pitch/4 + x;
+                *bufp = color;
+            }
+        }        
+
+
+            }
+            break;
+    }
+    if ( SDL_MUSTLOCK(SDL_GetWindowSurface(mainwindow)) ) {
+        SDL_UnlockSurface(SDL_GetWindowSurface(mainwindow));
+    }
+    SDL_UpdateRect(SDL_GetWindowSurface(mainwindow), 0, 0, mRESX, mRESY);
+    SDL_UpdateWindowSurface(mainwindow);
+
 }
 
 void SDLGLApplication::initGLSL(void)
@@ -1022,6 +1176,7 @@ void SDLGLApplication::runGLSLShader(void)
 
 void SDLGLApplication::cleanup(void)
 {
+#ifdef USE_OPEN_GL
     //texture
     glDeleteTextures(1, &sFBTextureId);
     //shader & buffers
@@ -1035,13 +1190,16 @@ void SDLGLApplication::cleanup(void)
     glDeleteVertexArrays(1, &vao);
 
     SDL_GL_DeleteContext(maincontext);
-    SDL_DestroyWindow(mainwindow);
+#endif
 
+    SDL_DestroyWindow(mainwindow);
     CUDAApplication::cleanup();
 }
 
 void SDLGLApplication::changeWindowSize(void)
 {
+    cameraChanged();
+#ifdef USE_OPEN_GL
     //texture
     glDeleteTextures(1, &sFBTextureId);
      //shader & buffers
@@ -1055,13 +1213,12 @@ void SDLGLApplication::changeWindowSize(void)
     glDeleteVertexArrays(1, &vao);
 
     SDL_GL_DeleteContext(maincontext);
-
+#endif
     SDL_SetWindowSize(mainwindow, mRESX, mRESY);
 
+#ifdef USE_OPEN_GL
     maincontext = SDL_GL_CreateContext(mainwindow);
-
-    cameraChanged();
-    
     initGLSL();
     initFrameBufferTexture(&sFBTextureId, mRESX, mRESY);
+#endif
 }

@@ -100,7 +100,7 @@ public:
     float mBACKGROUND_B;
 
     static SDL_Window* mainwindow;     //SDL window
-
+    Uint16 mGammaRamp;
     //////////////////////////////////////////////////////////////////////////
     // OpenGL
     static SDL_GLContext maincontext; //OpenGL Context
@@ -156,6 +156,9 @@ public:
 
     void displayFrame();
 
+    //copy the float3 frame buffer w/o using openGL
+    void drawFrameBuffer();
+
     /** Window is active again. **/
     void WindowActive();
 
@@ -169,12 +172,12 @@ public:
     /** Keyboard key has been released.
     @param iKeyEnum The key number.
     **/
-    void KeyUp		(const int& iKeyEnum);
+    void KeyUp		(SDL_Keysym& aSym);
 
     /** Keyboard key has been pressed.
     @param iKeyEnum The key number.
     **/
-    void KeyDown		(const int& iKeyEnum);
+    void KeyDown		(SDL_Keysym& aSym);
 
 
     /** The mouse has been moved.
