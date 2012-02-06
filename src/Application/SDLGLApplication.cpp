@@ -738,7 +738,7 @@ void SDLGLApplication::initVideo()
        
         glClearColor ( 1.0f, 0.0f, 0.0f, 1.0f );
         glClear ( GL_COLOR_BUFFER_BIT );
-        SDL_GL_SwapWindow(mainwindow)
+        SDL_GL_SwapWindow(mainwindow);
 #else //Do not use OpenGL
 
     mSDLVideoModeFlags = SDL_SWSURFACE | SDL_RESIZABLE ;
