@@ -134,12 +134,12 @@ void SDLGLApplication::initScene()
 
 void SDLGLApplication::WindowActive	()
 {
-    SDL_WM_SetCaption(mActiveWindowName, "");
+    //SDL_WM_SetCaption(mActiveWindowName, "");
 }
 
 void SDLGLApplication::WindowInactive	() 
 {
-    SDL_WM_SetCaption(mMinimizedWindowName, "");
+   //SDL_WM_SetCaption(mMinimizedWindowName, "");
 }
 
 void SDLGLApplication::writeScreenShot()
@@ -213,10 +213,10 @@ void SDLGLApplication::KeyUp		(SDL_Keysym& aSym)
     switch(SDL_GetKeyFromScancode(aSym.scancode)) 
     {
     case SDLK_LEFTBRACKET:
-        mMoveStep = std::max(0.00001f, mMoveStep / 2.f);
+        mMoveStep = std::max(MINSTEPSIZE, mMoveStep / 2.f);
         break;           
     case SDLK_RIGHTBRACKET:
-        mMoveStep = std::min(1024.f, mMoveStep * 2.f);
+        mMoveStep = std::min(MAXSTEPSIZE, mMoveStep * 2.f);
         break;           
     case SDLK_UP:
     case SDLK_w:
@@ -390,12 +390,6 @@ void SDLGLApplication::MouseButtonUp	(const int& iButton,
             grabMouse();
         }
         break;
-    case SDL_BUTTON_WHEELUP:
-        mMoveStep = std::min(mMoveStep * 2.f, MAXSTEPSIZE);
-        break;
-    case SDL_BUTTON_WHEELDOWN:
-        mMoveStep = std::max(mMoveStep * 0.5f, MINSTEPSIZE);
-        break;
     default:
         break;
     }
@@ -465,18 +459,6 @@ void SDLGLApplication::fetchEvents()
                 event.motion.y, 
                 event.motion.xrel, 
                 event.motion.yrel);
-            break;
-
-        case SDL_ACTIVEEVENT:
-            if ( event.active.state & SDL_APPACTIVE ) {
-                if ( event.active.gain ) {
-                    mMinimized = false;
-                    WindowActive();
-                } else {
-                    mMinimized = true;
-                    WindowInactive();
-                }
-            }
             break;
         case SDL_WINDOWEVENT:
             switch(event.window.event) 
@@ -626,8 +608,8 @@ void SDLGLApplication::setBackgroundColor()
 
 void SDLGLApplication::toggleFullSreenMode(void)
 {
-    mSDLVideoModeFlags ^= SDL_FULLSCREEN;
-    changeWindowSize();
+    //TODO: Not implemented
+    //changeWindowSize();
 }
 
 void SDLGLApplication::nextRenderMode()
@@ -741,7 +723,7 @@ void SDLGLApplication::initVideo()
         SDL_GL_SwapWindow(mainwindow);
 #else //Do not use OpenGL
 
-    mSDLVideoModeFlags = SDL_SWSURFACE | SDL_RESIZABLE ;
+    mSDLVideoModeFlags = SDL_SWSURFACE;
     if (SDL_Init(SDL_INIT_VIDEO) < 0) // Initialize SDL's Video subsystem
     {
         std::cerr << "Unable to initialize SDL\n";
@@ -955,7 +937,6 @@ void SDLGLApplication::drawFrameBuffer(void)
     if ( SDL_MUSTLOCK(SDL_GetWindowSurface(mainwindow)) ) {
         SDL_UnlockSurface(SDL_GetWindowSurface(mainwindow));
     }
-    SDL_UpdateRect(SDL_GetWindowSurface(mainwindow), 0, 0, mRESX, mRESY);
     SDL_UpdateWindowSurface(mainwindow);
 
 }
