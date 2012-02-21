@@ -431,7 +431,7 @@ GLOBAL void computeDirectIllumination(
                         PrimitiveArray<tPrimitive>              aStorage,
                         VtxAttributeArray<tPrimitive, float3>   aNormalStorage,
                         SimpleRayBuffer                         aInputBuffer,
-                        OcclusionRayBuffer                      aOcclusionBuffer,
+                        DirecIlluminationBuffer                      aOcclusionBuffer,
                         AreaLightSourceCollection               aLSCollection,
                         FrameBuffer                             oFinalImage,
                         int                                     dcNumRays, //shadow rays
@@ -439,7 +439,7 @@ GLOBAL void computeDirectIllumination(
                         float3*                                 aAttenuation = NULL)
 {
     extern SHARED float3 sharedVec[];
-    sharedVec[threadId1D()] = rep(FLT_MAX);
+    sharedVec[threadId1D()] = rep(0.f);
 
     float3 rayOrg = rep(0.f);
     float3 rayDir = rep(1.f);
@@ -461,7 +461,7 @@ GLOBAL void computeDirectIllumination(
         //load occlusion information in shared memory
         if (myRayIndex < dcNumRays)
         {
-            sharedVec[threadId1D()] = aOcclusionBuffer.loadLigtVec(myRayIndex);
+            sharedVec[threadId1D()] = aOcclusionBuffer.loadLSIntensity(myRayIndex);
             aInputBuffer.load(rayOrg, rayDir, rayT, bestHit, myPixelIndex, dcNumPixels);
         }
         //////////////////////////////////////////////////////////////////////////
@@ -471,7 +471,7 @@ GLOBAL void computeDirectIllumination(
 
         if (myRayIndex < dcNumRays && rayT < FLT_MAX )
         {
-            if (sharedVec[threadId1D()].x < FLT_MAX && bestHit < aStorage.numPrimitives)
+            if (sharedVec[threadId1D()].x + sharedVec[threadId1D()].y + sharedVec[threadId1D()].z > 0.f && bestHit < aStorage.numPrimitives)
             {
                 tPrimitive prim = aStorage[bestHit];
                 float3& vert0 = prim.vtx[0];
@@ -505,37 +505,16 @@ GLOBAL void computeDirectIllumination(
                 float3 specReflectance = material.getSpecularReflectance();
                 float  specExp = material.getSpecularExponent();
 
+                float3 dirToLS = aOcclusionBuffer.loadDirToLS(myRayIndex, dcNumRays);
 
-                float attenuation = 1.f /
-                    dot(sharedVec[threadId1D()],sharedVec[threadId1D()]);
-
-                //normalize
-                sharedVec[threadId1D()] = sharedVec[threadId1D()] * sqrtf(attenuation);
-
-                AreaLightSource dcLightSource = aLSCollection.getLightWithID(aOcclusionBuffer.loadLSId(myRayIndex,dcNumRays));
-
-                float cosLightNormal = dot(-dcLightSource.normal,
-                    sharedVec[threadId1D()]);
-
-                float cosNormalEyeDir = dot(normal,sharedVec[threadId1D()]);
+                float cosNormalEyeDir = dot(normal,dirToLS);
 
                 float cosHalfVecLightDir = fmaxf(0.f,
-                    dot((~(sharedVec[threadId1D()] - rayDir)),sharedVec[threadId1D()]));
+                    dot((~(dirToLS - rayDir)),dirToLS));
 
-                if (dcLightSource.isOnLS(rayOrg))
+                if (fabsf(dirToLS.x) +fabsf(dirToLS.y) + fabsf(dirToLS.z) > 0.f)
                 {
-                    cosLightNormal= dot(rayDir,dcLightSource.normal);
-                    float receivesEnergy = (cosLightNormal < 0.f) ? .5f : 0.f; //0.5f is power heuristic n = 0
-                    sharedVec[threadId1D()].x = dcLightSource.intensity.x * receivesEnergy;
-                    sharedVec[threadId1D()].y = dcLightSource.intensity.y * receivesEnergy;
-                    sharedVec[threadId1D()].z = dcLightSource.intensity.z * receivesEnergy;
-                }
-                else
-                {
-                    float3 lsRadiance = dcLightSource.intensity *
-                        dcLightSource.getArea() *
-                        attenuation * 
-                        fmaxf(0.f, cosLightNormal) * 0.5f; //0.5f is power heuristic n = 0
+                    float3 lsRadiance = sharedVec[threadId1D()];
                     
                     sharedVec[threadId1D()] = lsRadiance * fmaxf(0.f, cosNormalEyeDir);
 
@@ -553,12 +532,7 @@ GLOBAL void computeDirectIllumination(
 
                     sharedVec[threadId1D()] += tmp;
                 }
-
             }
-            else if (sharedVec[threadId1D()].x == FLT_MAX)
-            {
-                sharedVec[threadId1D()] = rep(0.f);
-            }//endif point receives direct illumination
         }
         else if (myRayIndex < dcNumRays)
         {
@@ -727,7 +701,7 @@ GLOBAL void addIndirectIllumination(
         typedef tAccelerationStructure                                  t_AccelerationStructure;
         typedef AreaLightShadowRayGenerator < OCCLUSIONSAMPLESX, OCCLUSIONSAMPLESY>  t_ShadowRayGenerator;
         typedef ImportanceBuffer                                        t_ImportanceBuffer;
-        typedef OcclusionRayBuffer                                      t_OcclusionBuffer;
+        typedef DirecIlluminationBuffer                                      t_OcclusionBuffer;
 
         t_RayBuffer             rayBuffer;
       
@@ -775,7 +749,7 @@ GLOBAL void addIndirectIllumination(
                 numPixels * sizeof(float) +                 //rayBuffer : rayT
                 numPixels * sizeof(uint) +                  //rayBuffer : primitive Id
                 numPixels * sizeof(float3) +                //importanceBuffer : importance
-                numPixels * NUMOCCLUSIONSAMPLES * (sizeof(float3) + sizeof(int)) + //occlusion buffer: light vector + light source id                
+                numPixels * NUMOCCLUSIONSAMPLES * (sizeof(float3) + sizeof(float3)) + //occlusion buffer: light vector + light source id                
                 0u;
 
             MemoryManager::allocateDeviceArray((void**)&mGlobalMemoryPtr, globalMemorySize, (void**)&mGlobalMemoryPtr, mGlobalMemorySize);

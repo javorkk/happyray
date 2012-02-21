@@ -184,11 +184,11 @@ public:
 };
 
 
-class OcclusionRayBuffer
+class DirecIlluminationBuffer
 {
     void* mMemoryPtr;
 public:
-    OcclusionRayBuffer(void* aMemPtr): mMemoryPtr(aMemPtr)
+    DirecIlluminationBuffer(void* aMemPtr): mMemoryPtr(aMemPtr)
     {}
 
     HOST DEVICE void* getData() const
@@ -199,35 +199,46 @@ public:
     HOST DEVICE void store(const float3& aRayOrg, const float3& aRayDir, const float aRayT,
         const uint aBestHit, const uint aRayId, const uint aNumRays)  const
     {
-        //if not occluded, store distance to light source
-        float3* rayOut = ((float3*)mMemoryPtr) + aRayId;
-        if (aRayT >= 0.9999f)
+        float3 outDir;
+        if (aRayT < 0.9999f)
         {
-            *rayOut = aRayDir;
+            if(aRayT > 0.f)
+            {
+                //if occluded, overwrite the radiance
+                float3* rayOut = ((float3*)mMemoryPtr) + aRayId;
+                *rayOut = rep(0.f);
+            }
+            //else hit point was on light source
+            outDir = rep(0.f);
         }
         else
         {
-            *rayOut = rep(FLT_MAX);
+            //hit point receives direct illumination
+            outDir = ~aRayDir;
         }
+
+        float3* rayOut = ((float3*)((char*)mMemoryPtr + aNumRays * sizeof(float3)) + aRayId);
+        *rayOut = outDir;
+
     }
 
-    HOST DEVICE void storeLSId(const int aVal, const uint aSampleId, const uint aNumSamples)  const
+    HOST DEVICE void storeLSIntensity(const float3& aVal, const uint aSampleId, const uint aNumSamples)  const
     {
         //if not occluded, store distance to light source
-        int* rayOut = (int*)((char*)mMemoryPtr + aNumSamples * sizeof(float3)) + aSampleId;
+        float3* rayOut = ((float3*)mMemoryPtr) + aSampleId;
         *rayOut = aVal;
     }
 
-    HOST DEVICE int loadLSId(const uint aSampleId, const uint aNumSamples) const
-    {
-        return *((int*)((char*)mMemoryPtr + aNumSamples * sizeof(float3)) + aSampleId);
-    }
-
-    HOST DEVICE float3 loadLigtVec(const uint aSampleId) const
+    HOST DEVICE float3 loadLSIntensity(const uint aSampleId) const
     {
         return *((float3*)mMemoryPtr + aSampleId);
     }    
     
+    HOST DEVICE float3 loadDirToLS(const uint aSampleId, const uint aNumSamples) const
+    {
+        return *((float3*)((char*)mMemoryPtr + aNumSamples * sizeof(float3)) + aSampleId);
+    }    
+
 };
 
 class ImportanceBuffer
