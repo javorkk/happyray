@@ -234,11 +234,11 @@
       </AddedDependencies>
     </Cudart_Build_Rule>
     <CudaCompile>
-      <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
+      <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -271,6 +271,7 @@
     <ClInclude Include="src\Core\Flags.hpp" />
     <ClInclude Include="src\Core\SSEAlgebra.hpp" />
     <ClInclude Include="src\CUDAStdAfx.h" />
+    <ClInclude Include="src\DeviceConstants.h" />
     <ClInclude Include="src\RT\Algorithm\RayGenerators.h" />
     <ClInclude Include="src\RT\Algorithm\RayTracingKernels.h" />
     <ClInclude Include="src\RT\Algorithm\RayTriangleIntersector.h" />
@@ -280,6 +281,7 @@
     <ClInclude Include="src\RT\Algorithm\UGridSortBuilder.h" />
     <ClInclude Include="src\RT\Algorithm\UGridTraverser.h" />
     <ClInclude Include="src\RT\Algorithm\UniformGridBuildKernels.h" />
+    <ClInclude Include="src\RT\Integrator\AOIntegrator.h" />
     <ClInclude Include="src\RT\Integrator\PathTracer.h" />
     <ClInclude Include="src\RT\Integrator\SimpleIntegrator.h" />
     <ClInclude Include="src\RT\Primitive\BBox.hpp" />

@@ -42,7 +42,7 @@ class RegularPrimaryRayGenerator
 public:
     Camera dcCamera;
     tPixelSampler dcRegularPixelSampler;
-    int dcImageId;
+    int sampleId;
 
     DEVICE float operator()(float3& oRayOrg, float3& oRayDir, const uint aRayId,
         const uint aNumRays)
@@ -53,13 +53,13 @@ public:
         if (taSafe)//compile-time decision
         {
             dcRegularPixelSampler.getPixelCoords(
-                (float)(min(aRayId, aNumRays - 1u)), (float)dcImageId, screenX,
+                (float)(min(aRayId, aNumRays - 1u)), (float)sampleId, screenX,
                 screenY);
         }
         else
         {
             dcRegularPixelSampler.getPixelCoords(
-                (float)aRayId, (float)dcImageId, screenX, screenY);
+                (float)aRayId, (float)sampleId, screenX, screenY);
         }
         oRayDir = dcCamera.getDirection(screenX, screenY);
 
@@ -74,7 +74,7 @@ class RandomPrimaryRayGenerator
 public:
     Camera dcCamera;
     tPixelSampler dcRandomPixelSampler;
-    int dcImageId;
+    int sampleId;
 
     DEVICE float operator()(float3& oRayOrg, float3& oRayDir, const uint aRayId,
         const uint aNumRays)
@@ -89,10 +89,10 @@ public:
 
         typedef SimpleRandomNumberGenerator     t_RNG;
         t_RNG genRand(globalThreadId1D() * globalThreadId1D() * globalThreadId1D() + 
-            1236789u + aRayId * 35537u * dcImageId +
-            (aRayId + dcImageId * aNumRays) * 
-            (aRayId + dcImageId * aNumRays) *
-            (aRayId + dcImageId * aNumRays) );
+            1236789u + aRayId * 35537u * sampleId +
+            (aRayId + sampleId * aNumRays) * 
+            (aRayId + sampleId * aNumRays) *
+            (aRayId + sampleId * aNumRays) );
 
 
         float screenX = genRand();
@@ -119,17 +119,17 @@ template<int taResX, int taResY>
 class AreaLightShadowRayGenerator
 {
     SimpleRayBuffer mBuffer;
-    DirecIlluminationBuffer mOcclusionBuffer;
+    DirectIlluminationBuffer mOcclusionBuffer;
 
 public:
     AreaLightSourceCollection lightSources;
-    int dcImageId;
+    int sampleId;
 
     AreaLightShadowRayGenerator(
         const SimpleRayBuffer& aBuffer,
-        const DirecIlluminationBuffer& aOccBuff,
+        const DirectIlluminationBuffer& aOccBuff,
         const AreaLightSourceCollection& aLSCollection,
-        int aImageId):mBuffer(aBuffer), mOcclusionBuffer(aOccBuff), lightSources(aLSCollection), dcImageId(aImageId)
+        int aImageId):mBuffer(aBuffer), mOcclusionBuffer(aOccBuff), lightSources(aLSCollection), sampleId(aImageId)
     {}
 
     DEVICE float operator()(float3& oRayOrg, float3& oRayDir, const uint aRayId,
@@ -147,9 +147,9 @@ public:
 
         typedef KISSRandomNumberGenerator       t_RNG;
 
-        t_RNG genRand(  3643u + aRayId * 4154207u * dcImageId + aRayId,
+        t_RNG genRand(  3643u + aRayId * 4154207u * sampleId + aRayId,
             1761919u + aRayId * 2746753u + globalThreadId1D(8116093u),
-            331801u + aRayId + dcImageId + globalThreadId1D(91438197u),
+            331801u + aRayId + sampleId + globalThreadId1D(91438197u),
             10499029u );
 
         int lightSourceId = 0;
@@ -171,9 +171,9 @@ public:
         else
         {
             StratifiedSampleGenerator<taResX,taResY> 
-                sampleGenerator( 3643u + aRayId * 4154207u * dcImageId + aRayId,
-                1761919u + aRayId * 2746753u + dcImageId /*+ globalThreadId1D(8116093u)*/,
-                331801u + aRayId * dcImageId  + dcImageId/*+ globalThreadId1D(91438197u)*/,
+                sampleGenerator( 3643u + aRayId * 4154207u * sampleId + aRayId,
+                1761919u + aRayId * 2746753u + sampleId /*+ globalThreadId1D(8116093u)*/,
+                331801u + aRayId * sampleId  + sampleId/*+ globalThreadId1D(91438197u)*/,
                 10499029u );
 
             float r1 = (float)(aRayId % taResX); 
@@ -202,6 +202,143 @@ public:
 
 
         return  (isOnLS) ? -1.f : FLT_MAX;
+
+    }
+};
+
+#include "RT/Structure/PrimitiveArray.h"
+
+template<class tPrimitive, int taResX>
+class AmbientOcclusionRayGenerator
+{
+    void* mMemoryPtr;
+public:
+
+    AmbientOcclusionRayGenerator(
+        const SimpleRayBuffer                          aBuffer,
+        const DirectIlluminationBuffer                 aOccBuff,
+        const PrimitiveArray<tPrimitive>               aPrimitiveStorage,
+        const VtxAttributeArray<tPrimitive, float3>    aNormalStorage,
+        int                                             aImageId,
+        void* aMemPtr)
+    {
+        void* hostPtr;
+        MY_CUDA_SAFE_CALL(cudaHostAlloc((void**)&hostPtr, getParametersSize(), cudaHostAllocDefault));
+        memcpy(hostPtr, (void*)&aBuffer, sizeof(SimpleRayBuffer));        
+        void* nextSlot = (char*)hostPtr + sizeof(SimpleRayBuffer);
+        memcpy(nextSlot, (void*)&aOccBuff, sizeof(DirectIlluminationBuffer));
+        nextSlot = (char*)nextSlot + sizeof(DirectIlluminationBuffer);
+        memcpy(nextSlot, (void*)&aPrimitiveStorage, sizeof(PrimitiveArray<tPrimitive>));
+        nextSlot = (char*)nextSlot + sizeof(PrimitiveArray<tPrimitive>);
+        memcpy(nextSlot, (void*)&aNormalStorage, sizeof(VtxAttributeArray<tPrimitive, float3>));
+        nextSlot = (char*)nextSlot + sizeof(VtxAttributeArray<tPrimitive, float3>);
+        memcpy(nextSlot, (void*)&aImageId, sizeof(int));
+
+        MY_CUDA_SAFE_CALL(cudaMemcpy(aMemPtr, hostPtr, getParametersSize(), cudaMemcpyHostToDevice));
+        MY_CUDA_SAFE_CALL(cudaFreeHost(hostPtr));
+        MY_CUT_CHECK_ERROR("Upload failed!\n");
+        mMemoryPtr = aMemPtr;
+
+    }
+    
+    static int getParametersSize()
+    {
+         return 2*sizeof(SimpleRayBuffer) + sizeof(DirectIlluminationBuffer) + sizeof(PrimitiveArray<tPrimitive>) + sizeof(VtxAttributeArray<tPrimitive, float3>) + sizeof(int);
+    }
+    DEVICE SimpleRayBuffer* getBuffer()
+    {
+        return (SimpleRayBuffer*)mMemoryPtr;
+    }
+
+    DEVICE DirectIlluminationBuffer* getOcclusionBuffer()
+    {
+        return (DirectIlluminationBuffer*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer));
+    }
+
+    DEVICE PrimitiveArray<tPrimitive>* getPrimitiveStorage()
+    {
+        return (PrimitiveArray<tPrimitive>*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer) + sizeof(DirectIlluminationBuffer));
+    }
+
+    DEVICE VtxAttributeArray<tPrimitive, float3>* getNormalStorage()
+    {
+        return (VtxAttributeArray<tPrimitive, float3>*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer) + sizeof(DirectIlluminationBuffer) + sizeof(PrimitiveArray<tPrimitive>));
+    }
+
+    DEVICE int getSampleId()
+    {
+        return *(int*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer) + sizeof(DirectIlluminationBuffer) + sizeof(PrimitiveArray<tPrimitive>) + sizeof(VtxAttributeArray<tPrimitive, float3>));
+
+    }
+
+    DEVICE float operator()(float3& oRayOrg, float3& oRayDir, const uint aRayId,
+        const uint aNumShadowRays)
+    {
+        //////////////////////////////////////////////////////////////////////////
+        //load hit point data
+        uint numPixels = aNumShadowRays / taResX;
+        uint myPixelIndex = aRayId / taResX;
+
+        float rayT;
+        uint bestHit = 0u;
+        
+        getBuffer()->load(oRayOrg, oRayDir, rayT, bestHit, myPixelIndex, numPixels);
+
+        if (rayT >= FLT_MAX || bestHit >= getPrimitiveStorage()->numPrimitives)
+        {
+            return 0.0f;
+        }
+
+        //////////////////////////////////////////////////////////////////////////
+        //compute surface normal
+        tPrimitive prim = (*getPrimitiveStorage())[bestHit];
+        float3& vert0 = prim.vtx[0];
+        float3& vert1 = prim.vtx[1];
+        float3& vert2 = prim.vtx[2];
+
+        float3 realNormal = (vert1 - vert0) % (vert2 - vert0);
+
+        //Compute barycentric coordinates
+        vert0 = vert0 - oRayOrg;
+        vert1 = vert1 - oRayOrg;
+        vert2 = vert2 - oRayOrg;
+
+        float3 n0 = vert1 % vert2;
+        float3 n1 = vert2 % vert0;
+
+        float twiceSabc_RCP = lenRCP(realNormal);
+        float u = len(n0) * twiceSabc_RCP;
+        float v = len(n1) * twiceSabc_RCP;
+
+        VtxAttribStruct<tPrimitive, float3> normals;
+        normals = (*getNormalStorage())[bestHit];
+        float3& normal0 = normals.data[0];
+        float3& normal1 = normals.data[1];
+        float3& normal2 = normals.data[2];
+
+        float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);        
+        //////////////////////////////////////////////////////////////////////////
+        //generate random direction and transform it in global coordinates
+        typedef KISSRandomNumberGenerator       t_RNG;
+
+        t_RNG genRand(  3643u + aRayId * 4154207u * getSampleId() + aRayId,
+            1761919u + aRayId * 2746753u + globalThreadId1D(8116093u),
+            331801u + aRayId + getSampleId() + globalThreadId1D(91438197u),
+            10499029u );
+
+        CosineHemisphereSampler getRandDirection;
+        float3 tmpDir = getRandDirection(genRand(), genRand());
+        float3 tangent, binormal;
+        getLocalCoordinates(normal, tangent, binormal);
+
+        oRayDir = ~(normal * tmpDir.z + tangent * tmpDir.x + binormal * tmpDir.y);
+        oRayOrg += 100.f * EPS * oRayDir;
+
+        float3 lsRadiance = rep(1.f);
+        getOcclusionBuffer()->storeLSIntensity(lsRadiance, aRayId, aNumShadowRays);
+
+
+        return  FLT_MAX;
 
     }
 };

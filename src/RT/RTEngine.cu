@@ -41,6 +41,7 @@
 
 #include "RT/Integrator/SimpleIntegrator.h"
 #include "RT/Integrator/PathTracer.h"
+#include "RT/Integrator/AOIntegrator.h"
 
 
 typedef Triangle    t_Primitive;
@@ -107,6 +108,14 @@ PathTracer<
     MollerTrumboreIntersectionTest
 >                           sPathTracer;
 
+AOIntegrator<
+    Triangle,
+    t_AccStruct,
+    Traverser_t,
+    MollerTrumboreIntersectionTest,
+    MollerTrumboreIntersectionTest
+>                           sAOIntegrator;
+
 
 void RTEngine::init()
 {
@@ -136,6 +145,8 @@ void RTEngine::upload(
         aFrame1, aFrame2, sTriangleNormalArray);
 
     uploader.uploadObjFrameMaterialData(aFrame2, sMaterialArray);
+
+    sAOIntegrator.setAlpha(len(sMemoryManager.bounds.vtx[1]- sMemoryManager.bounds.vtx[0]) * 0.05f);
 
 }
 
@@ -183,20 +194,23 @@ void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId, const 
     case 0:
         if(aImageId < 4)
         {
-            sRegularRayGen.dcImageId = aImageId;
+            sRegularRayGen.sampleId = aImageId;
             sSimpleIntegratorReg.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, grid, sRegularRayGen, aFrameBuffer, aImageId);
         }
         else
         {
-            sRandomRayGen.dcImageId = aImageId;
+            sRandomRayGen.sampleId = aImageId;
             sSimpleIntegratorRnd.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, grid, sRandomRayGen, aFrameBuffer, aImageId);
 
         }
         break;
     case 1:
-        sRandomRayGen.dcImageId = aImageId;
+        sRandomRayGen.sampleId = aImageId;
         sPathTracer.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, sLights, grid, sRandomRayGen, aFrameBuffer, aImageId);
         break;
+    case 2:
+        sRandomRayGen.sampleId = aImageId;
+        sAOIntegrator.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray,grid, sRandomRayGen, aFrameBuffer, aImageId);
     default:
         break;
     }//switch ( mRenderMode )

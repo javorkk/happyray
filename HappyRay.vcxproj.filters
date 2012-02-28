@@ -217,6 +217,12 @@
     <ClInclude Include="src\RT\Integrator\PathTracer.h">
       <Filter>RT\Integrator</Filter>
     </ClInclude>
+    <ClInclude Include="src\DeviceConstants.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Integrator\AOIntegrator.h">
+      <Filter>RT\Integrator</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\stdafx.cpp">

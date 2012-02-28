@@ -6,6 +6,7 @@
 #define PATHTRACER_H_DD9E04C2_BF7C_4C6E_8560_05836A9EF2FF
 
 #include "CUDAStdAfx.h"
+#include "DeviceConstants.h"
 #include "Core/Algebra.hpp"
 #include "Core/Flags.hpp"
 
@@ -24,16 +25,16 @@ static const int OCCLUSIONSAMPLESX = 1;
 static const int OCCLUSIONSAMPLESY = 1;
 static const int NUMOCCLUSIONSAMPLES  = OCCLUSIONSAMPLESX * OCCLUSIONSAMPLESY;
 
-
-DEVICE_NO_INLINE CONSTANT FrameBuffer                                               dcFrameBuffer;
-DEVICE_NO_INLINE CONSTANT PrimitiveAttributeArray<PhongMaterial>                    dcMaterialStorage;
-//DEVICE_NO_INLINE CONSTANT AreaLightSourceCollection                                 dcLightSources;
-DEVICE_NO_INLINE CONSTANT uint                                                      dcNumPixels;
-
-DEVICE_NO_INLINE CONSTANT float dcPrimesRCP[] = {0.5f, 0.333333f, 0.2f, 0.142857f,
-0.09090909f, 0.07692307f, 0.058823529f, 0.0526315789f, 0.04347826f,
-0.034482758f, 0.032258064f};
-
+//////////////////////////////////////////////////////////////////////////
+//in DeviceConstants.h:
+//DEVICE_NO_INLINE CONSTANT PrimitiveAttributeArray<PhongMaterial>                    dcMaterialStorage;
+////DEVICE_NO_INLINE CONSTANT AreaLightSourceCollection                                 dcLightSources;
+//DEVICE_NO_INLINE CONSTANT uint                                                      dcNumPixels;
+//
+//DEVICE_NO_INLINE CONSTANT float dcPrimesRCP[] = {0.5f, 0.333333f, 0.2f, 0.142857f,
+//0.09090909f, 0.07692307f, 0.058823529f, 0.0526315789f, 0.04347826f,
+//0.034482758f, 0.032258064f};
+//////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //Path Tracing Kernel
@@ -431,7 +432,7 @@ GLOBAL void computeDirectIllumination(
                         PrimitiveArray<tPrimitive>              aStorage,
                         VtxAttributeArray<tPrimitive, float3>   aNormalStorage,
                         SimpleRayBuffer                         aInputBuffer,
-                        DirecIlluminationBuffer                      aOcclusionBuffer,
+                        DirectIlluminationBuffer                      aOcclusionBuffer,
                         AreaLightSourceCollection               aLSCollection,
                         FrameBuffer                             oFinalImage,
                         int                                     dcNumRays, //shadow rays
@@ -701,7 +702,7 @@ GLOBAL void addIndirectIllumination(
         typedef tAccelerationStructure                                  t_AccelerationStructure;
         typedef AreaLightShadowRayGenerator < OCCLUSIONSAMPLESX, OCCLUSIONSAMPLESY>  t_ShadowRayGenerator;
         typedef ImportanceBuffer                                        t_ImportanceBuffer;
-        typedef DirecIlluminationBuffer                                      t_OcclusionBuffer;
+        typedef DirectIlluminationBuffer                                      t_OcclusionBuffer;
 
         t_RayBuffer             rayBuffer;
       
@@ -749,7 +750,7 @@ GLOBAL void addIndirectIllumination(
                 numPixels * sizeof(float) +                 //rayBuffer : rayT
                 numPixels * sizeof(uint) +                  //rayBuffer : primitive Id
                 numPixels * sizeof(float3) +                //importanceBuffer : importance
-                numPixels * NUMOCCLUSIONSAMPLES * (sizeof(float3) + sizeof(float3)) + //occlusion buffer: light vector + light source id                
+                numPixels * NUMOCCLUSIONSAMPLES * (sizeof(float3) + sizeof(float3)) + //occlusion buffer: intensity and direction                
                 0u;
 
             MemoryManager::allocateDeviceArray((void**)&mGlobalMemoryPtr, globalMemorySize, (void**)&mGlobalMemoryPtr, mGlobalMemorySize);
@@ -785,7 +786,7 @@ GLOBAL void addIndirectIllumination(
             MY_CUDA_SAFE_CALL( cudaMemset( mGlobalMemoryPtr, 0, sizeof(uint)) );
 
             //MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcGrid", &aAccStruct, sizeof(UniformGrid)) );
-            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcFrameBuffer", &aFrameBuffer, sizeof(FrameBuffer)) );
+            //MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcFrameBuffer", &aFrameBuffer, sizeof(FrameBuffer)) );
             MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcMaterialStorage", &aMaterialStorage, sizeof(PrimitiveAttributeArray<PhongMaterial>)) );
             MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcNumPixels", &numPixels, sizeof(uint)) );
 

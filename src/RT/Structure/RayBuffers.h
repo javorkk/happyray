@@ -184,11 +184,13 @@ public:
 };
 
 
-class DirecIlluminationBuffer
+class DirectIlluminationBuffer
 {
     void* mMemoryPtr;
+    //const float UNOCCLUDED_RAY_LENGTH;
 public:
-    DirecIlluminationBuffer(void* aMemPtr): mMemoryPtr(aMemPtr)
+    DirectIlluminationBuffer(void* aMemPtr, float aRayT = 0.9999f): mMemoryPtr(aMemPtr)//,
+        //UNOCCLUDED_RAY_LENGTH(aRayT)
     {}
 
     HOST DEVICE void* getData() const
@@ -200,7 +202,7 @@ public:
         const uint aBestHit, const uint aRayId, const uint aNumRays)  const
     {
         float3 outDir;
-        if (aRayT < 0.9999f)
+        if (aRayT < 0.999f)
         {
             if(aRayT > 0.f)
             {
