@@ -617,12 +617,12 @@ void SDLGLApplication::nextRenderMode()
     switch ( mRenderMode ) 
     {
     case DEFAULT:
-        mRenderMode = RENDERMODE1;
+        mRenderMode = PATH_TRACE;
         break;
-    case RENDERMODE1:
-        mRenderMode = RENDERMODE2;
+    case PATH_TRACE:
+        mRenderMode = AMBIENT_OCCLUSION;
         break;
-    case RENDERMODE2:
+    case AMBIENT_OCCLUSION:
     default:
         mRenderMode = DEFAULT;
         break;
@@ -758,10 +758,10 @@ void SDLGLApplication::displayFrame()
         case DEFAULT:
             renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 0);
             break;
-        case RENDERMODE1:
+        case PATH_TRACE:
             renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 1);
             break;
-        case RENDERMODE2:
+        case AMBIENT_OCCLUSION:
         default:
             renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 2);
             break;

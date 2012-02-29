@@ -219,7 +219,7 @@ public:
         const DirectIlluminationBuffer                 aOccBuff,
         const PrimitiveArray<tPrimitive>               aPrimitiveStorage,
         const VtxAttributeArray<tPrimitive, float3>    aNormalStorage,
-        int                                             aImageId,
+        int                                            aImageId,
         void* aMemPtr)
     {
         void* hostPtr;

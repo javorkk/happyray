@@ -33,7 +33,7 @@
 
 class SimpleRayBuffer
 {
-    static const int ELEMENTSIZE = 8;
+    //static const int ELEMENTSIZE = 8;
     void* mMemoryPtr;
 public:
     SimpleRayBuffer(void* aMemPtr): mMemoryPtr(aMemPtr)
@@ -186,11 +186,10 @@ public:
 
 class DirectIlluminationBuffer
 {
+protected:
     void* mMemoryPtr;
-    //const float UNOCCLUDED_RAY_LENGTH;
 public:
-    DirectIlluminationBuffer(void* aMemPtr, float aRayT = 0.9999f): mMemoryPtr(aMemPtr)//,
-        //UNOCCLUDED_RAY_LENGTH(aRayT)
+    DirectIlluminationBuffer(void* aMemPtr): mMemoryPtr(aMemPtr)
     {}
 
     HOST DEVICE void* getData() const
@@ -202,7 +201,7 @@ public:
         const uint aBestHit, const uint aRayId, const uint aNumRays)  const
     {
         float3 outDir;
-        if (aRayT < 0.999f)
+        if (aRayT < 0.9999f)
         {
             if(aRayT > 0.f)
             {
@@ -240,6 +239,27 @@ public:
     {
         return *((float3*)((char*)mMemoryPtr + aNumSamples * sizeof(float3)) + aSampleId);
     }    
+
+};
+
+class AOIlluminationBuffer: public DirectIlluminationBuffer
+{
+     const float UNOCCLUDED_RAY_LENGTH;
+public:
+    AOIlluminationBuffer(void* aMemPtr, float aRayT = 0.9999f): DirectIlluminationBuffer(aMemPtr),
+        UNOCCLUDED_RAY_LENGTH(aRayT)
+    {}
+
+    HOST DEVICE void store(const float3& aRayOrg, const float3& aRayDir, const float aRayT,
+        const uint aBestHit, const uint aRayId, const uint aNumRays)  const
+    {
+        if (aRayT < UNOCCLUDED_RAY_LENGTH)
+        {
+            //if occluded, overwrite the radiance
+            float3* rayOut = ((float3*)mMemoryPtr) + aRayId;
+            *rayOut = rep(0.f);
+        }
+    }
 
 };
 

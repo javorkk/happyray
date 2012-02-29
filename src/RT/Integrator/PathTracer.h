@@ -28,9 +28,7 @@ static const int NUMOCCLUSIONSAMPLES  = OCCLUSIONSAMPLESX * OCCLUSIONSAMPLESY;
 //////////////////////////////////////////////////////////////////////////
 //in DeviceConstants.h:
 //DEVICE_NO_INLINE CONSTANT PrimitiveAttributeArray<PhongMaterial>                    dcMaterialStorage;
-////DEVICE_NO_INLINE CONSTANT AreaLightSourceCollection                                 dcLightSources;
 //DEVICE_NO_INLINE CONSTANT uint                                                      dcNumPixels;
-//
 //DEVICE_NO_INLINE CONSTANT float dcPrimesRCP[] = {0.5f, 0.333333f, 0.2f, 0.142857f,
 //0.09090909f, 0.07692307f, 0.058823529f, 0.0526315789f, 0.04347826f,
 //0.034482758f, 0.032258064f};

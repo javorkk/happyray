@@ -21,10 +21,10 @@
 
 static const int NUMAMBIENTOCCLUSIONSAMPLES  = 1;
 
-//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 //in DeviceConstants.h:
-//DEVICE_NO_INLINE CONSTANT uint                            dcNumPixels;
-//////////////////////////////////////////////////////////////////////////
+//DEVICE_NO_INLINE CONSTANT uint                                        dcNumPixels;
+//////////////////////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //Ambient Occlusion Shading Kernel
@@ -35,6 +35,7 @@ template< class tPrimitive >
 GLOBAL void computeAOIllumination(
     PrimitiveArray<tPrimitive>              aStorage,
     VtxAttributeArray<tPrimitive, float3>   aNormalStorage,
+    PrimitiveAttributeArray<PhongMaterial>  aMaterialStorage,
     SimpleRayBuffer                         aInputBuffer,
     DirectIlluminationBuffer                aOcclusionBuffer,
     FrameBuffer                             oFrameBuffer,
@@ -103,7 +104,7 @@ GLOBAL void computeAOIllumination(
 
                 float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
 
-                PhongMaterial material = dcMaterialStorage[bestHit];
+                PhongMaterial material = aMaterialStorage[bestHit];
                 float3 diffReflectance = material.getDiffuseReflectance();
 
                 sharedVec[threadId1D()].x *= diffReflectance.x;
@@ -133,9 +134,16 @@ GLOBAL void computeAOIllumination(
             float newSampleWeight = 1.f / (float)(dcImageId + 1);
             float oldSamplesWeight = 1.f - newSampleWeight;
 
-            oFrameBuffer[myPixelIndex] =
-                oFrameBuffer[myPixelIndex] * oldSamplesWeight +
-                oRadiance * newSampleWeight;
+            if(dcImageId > 0)
+            {
+                oFrameBuffer[myPixelIndex] =
+                    oFrameBuffer[myPixelIndex] * oldSamplesWeight +
+                    oRadiance * newSampleWeight;
+            }
+            else
+            {
+                oFrameBuffer[myPixelIndex] = oRadiance;
+            }
         }
 
     }
@@ -163,7 +171,7 @@ public:
     typedef tPrimaryIntersector                                     t_Intersector;
     typedef tAccelerationStructure                                  t_AccelerationStructure;
     typedef AmbientOcclusionRayGenerator < tPrimitive, NUMAMBIENTOCCLUSIONSAMPLES >  t_AORayGenerator;
-    typedef DirectIlluminationBuffer                                t_OcclusionBuffer;
+    typedef AOIlluminationBuffer                                    t_AOcclusionBuffer;
 
     t_RayBuffer             rayBuffer;
 
@@ -201,7 +209,7 @@ public:
             numPixels * sizeof(float) +                 //rayBuffer : rayT
             numPixels * sizeof(uint) +                  //rayBuffer : primitive Id
             numPixels * sizeof(float3) +                //importanceBuffer : importance
-            numPixels * NUMAMBIENTOCCLUSIONSAMPLES * (sizeof(float3) + sizeof(float3)) + //ambient occlusion buffer: intensity and dummy direction               
+            numPixels * NUMAMBIENTOCCLUSIONSAMPLES * (sizeof(float3)) + //ambient occlusion buffer: intensity               
             0u;
 
         MemoryManager::allocateDeviceArray((void**)&mGlobalMemoryPtr, globalMemorySize, (void**)&mGlobalMemoryPtr, mGlobalMemorySize);
@@ -236,7 +244,7 @@ public:
         //////////////////////////////////////////////////////////////////////////////////////////////////////
         MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcNumPixels", &numPixels, sizeof(uint)) );
 
-        t_OcclusionBuffer occlusionBuffer(mGlobalMemoryPtr + 
+        t_AOcclusionBuffer occlusionBuffer(mGlobalMemoryPtr + 
             1 +                             //Persistent threads
             numPixels * 3 +                 //rayBuffer : rayOrg
             numPixels * 3 +                 //rayBuffer : rayDir
@@ -258,7 +266,7 @@ public:
         MY_CUDA_SAFE_CALL( cudaMemset( mGlobalMemoryPtr, 0, sizeof(uint)) );
         const uint numAORays = numPixels * NUMAMBIENTOCCLUSIONSAMPLES;
 
-        trace<tPrimitive, tAccelerationStructure, t_AORayGenerator, t_OcclusionBuffer, tTraverser, tPrimaryIntersector, true>
+        trace<tPrimitive, tAccelerationStructure, t_AORayGenerator, t_AOcclusionBuffer, tTraverser, tPrimaryIntersector, true>
             <<< blockGridTrace, threadBlockTrace, sharedMemoryTrace>>>(
             aStorage,
             ambientOcclusionRayGenerator,
@@ -272,9 +280,8 @@ public:
         MY_CUT_CHECK_ERROR("Tracing shadow rays failed!\n");
 
         //////////////////////////////////////////////////////////////////////////////////////////////////////
-        //direct illumination at the end of each path
+        //AO illumination
         //////////////////////////////////////////////////////////////////////////////////////////////////////
-
         dim3 threadBlockDI( 24*NUMAMBIENTOCCLUSIONSAMPLES );
         dim3 blockGridDI  ( 120 );
 
@@ -286,6 +293,7 @@ public:
             <<< blockGridDI, threadBlockDI, sharedMemoryShade>>>(
             aStorage,
             aNormalStorage,
+            aMaterialStorage,
             rayBuffer,
             occlusionBuffer,
             aFrameBuffer,

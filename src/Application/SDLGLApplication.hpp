@@ -83,7 +83,7 @@ class SDLGLApplication
     int mNumScreenshots;
     bool mDumpFrames;
     bool mPauseAnimation;
-    enum RenderMode {DEFAULT = 0, RENDERMODE1 = 1, RENDERMODE2 = 2};
+    enum RenderMode {DEFAULT = 0, PATH_TRACE = 1, AMBIENT_OCCLUSION = 2};
     RenderMode mRenderMode;
     //////////////////////////////////////////////////////////////////////////
     //IO
