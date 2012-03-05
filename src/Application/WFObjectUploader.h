@@ -7,6 +7,7 @@
 
 #include "RT/Primitive/Primitive.hpp"
 #include "RT/Primitive/Material.hpp"
+#include "RT/Structure/3DTextureMemoryManager.h"
 #include "Application/WFObject.hpp"
 #include "RT/Structure/PrimitiveArray.h"
 #include "RT/Structure/MemoryManager.h"
@@ -322,6 +323,86 @@ public:
         MY_CUDA_SAFE_CALL( cudaMemcpy( materialIndicesDevice, materialIndicesHost, indicesNewSize, cudaMemcpyHostToDevice) );
 
     }
+
+    HOST void ObjUploader::uploadObjFrameTextureData(
+        const WFObject& aKeyFrame2,
+        PrimitiveAttributeArray< TexturedPhongMaterial >& aArray,
+        TextureMemoryManager& aTexMemoryManager)
+    {
+        const size_t numMaterials = aKeyFrame2.getNumMaterials();
+        const size_t materialsNewSize = numMaterials * sizeof(TexturedPhongMaterial);
+
+        ////////////////////////////////////////////////////////////
+        //cleanup
+        ////////////////////////////////////////////////////////////
+        MemoryManager::allocateHostDeviceArrayPair(
+            (void**)&aArray.dataBufferDevicePtr,
+            (void**)&aArray.dataBufferHostPtr,
+            materialsNewSize,
+            (void**)&aArray.dataBufferDevicePtr,
+            (void**)&aArray.dataBufferHostPtr,
+            aArray.dataBufferSize);
+
+        TexturedPhongMaterial* matHost = aArray.dataBufferHostPtr;
+        TexturedPhongMaterial* matDevice = aArray.dataBufferDevicePtr;
+
+        //////////////////////////////////////////////////////////////////////////
+        //Copy and transfer data
+        //////////////////////////////////////////////////////////////////////////        
+        TexturedPhongMaterial current = aTexMemoryManager.getParameters();
+        for (size_t it = 0; it < numMaterials; ++it)
+        {
+            current.diffuseReflectance.x = aKeyFrame2.getMaterial(it).diffuseCoeff.x;
+            current.diffuseReflectance.y = aKeyFrame2.getMaterial(it).diffuseCoeff.y;
+            current.diffuseReflectance.z = aKeyFrame2.getMaterial(it).diffuseCoeff.z;
+            current.diffuseReflectance.w = aKeyFrame2.getMaterial(it).indexOfRefraction;
+            if(aKeyFrame2.getMaterial(it).isRefractive)
+                current.diffuseReflectance.w += 10.f;
+            current.specularReflectance.x = aKeyFrame2.getMaterial(it).specularCoeff.x;
+            current.specularReflectance.y = aKeyFrame2.getMaterial(it).specularCoeff.y;
+            current.specularReflectance.z = aKeyFrame2.getMaterial(it).specularCoeff.z;
+            current.specularReflectance.w = aKeyFrame2.getMaterial(it).specularExp;
+
+            //current.emission.x = aKeyFrame2.getMaterial(it).emission.x;
+            //current.emission.y = aKeyFrame2.getMaterial(it).emission.y;
+            //current.emission.z = aKeyFrame2.getMaterial(it).emission.z;
+            //current.emission.w = 0.f;
+
+            matHost[it] = current;
+        }
+
+        MY_CUDA_SAFE_CALL( cudaMemcpy( matDevice, matHost, materialsNewSize, cudaMemcpyHostToDevice) );
+
+        const size_t numIndices = aKeyFrame2.getNumFaces();
+        const size_t indicesNewSize = numIndices * sizeof(uint);
+
+        ////////////////////////////////////////////////////////////
+        //cleanup
+        ////////////////////////////////////////////////////////////
+        MemoryManager::allocateHostDeviceArrayPair(
+            (void**)&aArray.indicesBufferDevicePtr,
+            (void**)&aArray.indicesBufferHostPtr,
+            indicesNewSize,
+            (void**)&aArray.indicesBufferDevicePtr,
+            (void**)&aArray.indicesBufferHostPtr,
+            aArray.indicesBufferSize);
+
+        uint* materialIndicesHost = aArray.indicesBufferHostPtr;
+        uint* materialIndicesDevice = aArray.indicesBufferDevicePtr;
+
+
+        //////////////////////////////////////////////////////////////////////////
+        //Copy and transfer indices
+        //////////////////////////////////////////////////////////////////////////
+        for (size_t it = 0; it < numIndices; ++it)
+        {
+            materialIndicesHost[it] = aKeyFrame2.getFace(it).material;
+        }
+
+        MY_CUDA_SAFE_CALL( cudaMemcpy( materialIndicesDevice, materialIndicesHost, indicesNewSize, cudaMemcpyHostToDevice) );
+
+    }
+
 
 
 };//class ObjUploader

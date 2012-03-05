@@ -31,6 +31,7 @@
 
 #include "CUDAStdAfx.h"
 #include <vector_types.h> //float3
+#include <vector_functions.h> //make_float3
 //#include <math.h> //sqrtf
 
 

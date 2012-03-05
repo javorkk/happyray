@@ -25,6 +25,8 @@
 #include "Textures.h"
 #include "RT/RTEngine.h"
 
+#include "Core/Algebra.hpp"
+
 #include "Application/WFObjectUploader.h"
 
 #include "RT/Primitive/LightSource.hpp"
@@ -32,6 +34,7 @@
 #include "RT/Primitive/Triangle.hpp"
 #include "RT/Primitive/Camera.h"
 #include "RT/Primitive/Material.hpp"
+#include "RT/Structure/3DTextureMemoryManager.h"
 #include "RT/Structure/UGridMemoryManager.h"
 #include "RT/Algorithm/UGridSortBuilder.h"
 #include "RT/Structure/TLGridMemoryManager.h"
@@ -41,7 +44,8 @@
 
 #include "RT/Integrator/SimpleIntegrator.h"
 #include "RT/Integrator/PathTracer.h"
-#include "RT/Integrator/AOIntegrator.h"
+#include "RT/Integrator/AOIntegrator.h" //USE_3D_TEXTURE defined there
+
 
 
 typedef Triangle    t_Primitive;
@@ -68,6 +72,8 @@ int                                             sFrameId = 0;
 PrimitiveArray<t_Primitive>                     sTriangleArray;
 VtxAttributeArray<t_Primitive, float3>          sTriangleNormalArray;
 PrimitiveAttributeArray<PhongMaterial>          sMaterialArray;
+PrimitiveAttributeArray<TexturedPhongMaterial>  sTexMaterialArray;
+TextureMemoryManager                            sDefaultTextureManager;
 AreaLightSourceCollection                       sLights;
 t_MemoryManager                                 sMemoryManager;
 t_AccStructBuilder                              sBuilder;
@@ -146,6 +152,48 @@ void RTEngine::upload(
 
     uploader.uploadObjFrameMaterialData(aFrame2, sMaterialArray);
 
+#ifdef USE_3D_TEXTURE
+    bool updateTexture = sDefaultTextureManager.bounds.vtx[0].x != sMemoryManager.bounds.vtx[0].x ||
+        sDefaultTextureManager.bounds.vtx[0].y != sMemoryManager.bounds.vtx[0].y ||
+        sDefaultTextureManager.bounds.vtx[0].z != sMemoryManager.bounds.vtx[0].z ||
+        sDefaultTextureManager.resX != sMemoryManager.resX ||
+        sDefaultTextureManager.resY != sMemoryManager.resY ||
+        sDefaultTextureManager.resZ != sMemoryManager.resZ;
+
+    if(updateTexture)
+    {
+        sDefaultTextureManager.bounds = sMemoryManager.bounds;
+        sDefaultTextureManager.resX = cudastd::max(sMemoryManager.resX, 1);
+        sDefaultTextureManager.resY = cudastd::max(sMemoryManager.resX, 1);
+        sDefaultTextureManager.resZ = cudastd::max(sMemoryManager.resX, 1);
+        sDefaultTextureManager.allocateDataHost();
+        for(int z = 0; z < sDefaultTextureManager.resZ; ++z)
+        {
+            for(int y = 0; y < sDefaultTextureManager.resY; ++y)
+            {
+                for(int x = 0; x < sDefaultTextureManager.resX; ++x)
+                {
+                    bool oddCell = (x + y + z) % 2 == 1;
+                    float3 texColor;
+                    if(oddCell)
+                    {
+                        texColor = make_float3(0.15f, 0.2f, 0.3f);
+                    }
+                    else
+                    {
+                        texColor = make_float3(0.7f, 0.7f, 0.7f);
+                    }
+                    sDefaultTextureManager.getTexel(x,y,z) = texColor;
+                }
+            }
+        }
+        sDefaultTextureManager.allocateDataDevice();
+        sDefaultTextureManager.copyDataHostToDevice();
+
+        uploader.uploadObjFrameTextureData(aFrame2, sTexMaterialArray, sDefaultTextureManager);
+    }
+#endif
+
     sAOIntegrator.setAlpha(len(sMemoryManager.bounds.vtx[1]- sMemoryManager.bounds.vtx[0]) * 0.05f);
 
 }
@@ -210,7 +258,11 @@ void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId, const 
         break;
     case 2:
         sRandomRayGen.sampleId = aImageId;
+#ifdef USE_3D_TEXTURE
+        sAOIntegrator.integrate(sTriangleArray, sTriangleNormalArray, sTexMaterialArray, grid, sRandomRayGen, aFrameBuffer, aImageId);
+#else
         sAOIntegrator.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray,grid, sRandomRayGen, aFrameBuffer, aImageId);
+#endif
     default:
         break;
     }//switch ( mRenderMode )
@@ -222,6 +274,9 @@ void RTEngine::cleanup()
     sMemoryManager.cleanup();
     sTriangleArray.cleanup();
     sTriangleNormalArray.cleanup();
+    sMaterialArray.cleanup();
+    sTexMaterialArray.cleanup();
+    sDefaultTextureManager.cleanup();
     sSimpleIntegratorReg.cleanup();
     sSimpleIntegratorRnd.cleanup();
     sPathTracer.cleanup();

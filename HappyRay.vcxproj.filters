@@ -223,6 +223,9 @@
     <ClInclude Include="src\RT\Integrator\AOIntegrator.h">
       <Filter>RT\Integrator</Filter>
     </ClInclude>
+    <ClInclude Include="src\RT\Structure\3DTextureMemoryManager.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\stdafx.cpp">
@@ -287,5 +290,6 @@
     <CudaCompile Include="src\RT\Primitive\LightSource.cu">
       <Filter>RT\Primitive</Filter>
     </CudaCompile>
+    <CudaCompile Include="src\RT\Structure\3DTextureMemoryManager.cu" />
   </ItemGroup>
 </Project>

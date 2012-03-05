@@ -1,3 +1,26 @@
+/****************************************************************************/
+/* Copyright (c) 2011, Javor Kalojanov
+* 
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+* 
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+* 
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+* THE SOFTWARE.
+*/
+/****************************************************************************/
+
 #ifdef _MSC_VER
 #pragma once
 #endif
@@ -21,6 +44,13 @@
 
 static const int NUMAMBIENTOCCLUSIONSAMPLES  = 1;
 
+//#define USE_3D_TEXTURE //instead of scene materials
+#ifdef USE_3D_TEXTURE
+typedef TexturedPhongMaterial t_Material;
+#else
+typedef PhongMaterial t_Material;
+#endif
+
 //////////////////////////////////////////////////////////////////////////////////////////
 //in DeviceConstants.h:
 //DEVICE_NO_INLINE CONSTANT uint                                        dcNumPixels;
@@ -35,7 +65,7 @@ template< class tPrimitive >
 GLOBAL void computeAOIllumination(
     PrimitiveArray<tPrimitive>              aStorage,
     VtxAttributeArray<tPrimitive, float3>   aNormalStorage,
-    PrimitiveAttributeArray<PhongMaterial>  aMaterialStorage,
+    PrimitiveAttributeArray<t_Material>  aMaterialStorage,
     SimpleRayBuffer                         aInputBuffer,
     DirectIlluminationBuffer                aOcclusionBuffer,
     FrameBuffer                             oFrameBuffer,
@@ -104,8 +134,8 @@ GLOBAL void computeAOIllumination(
 
                 float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
 
-                PhongMaterial material = aMaterialStorage[bestHit];
-                float3 diffReflectance = material.getDiffuseReflectance();
+                t_Material material = aMaterialStorage[bestHit];
+                float3 diffReflectance = material.getDiffuseReflectance(rayOrg.x, rayOrg.y, rayOrg.z);
 
                 sharedVec[threadId1D()].x *= diffReflectance.x;
                 sharedVec[threadId1D()].y *= diffReflectance.y;
@@ -134,16 +164,10 @@ GLOBAL void computeAOIllumination(
             float newSampleWeight = 1.f / (float)(dcImageId + 1);
             float oldSamplesWeight = 1.f - newSampleWeight;
 
-            if(dcImageId > 0)
-            {
-                oFrameBuffer[myPixelIndex] =
-                    oFrameBuffer[myPixelIndex] * oldSamplesWeight +
-                    oRadiance * newSampleWeight;
-            }
-            else
-            {
-                oFrameBuffer[myPixelIndex] = oRadiance;
-            }
+
+            oFrameBuffer[myPixelIndex] =
+                oFrameBuffer[myPixelIndex] * oldSamplesWeight +
+                oRadiance * newSampleWeight;
         }
 
     }
@@ -193,7 +217,7 @@ public:
     HOST void integrate(
         PrimitiveArray<tPrimitive>&                     aStorage,
         VtxAttributeArray<tPrimitive, float3>&          aNormalStorage,
-        PrimitiveAttributeArray<PhongMaterial>&         aMaterialStorage,
+        PrimitiveAttributeArray<t_Material>&         aMaterialStorage,
         t_AccelerationStructure&                        aAccStruct,
         t_PrimaryRayGenerator&                          aRayGenerator,
         FrameBuffer&                                    aFrameBuffer,
