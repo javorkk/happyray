@@ -131,5 +131,8 @@ HOST void TextureMemoryManager::cleanup()
     {
         freeDataDevice();
         freeDataHost();
+
+        oldResX = oldResY = oldResZ = 0;
+        resX = resY = resZ = 1;
     }
 }
