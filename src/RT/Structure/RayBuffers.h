@@ -244,8 +244,9 @@ public:
 
 class AOIlluminationBuffer: public DirectIlluminationBuffer
 {
-     const float UNOCCLUDED_RAY_LENGTH;
 public:
+    const float UNOCCLUDED_RAY_LENGTH;
+
     AOIlluminationBuffer(void* aMemPtr, float aRayT = 0.9999f): DirectIlluminationBuffer(aMemPtr),
         UNOCCLUDED_RAY_LENGTH(aRayT)
     {}

@@ -216,7 +216,7 @@ public:
 
     AmbientOcclusionRayGenerator(
         const SimpleRayBuffer                          aBuffer,
-        const DirectIlluminationBuffer                 aOccBuff,
+        const AOIlluminationBuffer                     aOccBuff,
         const PrimitiveArray<tPrimitive>               aPrimitiveStorage,
         const VtxAttributeArray<tPrimitive, float3>    aNormalStorage,
         int                                            aImageId,
@@ -226,8 +226,8 @@ public:
         MY_CUDA_SAFE_CALL(cudaHostAlloc((void**)&hostPtr, getParametersSize(), cudaHostAllocDefault));
         memcpy(hostPtr, (void*)&aBuffer, sizeof(SimpleRayBuffer));        
         void* nextSlot = (char*)hostPtr + sizeof(SimpleRayBuffer);
-        memcpy(nextSlot, (void*)&aOccBuff, sizeof(DirectIlluminationBuffer));
-        nextSlot = (char*)nextSlot + sizeof(DirectIlluminationBuffer);
+        memcpy(nextSlot, (void*)&aOccBuff, sizeof(AOIlluminationBuffer));
+        nextSlot = (char*)nextSlot + sizeof(AOIlluminationBuffer);
         memcpy(nextSlot, (void*)&aPrimitiveStorage, sizeof(PrimitiveArray<tPrimitive>));
         nextSlot = (char*)nextSlot + sizeof(PrimitiveArray<tPrimitive>);
         memcpy(nextSlot, (void*)&aNormalStorage, sizeof(VtxAttributeArray<tPrimitive, float3>));
@@ -243,31 +243,31 @@ public:
     
     static int getParametersSize()
     {
-         return 2*sizeof(SimpleRayBuffer) + sizeof(DirectIlluminationBuffer) + sizeof(PrimitiveArray<tPrimitive>) + sizeof(VtxAttributeArray<tPrimitive, float3>) + sizeof(int);
+         return 2*sizeof(SimpleRayBuffer) + sizeof(AOIlluminationBuffer) + sizeof(PrimitiveArray<tPrimitive>) + sizeof(VtxAttributeArray<tPrimitive, float3>) + sizeof(int);
     }
     DEVICE SimpleRayBuffer* getBuffer()
     {
         return (SimpleRayBuffer*)mMemoryPtr;
     }
 
-    DEVICE DirectIlluminationBuffer* getOcclusionBuffer()
+    DEVICE AOIlluminationBuffer* getOcclusionBuffer()
     {
-        return (DirectIlluminationBuffer*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer));
+        return (AOIlluminationBuffer*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer));
     }
 
     DEVICE PrimitiveArray<tPrimitive>* getPrimitiveStorage()
     {
-        return (PrimitiveArray<tPrimitive>*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer) + sizeof(DirectIlluminationBuffer));
+        return (PrimitiveArray<tPrimitive>*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer) + sizeof(AOIlluminationBuffer));
     }
 
     DEVICE VtxAttributeArray<tPrimitive, float3>* getNormalStorage()
     {
-        return (VtxAttributeArray<tPrimitive, float3>*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer) + sizeof(DirectIlluminationBuffer) + sizeof(PrimitiveArray<tPrimitive>));
+        return (VtxAttributeArray<tPrimitive, float3>*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer) + sizeof(AOIlluminationBuffer) + sizeof(PrimitiveArray<tPrimitive>));
     }
 
     DEVICE int getSampleId()
     {
-        return *(int*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer) + sizeof(DirectIlluminationBuffer) + sizeof(PrimitiveArray<tPrimitive>) + sizeof(VtxAttributeArray<tPrimitive, float3>));
+        return *(int*)((char*)mMemoryPtr + sizeof(SimpleRayBuffer) + sizeof(AOIlluminationBuffer) + sizeof(PrimitiveArray<tPrimitive>) + sizeof(VtxAttributeArray<tPrimitive, float3>));
 
     }
 
@@ -332,7 +332,7 @@ public:
         getLocalCoordinates(normal, tangent, binormal);
 
         oRayDir = ~(normal * tmpDir.z + tangent * tmpDir.x + binormal * tmpDir.y);
-        oRayOrg += 100.f * EPS * oRayDir;
+        oRayOrg += 0.01f * getOcclusionBuffer()->UNOCCLUDED_RAY_LENGTH * oRayDir;
 
         float3 lsRadiance = rep(1.f);
         getOcclusionBuffer()->storeLSIntensity(lsRadiance, aRayId, aNumShadowRays);

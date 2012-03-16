@@ -65,9 +65,9 @@ template< class tPrimitive >
 GLOBAL void computeAOIllumination(
     PrimitiveArray<tPrimitive>              aStorage,
     VtxAttributeArray<tPrimitive, float3>   aNormalStorage,
-    PrimitiveAttributeArray<t_Material>  aMaterialStorage,
+    PrimitiveAttributeArray<t_Material>     aMaterialStorage,
     SimpleRayBuffer                         aInputBuffer,
-    DirectIlluminationBuffer                aOcclusionBuffer,
+    AOIlluminationBuffer                    aOcclusionBuffer,
     FrameBuffer                             oFrameBuffer,
     int                                     dcNumRays, //AO rays
     int                                     dcImageId)
@@ -201,7 +201,7 @@ public:
 
 
     AOIntegrator(float aAlpha = 10.f):rayBuffer(t_RayBuffer(NULL)), 
-        mGlobalMemorySize(0u), mAORayGeneratorMemorySize(0u)
+        mGlobalMemorySize(0u), mAORayGeneratorMemorySize(0u), mAlpha(aAlpha)
     {}
 
     ~AOIntegrator()
@@ -301,7 +301,7 @@ public:
 
         cudaEventRecord(mTrace, 0);
         cudaEventSynchronize(mTrace);
-        MY_CUT_CHECK_ERROR("Tracing shadow rays failed!\n");
+        MY_CUT_CHECK_ERROR("Tracing ambient occlusion rays failed!\n");
 
         //////////////////////////////////////////////////////////////////////////////////////////////////////
         //AO illumination
@@ -326,7 +326,7 @@ public:
 
         cudaEventRecord(mTrace, 0);
         cudaEventSynchronize(mTrace);
-        MY_CUT_CHECK_ERROR("Computing direct illumination failed!\n");
+        MY_CUT_CHECK_ERROR("Computing ambient illumination failed!\n");
 
         cudaEventDestroy(mTrace);
     }
