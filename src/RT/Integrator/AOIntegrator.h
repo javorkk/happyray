@@ -132,7 +132,7 @@ GLOBAL void computeAOIllumination(
                 float3& normal1 = normals.data[1];
                 float3& normal2 = normals.data[2];
 
-                float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
+                float3 normal = ~realNormal;//~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
 
                 t_Material material = aMaterialStorage[bestHit];
                 float3 diffReflectance = material.getDiffuseReflectance(rayOrg.x, rayOrg.y, rayOrg.z);
@@ -141,11 +141,17 @@ GLOBAL void computeAOIllumination(
                 sharedVec[threadId1D()].y *= diffReflectance.y;
                 sharedVec[threadId1D()].z *= diffReflectance.z;
 
+                float sinZNormal = fmaxf(0.f,sqrtf(1.f - normal.z));
+                float cosEyeNormal = fabsf(dot(rayDir, normal));
+                sharedVec[threadId1D()].x *= (0.6f * cosEyeNormal + 0.3f * sinZNormal);
+                sharedVec[threadId1D()].y *= (0.6f * cosEyeNormal + 0.2f * sinZNormal);
+                sharedVec[threadId1D()].z *= (0.7f * cosEyeNormal /*+ 0.1f * sinZNormal + 0.1f * (1.f  - sinZNormal)*/);
+
             }
         }
         else if (myRayIndex < dcNumRays)
         {
-            sharedVec[threadId1D()] = rep(0.f);
+            sharedVec[threadId1D()] = rep(1.f);
         }//endif hit point exists
 
         SYNCTHREADS;

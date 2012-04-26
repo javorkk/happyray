@@ -316,7 +316,9 @@ public:
         float3& normal1 = normals.data[1];
         float3& normal2 = normals.data[2];
 
-        float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);        
+        float3 normal = ~realNormal; /* ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);  */
+        if(dot(normal, oRayDir) > 0.f)
+            normal = -normal;
         //////////////////////////////////////////////////////////////////////////
         //generate random direction and transform it in global coordinates
         typedef KISSRandomNumberGenerator       t_RNG;
