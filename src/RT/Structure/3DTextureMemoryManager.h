@@ -55,8 +55,11 @@ public:
     HOST void checkResolution();
 
 
-    float3& getTexel(uint aX, uint aY, uint aZ = 0u)
+    float3& getTexel(uint aX, uint aY = 0u, uint aZ = 0u)
     {
+        aX = min(aX, resX - 1);
+        aY = min(aY, resY - 1);
+        aZ = min(aZ, resZ - 1);
         return *((float3*)((char*)texelPtrHost.ptr + aY * texelPtrHost.pitch + aZ * texelPtrHost.pitch * texelPtrHost.ysize) + aX);
     }
 
