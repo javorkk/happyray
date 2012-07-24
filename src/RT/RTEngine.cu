@@ -31,6 +31,7 @@
 
 #include "RT/Primitive/LightSource.hpp"
 #include "RT/Structure/PrimitiveArray.h"
+#include "RT/Structure/TexturedPrimitiveArray.h"
 #include "RT/Primitive/Triangle.hpp"
 #include "RT/Primitive/Camera.h"
 #include "RT/Primitive/Material.hpp"
@@ -69,7 +70,7 @@ float                                   sLeafLevelDensity = 1.2f; //dummy
 #endif
 
 int                                             sFrameId = 0;
-PrimitiveArray<t_Primitive>                     sTriangleArray;
+TexturedPrimitiveArray<t_Primitive>             sTriangleArray;
 VtxAttributeArray<t_Primitive, float3>          sTriangleNormalArray;
 PrimitiveAttributeArray<PhongMaterial>          sMaterialArray;
 PrimitiveAttributeArray<TexturedPhongMaterial>  sTexMaterialArray;

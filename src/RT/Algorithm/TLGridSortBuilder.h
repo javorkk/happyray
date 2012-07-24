@@ -298,9 +298,9 @@ public:
         //////////////////////////////////////////////////////////////////////////
         //DEBUG
         //cudastd::logger::out << "Scanned leaf level reference counts: ";
-        //#if HAPPYRAY__CUDA_ARCH__ < 120
-        //MY_CUDA_SAFE_CALL( cudaMemcpy(aMemoryManager.refCountsBufferHost, aMemoryManager.refCountsBuffer, (numCounters + 1) * sizeof(uint), cudaMemcpyDeviceToHost ));
-        //#endif
+        ////#if HAPPYRAY__CUDA_ARCH__ < 120
+        ////MY_CUDA_SAFE_CALL( cudaMemcpy(aMemoryManager.refCountsBufferHost, aMemoryManager.refCountsBuffer, (numCounters + 1) * sizeof(uint), cudaMemcpyDeviceToHost ));
+        ////#endif
         //for(int it = 0; it < numCounters + 1; ++it)
         //{
         //    cudastd::logger::out << aMemoryManager.refCountsBufferHost[it] << " ";

@@ -29,7 +29,6 @@
 #define PRIMITIVEARRAY_H_INCLUDED_4D30F730_121F_4E9F_915B_1814410DAEB0
 
 #include "CUDAStdAfx.h"
-#include "Textures.h"
 
 template<class tPrimitive>
 class PrimitiveArray
@@ -61,7 +60,6 @@ public:
 
     HOST void cleanup()
     {
-
         if(vertexBufferHostPtr != NULL)
             MY_CUDA_SAFE_CALL( cudaFreeHost(vertexBufferHostPtr) );
         if(indicesBufferHostPtr != NULL)
@@ -87,36 +85,6 @@ public:
         return vertexBufferSize + indicesBufferSize + normalBufferSize;
     }
 
-    HOST void unbindVerticesTexture()
-    {
-        MY_CUDA_SAFE_CALL( cudaUnbindTexture( &texVertices) );
-    }
-
-    HOST void unbindIndicesTexture()
-    {
-        MY_CUDA_SAFE_CALL( cudaUnbindTexture( &texVertexIndices) );
-    }
-
-    HOST void bindVerticesTexture(float4*& aVertexData, const size_t aDataSize)
-    {
-        cudaChannelFormatDesc chanelFormatDesc =
-            cudaCreateChannelDesc<float4>();
-
-        MY_CUDA_SAFE_CALL( cudaBindTexture(NULL, texVertices,
-            (void*) aVertexData, chanelFormatDesc, aDataSize) );
-
-    }
-
-    HOST void bindIndicesTexture(uint*& aIndicesData, const size_t aDataSize)
-    {
-        cudaChannelFormatDesc chanelFormatDesc =
-            cudaCreateChannelDesc<uint>();
-
-        MY_CUDA_SAFE_CALL( cudaBindTexture(NULL, texVertexIndices,
-            (void*) aIndicesData, chanelFormatDesc, aDataSize) );
-
-    }
-
     ////////////////////////////////////////////////////////////
     //Device Functions
     ////////////////////////////////////////////////////////////
@@ -128,8 +96,7 @@ public:
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-            indices[i] = tex1Dfetch(texVertexIndices, aIndex * tPrimitive::NUM_VERTICES + i);
-            //indices[i] = indicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i];
+            indices[i] = indicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i];
         }
 
         tPrimitive result;
@@ -137,8 +104,7 @@ public:
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-             float4 tmp = tex1Dfetch(texVertices, indices[i]);
-             //float4 tmp = vertexBufferDevicePtr[indices[i]];
+             float4 tmp = vertexBufferDevicePtr[indices[i]];
              result.vtx[i].x = tmp.x;
              result.vtx[i].y = tmp.y;
              result.vtx[i].z = tmp.z;
@@ -148,6 +114,8 @@ public:
     }
 
 };//class Primitive Array
+
+
 
 template<class tPrimitive, class tType>
 class VtxAttribStruct

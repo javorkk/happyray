@@ -48,6 +48,8 @@ public:
     cudaArray* cellArray;
 
     uint* primitiveIndices;
+    uint* primitiveIndicesHost;
+
     size_t primitiveIndicesSize;
 
     //////////////////////////////////////////////////////////////////////////
@@ -68,7 +70,7 @@ public:
     UGridMemoryManager()
         :resX(0), resY(0), resZ(0), oldResX(0), oldResY(0), oldResZ(0), bounds(BBox::empty()),
         cpuCells(NULL), gpuCells(NULL), cellArray(NULL), primitiveIndices(NULL),
-        primitiveIndicesSize(0u), refCountsBuffer(NULL), refCountsBufferHost(NULL),
+        primitiveIndicesHost(NULL),primitiveIndicesSize(0u), refCountsBuffer(NULL), refCountsBufferHost(NULL),
         refCountsBufferSize(0u),pairsBuffer(NULL), pairsPingBufferKeys(NULL),
         pairsPingBufferValues(NULL), pairsBufferSize(0u), pairsPingBufferKeysSize(0u),
         pairsPingBufferValuesSize(0u)
@@ -104,7 +106,7 @@ public:
     //////////////////////////////////////////////////////////////////////////
     //data transfer related
     //////////////////////////////////////////////////////////////////////////
-    UniformGrid getParameters() const
+    HOST UniformGrid getParameters() const
     {
         UniformGrid retval;
         retval.vtx[0] = bounds.vtx[0]; //bounds min
@@ -116,6 +118,25 @@ public:
         retval.cellSizeRCP = getCellSizeRCP();
         retval.cells = cellsPtrDevice;
         retval.primitives = primitiveIndices;
+        //retval.numPrimitiveReferences = primitiveIndicesSize / sizeof(uint);
+        return retval;
+    }
+
+    HOST UniformGrid getParametersHost()
+    {
+        UniformGrid retval;
+        retval.vtx[0] = bounds.vtx[0]; //bounds min
+        retval.vtx[1] = bounds.vtx[1]; //bounds max
+        retval.res[0] = resX;
+        retval.res[1] = resY;
+        retval.res[2] = resZ;
+        retval.cellSize = getCellSize();
+        retval.cellSizeRCP = getCellSizeRCP();
+        copyCellsDeviceToHost();
+        copyPrimitiveIndicesDeviceToHost();
+        retval.cells = cellsPtrHost;
+        retval.primitives = primitiveIndicesHost;
+        //retval.numPrimitiveReferences = primitiveIndicesSize / sizeof(uint);
         return retval;
     }
 
@@ -123,62 +144,13 @@ public:
 
     HOST void copyCellsHostToDevice();
 
-    HOST void bindDeviceDataToTexture()
-    {
-        cudaChannelFormatDesc chanelFormatDesc = cudaCreateChannelDesc<uint2>();
-        cudaExtent res = make_cudaExtent(resX, resY, resZ);
-        MY_CUDA_SAFE_CALL( cudaMalloc3DArray(&cellArray, &chanelFormatDesc, res) );
+    HOST void bindDeviceDataToTexture();
 
-        cudaMemcpy3DParms cpyParams = { 0 };
-        cpyParams.srcPtr    = cellsPtrDevice;
-        cpyParams.dstArray  = cellArray;
-        cpyParams.extent    = res;
-        cpyParams.kind      = cudaMemcpyDeviceToDevice;
+    HOST void reBindDeviceDataToTexture(cudaStream_t& aStream);
 
+    HOST void bindHostDataToTexture();
 
-        MY_CUDA_SAFE_CALL( cudaMemcpy3D(&cpyParams) );
-
-        MY_CUDA_SAFE_CALL( cudaBindTextureToArray(texGridCells, cellArray, chanelFormatDesc) );
-    }
-
-    HOST void reBindDeviceDataToTexture(cudaStream_t& aStream)
-    {
-        MY_CUDA_SAFE_CALL( cudaFreeArray(cellArray) );
-        MY_CUDA_SAFE_CALL( cudaUnbindTexture(texGridCells) );
-
-        cudaChannelFormatDesc chanelFormatDesc = cudaCreateChannelDesc<uint2>();
-        cudaExtent res = make_cudaExtent(resX, resY, resZ);
-        MY_CUDA_SAFE_CALL( cudaMalloc3DArray(&cellArray, &chanelFormatDesc, res) );
-
-        cudaMemcpy3DParms cpyParams = { 0 };
-        cpyParams.srcPtr    = cellsPtrDevice;
-        cpyParams.dstArray  = cellArray;
-        cpyParams.extent    = res;
-        cpyParams.kind      = cudaMemcpyDeviceToDevice;
-
-
-        MY_CUDA_SAFE_CALL( cudaMemcpy3DAsync(&cpyParams, aStream) );
-
-        MY_CUDA_SAFE_CALL( cudaBindTextureToArray(texGridCells, cellArray, chanelFormatDesc) );
-    }
-
-    HOST void bindHostDataToTexture()
-    {
-        cudaChannelFormatDesc chanelFormatDesc = cudaCreateChannelDesc<uint2>();
-        cudaExtent res = make_cudaExtent(resX, resY, resZ);
-        MY_CUDA_SAFE_CALL( cudaMalloc3DArray(&cellArray, &chanelFormatDesc, res) );
-
-        cudaMemcpy3DParms cpyParams = { 0 };
-        cpyParams.srcPtr    = cellsPtrHost;
-        cpyParams.dstArray  = cellArray;
-        cpyParams.extent    = res;
-        cpyParams.kind      = cudaMemcpyHostToDevice;
-
-        MY_CUDA_SAFE_CALL( cudaMemcpy3D(&cpyParams) );
-
-        MY_CUDA_SAFE_CALL( cudaBindTextureToArray(texGridCells, cellArray, chanelFormatDesc) );
-    }
-
+    HOST void copyPrimitiveIndicesDeviceToHost();
 
     //////////////////////////////////////////////////////////////////////////
     //memory allocation

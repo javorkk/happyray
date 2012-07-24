@@ -29,7 +29,7 @@
 #define UNIFORMGRID_H_C8280ED1_0974_408A_BD7C_9A509CA1C1DB
 
 #include "CUDAStdAfx.h"
-#include "Textures.h"
+//#include "Textures.h"
 #include "RT/Primitive/Primitive.hpp"
 #include "RT/Primitive/BBox.hpp"
 
@@ -43,6 +43,7 @@ public:
     float3 cellSizeRCP;
     cudaPitchedPtr cells;
     uint* primitives;
+    //uint  numPrimitiveReferences;
 
     DEVICE const float3 getResolution() const
     {

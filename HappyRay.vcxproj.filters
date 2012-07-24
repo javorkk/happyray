@@ -224,7 +224,10 @@
       <Filter>RT\Integrator</Filter>
     </ClInclude>
     <ClInclude Include="src\RT\Structure\3DTextureMemoryManager.h">
-      <Filter>Headers</Filter>
+      <Filter>RT\Structure</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Structure\TexturedPrimitiveArray.h">
+      <Filter>RT\Structure</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -290,6 +293,8 @@
     <CudaCompile Include="src\RT\Primitive\LightSource.cu">
       <Filter>RT\Primitive</Filter>
     </CudaCompile>
-    <CudaCompile Include="src\RT\Structure\3DTextureMemoryManager.cu" />
+    <CudaCompile Include="src\RT\Structure\3DTextureMemoryManager.cu">
+      <Filter>RT\Structure</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

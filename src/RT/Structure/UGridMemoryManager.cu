@@ -56,6 +56,66 @@ HOST void UGridMemoryManager::copyCellsHostToDevice()
 }
 
 
+HOST void UGridMemoryManager::copyPrimitiveIndicesDeviceToHost()
+{
+    MY_CUDA_SAFE_CALL( cudaMemcpy(primitiveIndicesHost, primitiveIndices, primitiveIndicesSize, cudaMemcpyDeviceToHost) );
+}
+
+HOST void UGridMemoryManager::bindDeviceDataToTexture()
+{
+    cudaChannelFormatDesc chanelFormatDesc = cudaCreateChannelDesc<uint2>();
+    cudaExtent res = make_cudaExtent(resX, resY, resZ);
+    MY_CUDA_SAFE_CALL( cudaMalloc3DArray(&cellArray, &chanelFormatDesc, res) );
+
+    cudaMemcpy3DParms cpyParams = { 0 };
+    cpyParams.srcPtr    = cellsPtrDevice;
+    cpyParams.dstArray  = cellArray;
+    cpyParams.extent    = res;
+    cpyParams.kind      = cudaMemcpyDeviceToDevice;
+
+
+    MY_CUDA_SAFE_CALL( cudaMemcpy3D(&cpyParams) );
+
+    MY_CUDA_SAFE_CALL( cudaBindTextureToArray(texGridCells, cellArray, chanelFormatDesc) );
+}
+
+HOST void UGridMemoryManager::reBindDeviceDataToTexture( cudaStream_t& aStream )
+{
+    MY_CUDA_SAFE_CALL( cudaFreeArray(cellArray) );
+    MY_CUDA_SAFE_CALL( cudaUnbindTexture(texGridCells) );
+
+    cudaChannelFormatDesc chanelFormatDesc = cudaCreateChannelDesc<uint2>();
+    cudaExtent res = make_cudaExtent(resX, resY, resZ);
+    MY_CUDA_SAFE_CALL( cudaMalloc3DArray(&cellArray, &chanelFormatDesc, res) );
+
+    cudaMemcpy3DParms cpyParams = { 0 };
+    cpyParams.srcPtr    = cellsPtrDevice;
+    cpyParams.dstArray  = cellArray;
+    cpyParams.extent    = res;
+    cpyParams.kind      = cudaMemcpyDeviceToDevice;
+
+
+    MY_CUDA_SAFE_CALL( cudaMemcpy3DAsync(&cpyParams, aStream) );
+
+    MY_CUDA_SAFE_CALL( cudaBindTextureToArray(texGridCells, cellArray, chanelFormatDesc) );
+}
+
+HOST void UGridMemoryManager::bindHostDataToTexture()
+{
+    cudaChannelFormatDesc chanelFormatDesc = cudaCreateChannelDesc<uint2>();
+    cudaExtent res = make_cudaExtent(resX, resY, resZ);
+    MY_CUDA_SAFE_CALL( cudaMalloc3DArray(&cellArray, &chanelFormatDesc, res) );
+
+    cudaMemcpy3DParms cpyParams = { 0 };
+    cpyParams.srcPtr    = cellsPtrHost;
+    cpyParams.dstArray  = cellArray;
+    cpyParams.extent    = res;
+    cpyParams.kind      = cudaMemcpyHostToDevice;
+
+    MY_CUDA_SAFE_CALL( cudaMemcpy3D(&cpyParams) );
+
+    MY_CUDA_SAFE_CALL( cudaBindTextureToArray(texGridCells, cellArray, chanelFormatDesc) );
+}
 //////////////////////////////////////////////////////////////////////////
 //memory allocation
 //////////////////////////////////////////////////////////////////////////
@@ -123,8 +183,9 @@ HOST void UGridMemoryManager::setDeviceCellsToZero()
 
 HOST uint* UGridMemoryManager::allocatePrimitiveIndicesBuffer(const size_t aNumIndices)
 {
-    MemoryManager::allocateDeviceArray((void**)&primitiveIndices, aNumIndices * sizeof(uint),
-        (void**)&primitiveIndices, primitiveIndicesSize);
+    MemoryManager::allocateHostDeviceArrayPair(
+        (void**)&primitiveIndices, (void**)&primitiveIndicesHost, aNumIndices * sizeof(uint),
+        (void**)&primitiveIndices, (void**)&primitiveIndicesHost, primitiveIndicesSize);
     
     return primitiveIndices;
 }
@@ -177,6 +238,7 @@ HOST void UGridMemoryManager::freePrimitiveIndicesBuffer()
     {
         primitiveIndicesSize = 0u;
         MY_CUDA_SAFE_CALL( cudaFree(primitiveIndices) );
+        MY_CUDA_SAFE_CALL( cudaFreeHost(primitiveIndicesHost) );
         primitiveIndices = NULL;
     }
 }
@@ -234,3 +296,4 @@ HOST void UGridMemoryManager::checkResolution()
         resX = resY = resZ = 32;
     }
 }
+

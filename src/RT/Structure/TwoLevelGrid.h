@@ -173,6 +173,7 @@ public:
     cudaPitchedPtr  cells;
     t_Leaf*         leaves;
     uint*           primitives;
+    //uint            numPrimitiveReferences;
 
     DEVICE const float3 getResolution() const
     {

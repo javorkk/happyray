@@ -132,6 +132,7 @@ public:
         retval.cells = cellsPtrDevice;
         retval.leaves = leavesDevice;
         retval.primitives = primitiveIndices;
+        //retval.numPrimitiveReferences = primitiveIndicesSize / sizeof(uint);
         return retval;
     }
 

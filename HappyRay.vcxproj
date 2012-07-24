@@ -70,6 +70,9 @@
     <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
     <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x86;$(LIB32)</LibraryPath>
     <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x86;$(BIN32)</ExecutablePath>
+    <ExcludePath>$(ExcludePath)</ExcludePath>
+    <SourcePath>$(SourcePath)</SourcePath>
+    <ReferencePath>$(ReferencePath)</ReferencePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
@@ -78,6 +81,9 @@
     <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
     <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x64;$(LIB64)</LibraryPath>
     <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x64;$(BIN64)</ExecutablePath>
+    <ExcludePath>$(ExcludePath)</ExcludePath>
+    <SourcePath>$(SourcePath)</SourcePath>
+    <ReferencePath>$(ReferencePath)</ReferencePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -86,6 +92,9 @@
     <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
     <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x86;$(LIB32)</LibraryPath>
     <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x86;$(BIN32)</ExecutablePath>
+    <ExcludePath>$(ExcludePath)</ExcludePath>
+    <SourcePath>$(SourcePath)</SourcePath>
+    <ReferencePath>$(ReferencePath)</ReferencePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -94,6 +103,9 @@
     <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
     <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x64;$(LIB64)</LibraryPath>
     <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x64;$(BIN64)</ExecutablePath>
+    <ReferencePath>$(ReferencePath)</ReferencePath>
+    <SourcePath>$(SourcePath)</SourcePath>
+    <ExcludePath>$(ExcludePath)</ExcludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -296,6 +308,7 @@
     <ClInclude Include="src\RT\Structure\MemoryManager.h" />
     <ClInclude Include="src\RT\Structure\PrimitiveArray.h" />
     <ClInclude Include="src\RT\Structure\RayBuffers.h" />
+    <ClInclude Include="src\RT\Structure\TexturedPrimitiveArray.h" />
     <ClInclude Include="src\RT\Structure\TLGridMemoryManager.h" />
     <ClInclude Include="src\RT\Structure\TwoLevelGrid.h" />
     <ClInclude Include="src\RT\Structure\UGridMemoryManager.h" />

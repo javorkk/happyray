@@ -9,7 +9,7 @@
 #include "RT/Primitive/Material.hpp"
 #include "RT/Structure/3DTextureMemoryManager.h"
 #include "Application/WFObject.hpp"
-#include "RT/Structure/PrimitiveArray.h"
+#include "RT/Structure/TexturedPrimitiveArray.h"
 #include "RT/Structure/MemoryManager.h"
 
 class ObjUploader
@@ -51,7 +51,7 @@ public:
         const float     aCoeff,
         float3&         oMinBound,
         float3&         oMaxBound,
-        PrimitiveArray<Primitive<3> >& aArray)
+        TexturedPrimitiveArray<Primitive<3> >& aArray)
     {
         const size_t numVertices1 = aKeyFrame1.getNumVertices();
         const size_t numVertices2 = aKeyFrame2.getNumVertices();
@@ -163,7 +163,7 @@ public:
     HOST void ObjUploader::uploadObjFrameVertexIndexData(
         const WFObject& aKeyFrame1,
         const WFObject& aKeyFrame2,
-        PrimitiveArray<Primitive<3> >& aArray)
+        TexturedPrimitiveArray<Primitive<3> >& aArray)
     {
         aArray.numPrimitives = aKeyFrame1.getNumFaces();
         const size_t numIndices1 = aKeyFrame1.getNumFaces() * 3;
