@@ -98,6 +98,29 @@ public:
 
     }
 
+    //dummy to use instead of init
+    HOST void initEvents(
+        TLGridMemoryManager&            aMemoryManager,
+        const uint                      aNumPrimitives,
+        const float                     aTopLevelDensity = 0.0625f,
+        const float                     aLeafLevelDensity = 1.2f
+        )
+    {
+        //////////////////////////////////////////////////////////////////////////
+        //initialize grid parameters
+        cudaEventCreate(&mStart);
+        cudaEventCreate(&mDataUpload);
+        cudaEventRecord(mStart, 0);
+        cudaEventSynchronize(mStart);
+        //////////////////////////////////////////////////////////////////////////
+
+        //////////////////////////////////////////////////////////////////////////
+        cudaEventRecord(mDataUpload, 0);
+        cudaEventSynchronize(mDataUpload);
+        //////////////////////////////////////////////////////////////////////////
+
+    }
+
     HOST void build(
         TLGridMemoryManager&                aMemoryManager,
         PrimitiveArray<tPrimitive>&         aPrimitiveArray)

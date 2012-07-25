@@ -45,7 +45,7 @@ public:
     uint* primitives;
     //uint  numPrimitiveReferences;
 
-    DEVICE const float3 getResolution() const
+    HOST DEVICE const float3 getResolution() const
     {
         float3 retval;
         retval.x = static_cast<float>(res[0]);
@@ -54,26 +54,26 @@ public:
         return retval;
     }
 
-    DEVICE float3 getCellSize() const
+    HOST DEVICE float3 getCellSize() const
     {
         return cellSize;
         //return fastDivide(vtx[1] - vtx[0], getResolution());
     }
 
-    DEVICE float3 getCellSizeRCP() const
+    HOST DEVICE float3 getCellSizeRCP() const
     {
         return cellSizeRCP;
         //return fastDivide(getResolution(), vtx[1] - vtx[0]);
     }
 
-    DEVICE uint2 getCell(int aIdX, int aIdY, int aIdZ)
+    HOST DEVICE uint2 getCell(int aIdX, int aIdY, int aIdZ)
     {
         return *((uint2*)((char*)cells.ptr
             + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX);
         //return tex3D(texGridCells, aIdX, aIdY,  aIdZ);
     } 
 
-    DEVICE uint getPrimitiveId(uint aId)
+    HOST DEVICE uint getPrimitiveId(uint aId)
     {
         return primitives[aId];
     }

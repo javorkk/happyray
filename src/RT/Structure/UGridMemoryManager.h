@@ -69,13 +69,17 @@ public:
 
     UGridMemoryManager()
         :resX(0), resY(0), resZ(0), oldResX(0), oldResY(0), oldResZ(0), bounds(BBox::empty()),
-        cpuCells(NULL), gpuCells(NULL), cellsPtrDevice.ptr(NULL),cellsPtrHost.ptr(NULL),
+        cpuCells(NULL), gpuCells(NULL),
         cellArray(NULL), primitiveIndices(NULL),
         primitiveIndicesHost(NULL),primitiveIndicesSize(0u), refCountsBuffer(NULL), refCountsBufferHost(NULL),
         refCountsBufferSize(0u),pairsBuffer(NULL), pairsPingBufferKeys(NULL),
         pairsPingBufferValues(NULL), pairsBufferSize(0u), pairsPingBufferKeysSize(0u),
         pairsPingBufferValuesSize(0u)
-    {}
+
+    {
+         cellsPtrDevice.ptr = NULL;
+         cellsPtrHost.ptr = NULL;
+    }
 
     //////////////////////////////////////////////////////////////////////////
     //construction related
@@ -133,6 +137,7 @@ public:
         retval.res[2] = resZ;
         retval.cellSize = getCellSize();
         retval.cellSizeRCP = getCellSizeRCP();
+        allocateHostCells();
         copyCellsDeviceToHost();
         copyPrimitiveIndicesDeviceToHost();
         retval.cells = cellsPtrHost;

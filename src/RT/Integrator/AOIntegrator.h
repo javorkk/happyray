@@ -143,9 +143,9 @@ GLOBAL void computeAOIllumination(
 
                 float sinZNormal = fmaxf(0.f,sqrtf(1.f - normal.z));
                 float cosEyeNormal = fabsf(dot(rayDir, normal));
-                sharedVec[threadId1D()].x *= (0.6f * cosEyeNormal + 0.3f * sinZNormal);
-                sharedVec[threadId1D()].y *= (0.6f * cosEyeNormal + 0.2f * sinZNormal);
-                sharedVec[threadId1D()].z *= (0.7f * cosEyeNormal /*+ 0.1f * sinZNormal + 0.1f * (1.f  - sinZNormal)*/);
+                sharedVec[threadId1D()].x *= (0.7f * cosEyeNormal + 0.3f * sinZNormal);
+                sharedVec[threadId1D()].y *= (0.7f * cosEyeNormal + 0.2f * sinZNormal);
+                sharedVec[threadId1D()].z *= (0.9f * cosEyeNormal /*+ 0.1f * sinZNormal + 0.1f * (1.f  - sinZNormal)*/);
 
             }
         }
@@ -250,6 +250,8 @@ public:
         //////////////////////////////////////////////////////////////////////////////////////////////////////
         MY_CUDA_SAFE_CALL( cudaMemset( mGlobalMemoryPtr, 0, sizeof(uint)) );
         rayBuffer.setMemPtr(mGlobalMemoryPtr + 1);
+
+        MY_CUT_CHECK_ERROR("Setting memory for ray tracing failed!\n");
 
         dim3 threadBlockTrace( RENDERTHREADSX, RENDERTHREADSY );
         dim3 blockGridTrace  ( RENDERBLOCKSX, RENDERBLOCKSY );

@@ -79,7 +79,6 @@ public:
 
     TLGridMemoryManager()
         :resX(0), resY(0), resZ(0), oldResX(0), oldResY(0), oldResZ(0), bounds(BBox::empty()),
-        cellsPtrDevice.ptr(NULL), cellsPtrHost.ptr(NULL),
         leavesHost(NULL), leavesDevice(NULL), leavesSize(0), primitiveIndices(NULL),
         primitiveIndicesSize(0u), refCountsBuffer(NULL), refCountsBufferHost(NULL),
         refCountsBufferSize(0u),cellCountsBuffer(NULL),cellCountsBufferHost(NULL),
@@ -88,7 +87,10 @@ public:
         topLevelPairsBufferSize(0u), topLevelPairsPingBufferKeysSize(0u), topLevelPairsPingBufferValuesSize(0u),
         leafLevelPairsBuffer(NULL), leafLevelPairsPingBufferKeys(NULL), leafLevelPairsPingBufferValues(NULL),
         leafLevelPairsBufferSize(0u), leafLevelPairsPingBufferKeysSize(0u), leafLevelPairsPingBufferValuesSize(0u)
-    {}
+    {
+        cellsPtrDevice.ptr = NULL;
+        cellsPtrHost.ptr = NULL;
+    }
 
     //////////////////////////////////////////////////////////////////////////
     //construction related

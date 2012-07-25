@@ -123,7 +123,7 @@ HOST cudaPitchedPtr UGridMemoryManager::allocateHostCells()
 {
     checkResolution();
 
-    if(oldResX == resX && oldResY == resY && oldResZ == resZ)
+    if(oldResX == resX && oldResY == resY && oldResZ == resZ && cellsPtrHost.ptr != NULL)
     {
         return cellsPtrHost;
     }
@@ -148,7 +148,7 @@ HOST cudaPitchedPtr UGridMemoryManager::allocateDeviceCells()
 {
     checkResolution();
 
-    if(oldResX == resX && oldResY == resY && oldResZ == resZ)
+    if(oldResX == resX && oldResY == resY && oldResZ == resZ && cellsPtrDevice.ptr != NULL)
     {
         return cellsPtrDevice;
     }
