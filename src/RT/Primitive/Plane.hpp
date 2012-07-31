@@ -25,7 +25,7 @@ public:
     }
     DEVICE HOST bool equal( const InfPlane &aPlane, float aAngleEPS, float aSpatialEPS ) const
     {
-        return fabsf(dot(getN(),aPlane.getN())) >= 1.0f - aAngleEPS &&
+        return dot(getN(),aPlane.getN()) >= 1.0f - aAngleEPS &&
             fabsf(calculateSignedDistance(aPlane.getPt())) <= aSpatialEPS;
     }
 };
