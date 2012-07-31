@@ -54,6 +54,7 @@ public:
         return retval;
     }
 
+
     HOST DEVICE float3 getCellSize() const
     {
         return cellSize;
@@ -72,6 +73,28 @@ public:
             + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX);
         //return tex3D(texGridCells, aIdX, aIdY,  aIdZ);
     } 
+
+    HOST DEVICE void setCell(int aIdX, int aIdY, int aIdZ, uint2 aVal)
+    {
+        *((uint2*)((char*)cells.ptr
+            + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX) = aVal;
+    } 
+
+    HOST DEVICE int3 getCellIdAt(float3 aPosition)
+    {
+        float3 cellIdf = (aPosition - vtx[0]) * getCellSizeRCP();
+        int3 cellId;
+        cellId.x = static_cast<int>(cellIdf.x);
+        cellId.y = static_cast<int>(cellIdf.y);
+        cellId.z = static_cast<int>(cellIdf.z);
+    }
+
+    HOST DEVICE uint2 getCellAt(float3 aPosition)
+    {
+        float3 cellIdf = (aPosition - vtx[0]) * getCellSizeRCP();
+        return getCell(static_cast<int>(cellIdf.x),  static_cast<int>(cellIdf.y), static_cast<int>(cellIdf.z));
+    }
+
 
     HOST DEVICE uint getPrimitiveId(uint aId)
     {

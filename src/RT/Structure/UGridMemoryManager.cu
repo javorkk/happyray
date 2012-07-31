@@ -61,6 +61,11 @@ HOST void UGridMemoryManager::copyPrimitiveIndicesDeviceToHost()
     MY_CUDA_SAFE_CALL( cudaMemcpy(primitiveIndicesHost, primitiveIndices, primitiveIndicesSize, cudaMemcpyDeviceToHost) );
 }
 
+HOST void UGridMemoryManager::copyPrimitiveIndicesHostToDevice()
+{
+    MY_CUDA_SAFE_CALL( cudaMemcpy(primitiveIndices, primitiveIndicesHost, primitiveIndicesSize, cudaMemcpyHostToDevice) );
+}
+
 HOST void UGridMemoryManager::bindDeviceDataToTexture()
 {
     cudaChannelFormatDesc chanelFormatDesc = cudaCreateChannelDesc<uint2>();
@@ -296,4 +301,5 @@ HOST void UGridMemoryManager::checkResolution()
         resX = resY = resZ = 32;
     }
 }
+
 

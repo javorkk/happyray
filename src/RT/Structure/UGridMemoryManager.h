@@ -157,6 +157,7 @@ public:
     HOST void bindHostDataToTexture();
 
     HOST void copyPrimitiveIndicesDeviceToHost();
+    HOST void copyPrimitiveIndicesHostToDevice();
 
     //////////////////////////////////////////////////////////////////////////
     //memory allocation
