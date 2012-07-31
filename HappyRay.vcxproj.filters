@@ -229,6 +229,9 @@
     <ClInclude Include="src\RT\Structure\TexturedPrimitiveArray.h">
       <Filter>RT\Structure</Filter>
     </ClInclude>
+    <ClInclude Include="src\RT\Primitive\Plane.hpp">
+      <Filter>Headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\stdafx.cpp">

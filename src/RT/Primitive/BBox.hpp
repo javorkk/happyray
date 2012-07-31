@@ -55,8 +55,8 @@ public:
         oEntry = fmaxf(fmaxf(tMin.x, tMin.y), tMin.z);
         oExit = fminf(fminf(tMax.x, tMax.y), tMax.z);
 #else
-        oEntry = max(max(tMin.x, tMin.y), tMin.z);
-        oExit = min(min(tMax.x, tMax.y), tMax.z);
+        oEntry = cudastd::max(cudastd::max(tMin.x, tMin.y), tMin.z);
+        oExit = cudastd::min(cudastd::min(tMax.x, tMax.y), tMax.z);
 #endif
 
     }
@@ -72,8 +72,8 @@ public:
         oEntry = fmaxf(fmaxf(tMin.x, tMin.y), tMin.z);
         oExit = fminf(fminf(tMax.x, tMax.y), tMax.z);
 #else
-        oEntry = max(max(tMin.x, tMin.y), tMin.z);
-        oExit = min(min(tMax.x, tMax.y), tMax.z);
+        oEntry = cudastd::max(cudastd::max(tMin.x, tMin.y), tMin.z);
+        oExit = cudastd::min(cudastd::min(tMax.x, tMax.y), tMax.z);
 #endif
 
     }

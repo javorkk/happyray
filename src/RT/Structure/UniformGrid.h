@@ -87,6 +87,7 @@ public:
         cellId.x = static_cast<int>(cellIdf.x);
         cellId.y = static_cast<int>(cellIdf.y);
         cellId.z = static_cast<int>(cellIdf.z);
+        return cellId;
     }
 
     HOST DEVICE uint2 getCellAt(float3 aPosition)

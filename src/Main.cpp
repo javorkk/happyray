@@ -27,13 +27,14 @@
 #include "StdAfx.hpp"
 #include "Application/SDLGLApplication.hpp"
 
+#include "RT/Primitive/Plane.hpp"
+
 #ifdef _WIN32
 int wmain (int argc, char* argv[])
 #else
 int main(int argc, char* argv[])
 #endif
 {
-
     SDLGLApplication app;
     app.init(argc, argv);
     app.initVideo();

@@ -300,6 +300,7 @@
     <ClInclude Include="src\RT\Primitive\Camera.h" />
     <ClInclude Include="src\RT\Primitive\LightSource.hpp" />
     <ClInclude Include="src\RT\Primitive\Material.hpp" />
+    <ClInclude Include="src\RT\Primitive\Plane.hpp" />
     <ClInclude Include="src\RT\Primitive\Primitive.hpp" />
     <ClInclude Include="src\RT\Primitive\Triangle.hpp" />
     <ClInclude Include="src\RT\RTEngine.h" />
