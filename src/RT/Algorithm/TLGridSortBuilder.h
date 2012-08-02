@@ -202,7 +202,7 @@ public:
         dim3 blockUnsortedGrid(sNUM_WRITE_THREADS);
         dim3 gridUnsortedGrid (sNUM_WRITE_BLOCKS);
 
-        writePairs<tPrimitive, PrimitiveArray, true>
+        writePairs<tPrimitive, PrimitiveArray, false>
             <<< gridUnsortedGrid, blockUnsortedGrid,
             sizeof(uint)/* + sizeof(float3) * blockUnsortedGrid.x*/ >>>(
             aPrimitiveArray,

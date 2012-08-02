@@ -51,7 +51,7 @@
 
 typedef Triangle    t_Primitive;
 
-#define TLGRID
+//#define TLGRID
 
 #ifdef TLGRID
 typedef TLGridMemoryManager             t_MemoryManager;
@@ -61,8 +61,9 @@ typedef TwoLevelGrid                    t_AccStruct;
 float                                   sTopLevelDensity = 0.0625f;
 float                                   sLeafLevelDensity = 1.2f;
 #else
+const bool exact  = true; //true = exact triangle insertion, false = fast construction
 typedef UGridMemoryManager              t_MemoryManager;
-typedef UGridSortBuilder<t_Primitive>   t_AccStructBuilder;
+typedef UGridSortBuilder<t_Primitive, exact>   t_AccStructBuilder;
 typedef UniformGrid                     t_AccStruct;
 #define Traverser_t                     UGridTraverser
 float                                   sTopLevelDensity = 5.f;

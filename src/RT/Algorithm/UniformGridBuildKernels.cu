@@ -109,121 +109,106 @@ GLOBAL void writePairs<Triangle, PrimitiveArray, true>(
         startPosition += numCells;
 #endif
 
-        if (    maxCellIdX - minCellIdX > 0
-            &&  maxCellIdY - minCellIdY > 0
-            &&  maxCellIdZ - minCellIdZ > 0
-            )
+
+
+        const float3 normal =
+            ~((triangle.vtx[1] - triangle.vtx[0]) %
+            (triangle.vtx[2] - triangle.vtx[0]));
+
+        const float3 gridCellSizeHALF = aCellSize * 0.505f; //1% extra as epsilon
+        float3 minCellCenter;
+        minCellCenter.x = (float)(minCellIdX);
+        minCellCenter.y = (float)(minCellIdY);
+        minCellCenter.z = (float)(minCellIdZ);
+        minCellCenter =  minCellCenter * aCellSize;
+        minCellCenter = minCellCenter + aBoundsMin + gridCellSizeHALF;
+
+        float3 cellCenter;
+        cellCenter.z = minCellCenter.z - aCellSize.z;
+
+        for (uint z = minCellIdZ; z <= maxCellIdZ; ++z)
         {
-            const float3 normal =
-                ~((triangle.vtx[1] - triangle.vtx[0]) %
-                (triangle.vtx[2] - triangle.vtx[0]));
+            cellCenter.z += aCellSize.z;
+            cellCenter.y = minCellCenter.y - aCellSize.y;
 
-            const float3 gridCellSizeHALF = aCellSize * 0.5f;
-            float3 minCellCenter;
-            minCellCenter.x = (float)(minCellIdX);
-            minCellCenter.y = (float)(minCellIdY);
-            minCellCenter.z = (float)(minCellIdZ);
-            minCellCenter =  minCellCenter * aCellSize;
-            minCellCenter = minCellCenter + aBoundsMin + gridCellSizeHALF;
-
-            float3 cellCenter;
-            cellCenter.z = minCellCenter.z - aCellSize.z;
-
-            for (uint z = minCellIdZ; z <= maxCellIdZ; ++z)
+            for (uint y = minCellIdY; y <= maxCellIdY; ++y)
             {
-                cellCenter.z += aCellSize.z;
-                cellCenter.y = minCellCenter.y - aCellSize.y;
+                cellCenter.y += aCellSize.y;
+                cellCenter.x = minCellCenter.x - aCellSize.x;
 
-                for (uint y = minCellIdY; y <= maxCellIdY; ++y)
+                for (uint x = minCellIdX; x <= maxCellIdX; ++x, ++nextSlot)
                 {
-                    cellCenter.y += aCellSize.y;
-                    cellCenter.x = minCellCenter.x - aCellSize.x;
+                    cellCenter.x += aCellSize.x;
 
-                    for (uint x = minCellIdX; x <= maxCellIdX; ++x, ++nextSlot)
-                    {
-                        cellCenter.x += aCellSize.x;
+                    //////////////////////////////////////////////////////////////////////////
+                    //coordinate transform origin -> cellCenter
+                    const float3 v0 = triangle.vtx[0] - cellCenter;
+                    const float3 v1 = triangle.vtx[1] - cellCenter;
+                    const float3 v2 = triangle.vtx[2] - cellCenter;
+                    const float3 e0 = v1 - v0;
+                    const float3 e1 = v2 - v1;
+                    const float3 e2 = v0 - v2;
 
-                        //////////////////////////////////////////////////////////////////////////
-                        //coordinate transform origin -> cellCenter
-                        const float3 v0 = triangle.vtx[0] - cellCenter;
-                        const float3 v1 = triangle.vtx[1] - cellCenter;
-                        const float3 v2 = triangle.vtx[2] - cellCenter;
-                        const float3 e0 = v1 - v0;
-                        const float3 e1 = v2 - v1;
-                        const float3 e2 = v0 - v2;
+                    bool passedAllTests = true;
+                    //9 tests for separating axis
+                    float3 fe;
+                    fe.x = fabsf(e0.x);
+                    fe.y = fabsf(e0.y);
+                    fe.z = fabsf(e0.z);
 
-                        bool passedAllTests = true;
-                        //9 tests for separating axis
-                        float3 fe;
-                        fe.x = fabsf(e0.x);
-                        fe.y = fabsf(e0.y);
-                        fe.z = fabsf(e0.z);
+                    passedAllTests = passedAllTests && AXISTEST_X01(e0, fe, v0, v1, v2, gridCellSizeHALF);
+                    passedAllTests = passedAllTests && AXISTEST_Y02(e0, fe, v0, v1, v2, gridCellSizeHALF);
+                    passedAllTests = passedAllTests && AXISTEST_Z12(e0, fe, v0, v1, v2, gridCellSizeHALF);
 
-                        passedAllTests = passedAllTests && AXISTEST_X01(e0, fe, v0, v1, v2, gridCellSizeHALF);
-                        passedAllTests = passedAllTests && AXISTEST_Y02(e0, fe, v0, v1, v2, gridCellSizeHALF);
-                        passedAllTests = passedAllTests && AXISTEST_Z12(e0, fe, v0, v1, v2, gridCellSizeHALF);
+                    fe.x = fabsf(e1.x);
+                    fe.y = fabsf(e1.y);
+                    fe.z = fabsf(e1.z);
 
-                        fe.x = fabsf(e1.x);
-                        fe.y = fabsf(e1.y);
-                        fe.z = fabsf(e1.z);
+                    passedAllTests = passedAllTests && AXISTEST_X01(e1, fe, v0, v1, v2, gridCellSizeHALF);
+                    passedAllTests = passedAllTests && AXISTEST_Y02(e1, fe, v0, v1, v2, gridCellSizeHALF);
+                    passedAllTests = passedAllTests && AXISTEST_Z0(e1, fe, v0, v1, v2, gridCellSizeHALF);
 
-                        passedAllTests = passedAllTests && AXISTEST_X01(e1, fe, v0, v1, v2, gridCellSizeHALF);
-                        passedAllTests = passedAllTests && AXISTEST_Y02(e1, fe, v0, v1, v2, gridCellSizeHALF);
-                        passedAllTests = passedAllTests && AXISTEST_Z0(e1, fe, v0, v1, v2, gridCellSizeHALF);
+                    fe.x = fabsf(e2.x);
+                    fe.y = fabsf(e2.y);
+                    fe.z = fabsf(e2.z);
 
-                        fe.x = fabsf(e2.x);
-                        fe.y = fabsf(e2.y);
-                        fe.z = fabsf(e2.z);
+                    passedAllTests = passedAllTests && AXISTEST_X2(e2, fe, v0, v1, v2, gridCellSizeHALF);
+                    passedAllTests = passedAllTests && AXISTEST_Y1(e2, fe, v0, v1, v2, gridCellSizeHALF);
+                    passedAllTests = passedAllTests && AXISTEST_Z12(e2, fe, v0, v1, v2, gridCellSizeHALF);
 
-                        passedAllTests = passedAllTests && AXISTEST_X2(e2, fe, v0, v1, v2, gridCellSizeHALF);
-                        passedAllTests = passedAllTests && AXISTEST_Y1(e2, fe, v0, v1, v2, gridCellSizeHALF);
-                        passedAllTests = passedAllTests && AXISTEST_Z12(e2, fe, v0, v1, v2, gridCellSizeHALF);
+                    //////////////////////////////////////////////////////////////////////////
+                    //Plane/box overlap test
+                    float3 vmin, vmax;
+                    vmin.x = (normal.x > 0.f) ? -gridCellSizeHALF.x : gridCellSizeHALF.x;
+                    vmin.y = (normal.y > 0.f) ? -gridCellSizeHALF.y : gridCellSizeHALF.y;
+                    vmin.z = (normal.z > 0.f) ? -gridCellSizeHALF.z : gridCellSizeHALF.z;
 
-                        //////////////////////////////////////////////////////////////////////////                                                
-                        const float3 distToPlane = normal *
-                            dot((cellCenter - triangle.vtx[0]),normal);
+                    vmax = -vmin;
+                    vmax = vmax - v0;
+                    vmin = vmin - v0;
 
-                        if (passedAllTests && 
-                            fabsf(distToPlane.x) <= gridCellSizeHALF.x + EPS &&
-                            fabsf(distToPlane.y) <= gridCellSizeHALF.y + EPS &&
-                            fabsf(distToPlane.z) <= gridCellSizeHALF.z + EPS )
-                        {
-                            oPairs[2 * nextSlot] = x +
-                                y * (uint)aGridRes.x +
-                                z * (uint)(aGridRes.x * aGridRes.y);
+                    passedAllTests = passedAllTests && dot(normal, vmin) <= 0.f && dot(normal, vmax) > 0.f;
+                    //////////////////////////////////////////////////////////////////////////
 
-                            oPairs[2 * nextSlot + 1] =
-                                triangleId;
-                        }
-                        else
-                        {
-                            oPairs[2 * nextSlot] = 
-                                (uint)(aGridRes.x * aGridRes.y * aGridRes.z);
-
-                            oPairs[2 * nextSlot + 1] = 
-                                triangleId;
-                        }
-                    }//end for z
-                }//end for y
-            }//end for x
-        }
-        else
-        {
-            for (uint z = minCellIdZ; z <= maxCellIdZ; ++z)
-            {
-                for (uint y = minCellIdY; y <= maxCellIdY; ++y)
-                {
-                    for (uint x = minCellIdX; x <= maxCellIdX; ++x, ++nextSlot)
+                    if (passedAllTests)
                     {
                         oPairs[2 * nextSlot] = x +
                             y * (uint)aGridRes.x +
                             z * (uint)(aGridRes.x * aGridRes.y);
-                        oPairs[2 * nextSlot + 1] = triangleId;
-                    }//end for z
-                }//end for y
-            }//end for x
-        }//end if (maxCellIdX - minCellIdX > 0...
 
+                        oPairs[2 * nextSlot + 1] =
+                            triangleId;
+                    }
+                    else
+                    {
+                        oPairs[2 * nextSlot] = 
+                            (uint)(aGridRes.x * aGridRes.y * aGridRes.z);
+
+                        oPairs[2 * nextSlot + 1] = 
+                            triangleId;
+                    }
+                }//end for z
+            }//end for y
+        }//end for x
     }
-
 }

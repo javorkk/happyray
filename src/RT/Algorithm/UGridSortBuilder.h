@@ -40,7 +40,7 @@
 #include "Utils/Scan.h"
 #include "Utils/Sort.h"
 
-template<class tPrimitive>
+template<class tPrimitive, bool taExactTriangleInsertion = false>
 class UGridSortBuilder
 {
     static const uint   sNUM_COUNTER_THREADS    = 128u;
@@ -181,7 +181,7 @@ public:
         dim3 blockUnsortedGrid(sNUM_WRITE_THREADS);
         dim3 gridUnsortedGrid (sNUM_WRITE_BLOCKS);
 
-        writePairs<tPrimitive, PrimitiveArray, true>
+        writePairs<tPrimitive, PrimitiveArray, taExactTriangleInsertion>
             <<< gridUnsortedGrid, blockUnsortedGrid,
             sizeof(uint)/* + sizeof(float3) * blockUnsortedGrid.x*/ >>>(
             aPrimitiveArray,
