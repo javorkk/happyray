@@ -335,6 +335,7 @@
     <ClCompile Include="src\Core\SSEAlgebra.cpp" />
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\RT\Primitive\Triangle.cpp" />
+    <CudaCompile Include="src\RT\Algorithm\UniformGridBuildKernels.cu" />
     <CudaCompile Include="src\RT\Primitive\LightSource.cu" />
     <CudaCompile Include="src\RT\Structure\3DTextureMemoryManager.cu" />
     <CudaCompile Include="src\RT\Structure\TLGridMemManager.cu" />

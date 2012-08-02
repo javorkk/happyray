@@ -32,6 +32,8 @@
 #include "Core/Algebra.hpp"
 #include "RT/Primitive/Primitive.hpp"
 #include "RT/Primitive/BBox.hpp"
+#include "RT/Primitive/Triangle.hpp"
+#include "RT/Structure/PrimitiveArray.h"
 
 
 template<class tPrimitive, template<class> class tPrimitiveArray, int taBlockSize>
@@ -97,7 +99,7 @@ GLOBAL void countPairs(
 #endif
 }
 
-template<class tPrimitive, template<class> class tPrimitiveArray>
+template<class tPrimitive, template<class> class tPrimitiveArray, bool tExactInsertion>
 GLOBAL void writePairs(
                         tPrimitiveArray<tPrimitive> aPrimitiveArray,
                         uint*                       oPairs,
@@ -173,6 +175,19 @@ GLOBAL void writePairs(
 
     }
 }
+
+//Explicit specialization for exact triangle insertion
+template<>
+GLOBAL void writePairs<Triangle, PrimitiveArray, true>(
+    PrimitiveArray<Triangle> aPrimitiveArray,
+    uint*                       oPairs,
+    const uint                  aNumPrimitives,
+    uint*                       aStartId,
+    const float3                 aGridRes,
+    const float3                 aBoundsMin,
+    const float3                 aCellSize,
+    const float3                 aCellSizeRCP
+    );
 
 template<int taBlockSize>
 GLOBAL void prepareCellRanges(

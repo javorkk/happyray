@@ -299,5 +299,8 @@
     <CudaCompile Include="src\RT\Structure\3DTextureMemoryManager.cu">
       <Filter>RT\Structure</Filter>
     </CudaCompile>
+    <CudaCompile Include="src\RT\Algorithm\UniformGridBuildKernels.cu">
+      <Filter>RT\Algorithm</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>
