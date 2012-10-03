@@ -36,7 +36,7 @@ class PrimitiveArray
 
 public:
     /////////////////////////////////////////////////////////////
-    //Memory Managment
+    //Memory Management
     /////////////////////////////////////////////////////////////
     float4* vertexBufferDevicePtr;
     float4* vertexBufferHostPtr;
@@ -82,21 +82,27 @@ public:
 
     HOST DEVICE size_t getMemorySize()
     {
-        return vertexBufferSize + indicesBufferSize + normalBufferSize;
+        return vertexBufferSize + indicesBufferSize;
     }
 
     ////////////////////////////////////////////////////////////
-    //Device Functions
+    //Accessors Functions
     ////////////////////////////////////////////////////////////
 
-    DEVICE tPrimitive operator[](uint aIndex) const
+    HOST DEVICE tPrimitive operator[](uint aIndex) const
     {
+
         uint indices[tPrimitive::NUM_VERTICES];
+
 
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
+#ifdef __CUDA_ARCH__
             indices[i] = indicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i];
+#else
+            indices[i] = indicesBufferHostPtr[aIndex * tPrimitive::NUM_VERTICES + i];
+#endif // __CUDA_ARCH__
         }
 
         tPrimitive result;
@@ -104,10 +110,14 @@ public:
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
-             float4 tmp = vertexBufferDevicePtr[indices[i]];
-             result.vtx[i].x = tmp.x;
-             result.vtx[i].y = tmp.y;
-             result.vtx[i].z = tmp.z;
+#ifdef __CUDA_ARCH__
+            float4 tmp = vertexBufferDevicePtr[indices[i]];
+#else
+            float4 tmp = vertexBufferHostPtr[indices[i]];
+#endif // __CUDA_ARCH__
+            result.vtx[i].x = tmp.x;
+            result.vtx[i].y = tmp.y;
+            result.vtx[i].z = tmp.z;
         }
 
         return result;
@@ -131,7 +141,7 @@ public:
     typedef VtxAttribStruct<tPrimitive, tType> t_AttribStruct;
 
     /////////////////////////////////////////////////////////////
-    //Memory Managment
+    //Memory Management
     /////////////////////////////////////////////////////////////
 
     tType* dataBufferDevicePtr;
@@ -179,17 +189,21 @@ public:
 
 
     ////////////////////////////////////////////////////////////
-    //Device Functions
+    //Accessors Functions
     ////////////////////////////////////////////////////////////
  
-    DEVICE t_AttribStruct  operator[](uint aIndex) const
+    HOST DEVICE t_AttribStruct  operator[](uint aIndex) const
     {
         uint indices[tPrimitive::NUM_VERTICES];
 
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
+#ifdef __CUDA_ARCH__
             indices[i] = indicesBufferDevicePtr[aIndex * tPrimitive::NUM_VERTICES + i]; 
+#else
+            indices[i] = indicesBufferHostPtr[aIndex * tPrimitive::NUM_VERTICES + i];
+#endif // __CUDA_ARCH__
         }
 
         t_AttribStruct result;
@@ -197,7 +211,11 @@ public:
 #pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
+#ifdef __CUDA_ARCH__
             result.data[i] = dataBufferDevicePtr[indices[i]];
+#else
+            result.data[i] = dataBufferHostPtr[indices[i]];
+#endif // __CUDA_ARCH__
         }
 
         return result;
@@ -210,7 +228,7 @@ class PrimitiveAttributeArray
 {
 public:
     /////////////////////////////////////////////////////////////
-    //Memory Managment
+    //Memory Management
     /////////////////////////////////////////////////////////////
 
     tType* dataBufferDevicePtr;
@@ -260,12 +278,17 @@ public:
 
 
     ////////////////////////////////////////////////////////////
-    //Device Functions
+    //Accessors Functions
     ////////////////////////////////////////////////////////////
  
     DEVICE tType  operator[](uint aIndex) const
     {
+#ifdef __CUDA_ARCH__
         return dataBufferDevicePtr[indicesBufferDevicePtr[aIndex]];
+#else
+        return dataBufferHostPtr[indicesBufferHostPtr[aIndex]];
+#endif // __CUDA_ARCH__
+        
     }
 
 };//class Primitive Attribute Array
