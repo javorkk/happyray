@@ -203,6 +203,12 @@ public:
         //return tex3D(texGridCells, aIdX, aIdY,  aIdZ);
     } 
 
+    DEVICE float3 getCellCenter (int aIdX, int aIdY, int aIdZ) const
+    {
+        float3 cellIdf = make_float3((float)aIdX + 0.5f, (float)aIdY + 0.5f, (float)aIdZ + 0.5f);
+        return vtx[0] + cellIdf * cellSize;
+    }
+
     DEVICE uint getPrimitiveId(uint aId)
     {
         return primitives[aId];

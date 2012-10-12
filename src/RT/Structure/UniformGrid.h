@@ -96,6 +96,11 @@ public:
         return getCell(static_cast<int>(cellIdf.x),  static_cast<int>(cellIdf.y), static_cast<int>(cellIdf.z));
     }
 
+    HOST DEVICE float3 getCellCenter(int aIdX, int aIdY, int aIdZ) const
+    {
+        float3 cellIdf = make_float3((float)aIdX + 0.5f, (float)aIdY + 0.5f, (float)aIdZ + 0.5f);
+        return vtx[0] + cellIdf * cellSize;
+    }
 
     HOST DEVICE uint getPrimitiveId(uint aId)
     {

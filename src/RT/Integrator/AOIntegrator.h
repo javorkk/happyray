@@ -126,11 +126,11 @@ GLOBAL void computeAOIllumination(
                 float u = len(n0) * twiceSabc_RCP;
                 float v = len(n1) * twiceSabc_RCP;
 
-                VtxAttribStruct<tPrimitive, float3> normals;
+                /*VtxAttribStruct<tPrimitive, float3> normals;
                 normals = aNormalStorage[bestHit];
                 float3& normal0 = normals.data[0];
                 float3& normal1 = normals.data[1];
-                float3& normal2 = normals.data[2];
+                float3& normal2 = normals.data[2];*/
 
                 float3 normal = ~realNormal;//~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
 

@@ -230,7 +230,7 @@
       <Filter>RT\Structure</Filter>
     </ClInclude>
     <ClInclude Include="src\RT\Primitive\Plane.hpp">
-      <Filter>Headers</Filter>
+      <Filter>RT\Primitive</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

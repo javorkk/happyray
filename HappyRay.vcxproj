@@ -251,6 +251,7 @@
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
       <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
+      <PtxAsOptionV>true</PtxAsOptionV>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
