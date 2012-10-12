@@ -28,7 +28,7 @@ public:
         return dot(getN(),aPlane.getN()) >= 1.0f - aAngleEPS &&
             fabsf(calculateSignedDistance(aPlane.getPt())) <= aSpatialEPS;
     }
-    DEVICE HOST float3 projectedPoint( const float3& aPt)
+    DEVICE HOST float3 projectedPoint( const float3& aPt) const
     {
         return aPt - calculateSignedDistance(aPt) * getN();
     }
