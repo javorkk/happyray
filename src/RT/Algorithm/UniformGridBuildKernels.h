@@ -245,7 +245,8 @@ GLOBAL void prepareCellRanges(
         //which means that at this point there is an end of and a begin of a range
 
         //compare left neighbor
-        if (instanceId > 0 && instanceId < aNumPairs && padShMem[threadId1D()] != shMem[threadId1D()])
+        if (instanceId > 0 && instanceId < aNumPairs && padShMem[threadId1D()] != shMem[threadId1D()]
+        && padShMem[threadId1D()] < aGridResX * aGridResY * aGridResZ)
         {
             //begin of range
             uint cellIdX =  padShMem[threadId1D()] % aGridResX;
@@ -260,7 +261,8 @@ GLOBAL void prepareCellRanges(
         }
 
         //compare right neighbor
-        if (instanceId < aNumPairs && padShMem[threadId1D()] != padShMem[threadId1D() + 1])
+        if (instanceId < aNumPairs && padShMem[threadId1D()] != padShMem[threadId1D() + 1]
+         && padShMem[threadId1D()] < aGridResX * aGridResY * aGridResZ)
         {
             //end of range
             uint cellIdX =  padShMem[threadId1D()] % aGridResX;
