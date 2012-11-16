@@ -27,7 +27,7 @@
 
 #include "../Utils/ImagePNG.hpp"
 
-//#define USE_OPEN_GL
+#define USE_OPEN_GL
 
 SDL_Window* SDLGLApplication::mainwindow;
 

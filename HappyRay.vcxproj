@@ -48,7 +48,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 4.2.props" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 5.0.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -135,7 +135,7 @@
       </AddedDependencies>
     </Cudart_Build_Rule>
     <CudaCompile>
-      <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
+      <CodeGeneration>compute_12,sm_12;compute_20,sm_20;compute_30,sm_30</CodeGeneration>
       <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MTd</Runtime>
@@ -170,7 +170,7 @@
       </AddedDependencies>
     </Cudart_Build_Rule>
     <CudaCompile>
-      <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
+      <CodeGeneration>compute_12,sm_12;compute_20,sm_20;compute_30,sm_30</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
@@ -208,7 +208,7 @@
       </AddedDependencies>
     </Cudart_Build_Rule>
     <CudaCompile>
-      <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
+      <CodeGeneration>compute_12,sm_12;compute_20,sm_20;compute_30,sm_30</CodeGeneration>
       <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
@@ -250,7 +250,7 @@
       <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
-      <CodeGeneration>compute_12,sm_12;compute_20,sm_20</CodeGeneration>
+      <CodeGeneration>compute_12,sm_12;compute_20,sm_20;compute_30,sm_30</CodeGeneration>
       <PtxAsOptionV>true</PtxAsOptionV>
     </CudaCompile>
   </ItemDefinitionGroup>
@@ -358,6 +358,6 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 4.2.targets" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 5.0.targets" />
   </ImportGroup>
 </Project>

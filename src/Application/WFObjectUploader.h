@@ -317,7 +317,7 @@ public:
         //////////////////////////////////////////////////////////////////////////
         for (size_t it = 0; it < numIndices; ++it)
         {
-            materialIndicesHost[it] = aKeyFrame2.getFace(it).material;
+            materialIndicesHost[it] = (uint)aKeyFrame2.getFace(it).material;
         }
 
         MY_CUDA_SAFE_CALL( cudaMemcpy( materialIndicesDevice, materialIndicesHost, indicesNewSize, cudaMemcpyHostToDevice) );
@@ -396,7 +396,7 @@ public:
         //////////////////////////////////////////////////////////////////////////
         for (size_t it = 0; it < numIndices; ++it)
         {
-            materialIndicesHost[it] = aKeyFrame2.getFace(it).material;
+            materialIndicesHost[it] = (uint)aKeyFrame2.getFace(it).material;
         }
 
         MY_CUDA_SAFE_CALL( cudaMemcpy( materialIndicesDevice, materialIndicesHost, indicesNewSize, cudaMemcpyHostToDevice) );

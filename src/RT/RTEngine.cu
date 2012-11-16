@@ -51,7 +51,7 @@
 
 typedef Triangle    t_Primitive;
 
-//#define TLGRID
+#define TLGRID
 
 #ifdef TLGRID
 typedef TLGridMemoryManager             t_MemoryManager;
@@ -203,7 +203,7 @@ void RTEngine::upload(
 void RTEngine::buildAccStruct()
 
 {
-    sBuilder.init(sMemoryManager, sTriangleArray.numPrimitives, sTopLevelDensity, sLeafLevelDensity);
+    sBuilder.init(sMemoryManager, (uint)sTriangleArray.numPrimitives, sTopLevelDensity, sLeafLevelDensity);
     sBuilder.build(sMemoryManager, sTriangleArray);
 }
 

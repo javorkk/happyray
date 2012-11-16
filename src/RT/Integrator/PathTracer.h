@@ -785,8 +785,8 @@ GLOBAL void addIndirectIllumination(
 
             //MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcGrid", &aAccStruct, sizeof(UniformGrid)) );
             //MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcFrameBuffer", &aFrameBuffer, sizeof(FrameBuffer)) );
-            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcMaterialStorage", &aMaterialStorage, sizeof(PrimitiveAttributeArray<PhongMaterial>)) );
-            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcNumPixels", &numPixels, sizeof(uint)) );
+            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol(dcMaterialStorage, &aMaterialStorage, sizeof(PrimitiveAttributeArray<PhongMaterial>)) );
+            MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol(dcNumPixels, &numPixels, sizeof(uint)) );
 
             t_ImportanceBuffer     importanceBuffer(mGlobalMemoryPtr + 
                 1 +                                                         //Persistent threads

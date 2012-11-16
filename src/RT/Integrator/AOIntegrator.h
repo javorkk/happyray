@@ -274,7 +274,7 @@ public:
         //////////////////////////////////////////////////////////////////////////////////////////////////////
         //Ambient Occlusion rays
         //////////////////////////////////////////////////////////////////////////////////////////////////////
-        MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcNumPixels", &numPixels, sizeof(uint)) );
+        MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol(dcNumPixels, &numPixels, sizeof(uint)) );
 
         t_AOcclusionBuffer occlusionBuffer(mGlobalMemoryPtr + 
             1 +                             //Persistent threads

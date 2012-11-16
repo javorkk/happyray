@@ -155,7 +155,7 @@ public:
             <<< gridTotalSize, blockTotalSize,
             blockTotalSize.x * (sizeof(uint) + sizeof(float3))>>>(
             aPrimitiveArray,
-            aPrimitiveArray.numPrimitives,
+            (uint)aPrimitiveArray.numPrimitives,
             aMemoryManager.getResolution(), 
             aMemoryManager.bounds.vtx[0],
             aMemoryManager.getCellSize(),
@@ -207,7 +207,7 @@ public:
             sizeof(uint)/* + sizeof(float3) * blockUnsortedGrid.x*/ >>>(
             aPrimitiveArray,
             aMemoryManager.topLevelPairsBuffer,
-            aPrimitiveArray.numPrimitives,
+            (uint)aPrimitiveArray.numPrimitives,
             aMemoryManager.refCountsBuffer,
             aMemoryManager.getResolution(),
             aMemoryManager.bounds.vtx[0],
