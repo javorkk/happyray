@@ -77,9 +77,9 @@ GLOBAL void computeAOIllumination(
 
     float3 rayOrg = rep(0.f);
     float3 rayDir = rep(1.f);
-
+    uint numIterations = dcNumRays - dcNumRays % blockSize() + blockSize();
     for(uint myRayIndex = globalThreadId1D();
-        myRayIndex - threadId1D() < dcNumRays;
+        myRayIndex < numIterations;
         myRayIndex += numThreads())
     {
 
