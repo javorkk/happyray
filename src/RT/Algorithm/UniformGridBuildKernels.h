@@ -35,10 +35,11 @@
 #include "RT/Primitive/Triangle.hpp"
 #include "RT/Structure/PrimitiveArray.h"
 
+extern SHARED uint shMem[];
 
-template<class tPrimitive, template<class> class tPrimitiveArray, int taBlockSize>
+template<class tPrimitive, class tPrimitiveArray, int taBlockSize>
 GLOBAL void countPairs(
-                      tPrimitiveArray<tPrimitive>   aPrimitiveArray,
+                      tPrimitiveArray               aPrimitiveArray,
                       const uint                    aNumPrimitives,
                       const float3                  aGridRes,
                       const float3                  aBoundsMin,
@@ -47,7 +48,7 @@ GLOBAL void countPairs(
                       uint*                         oRefCounts
                       )
 {
-    extern SHARED uint shMem[];
+
     shMem[threadId1D()] = 0u;
 
     for(int primitiveId = globalThreadId1D(); primitiveId < aNumPrimitives; primitiveId += numThreads())
@@ -56,23 +57,27 @@ GLOBAL void countPairs(
         BBox bounds = BBoxExtractor<tPrimitive>::get(prim);
         
         float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
-        minCellIdf =
-            max(rep(0.f), (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP );
-        const float3 maxCellIdf =
-            min(aGridRes - rep(1.f), (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP );
+        minCellIdf = (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP;
+        const float3 maxCellIdPlus1f = (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP + rep(1.f);
 
         const int minCellIdX =   max(0, (int)(minCellIdf.x));
         const int minCellIdY =   max(0, (int)(minCellIdf.y));
         const int minCellIdZ =   max(0, (int)(minCellIdf.z));
 
-        const int maxCellIdX =  min((int)aGridRes.x, (int)(maxCellIdf.x));
-        const int maxCellIdY =  min((int)aGridRes.y, (int)(maxCellIdf.y));
-        const int maxCellIdZ =  min((int)aGridRes.z, (int)(maxCellIdf.z));
+        const int maxCellIdP1X =  min((int)aGridRes.x, (int)(maxCellIdPlus1f.x));
+        const int maxCellIdP1Y =  min((int)aGridRes.y, (int)(maxCellIdPlus1f.y));
+        const int maxCellIdP1Z =  min((int)aGridRes.z, (int)(maxCellIdPlus1f.z));
+        const int numCells   = 
+              (maxCellIdP1X - minCellIdX )
+            * (maxCellIdP1Y - minCellIdY )
+            * (maxCellIdP1Z - minCellIdZ );
 
-        shMem[threadId1D()] += (maxCellIdX - minCellIdX + 1)
-            * (maxCellIdY - minCellIdY + 1)
-            * (maxCellIdZ - minCellIdZ + 1);
+        shMem[threadId1D()] += numCells;
     }
+
+    ////DEBUG
+    //if(shMem[threadId1D()] != 0u)
+    //    printf("Thread %d counted %d cells.\n", globalThreadId1D(), shMem[threadId1D()]);
 
     SYNCTHREADS;
 
@@ -99,9 +104,9 @@ GLOBAL void countPairs(
 #endif
 }
 
-template<class tPrimitive, template<class> class tPrimitiveArray, bool tExactInsertion>
+template<class tPrimitive, class tPrimitiveArray, bool tExactInsertion>
 GLOBAL void writePairs(
-                        tPrimitiveArray<tPrimitive> aPrimitiveArray,
+                        tPrimitiveArray             aPrimitiveArray,
                         uint*                       oPairs,
                         const uint                  aNumPrimitives,
                         uint*                       aStartId,
@@ -111,7 +116,6 @@ GLOBAL void writePairs(
                         const float3                 aCellSizeRCP
                               )
 {
-    extern SHARED uint shMem[];
 
 #if HAPPYRAY__CUDA_ARCH__ >= 120
 
@@ -134,23 +138,20 @@ GLOBAL void writePairs(
         BBox bounds = BBoxExtractor<tPrimitive>::get(prim);
         
         //float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
-        float3 minCellIdf =
-            max(rep(0.f), (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP );
-        const float3 maxCellIdf =
-            min(aGridRes - rep(1.f), (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP );
+        const float3 minCellIdf = (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP;
+        const float3 maxCellIdPlus1f = (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP + rep(1.f);
 
         const int minCellIdX =   max(0, (int)(minCellIdf.x));
         const int minCellIdY =   max(0, (int)(minCellIdf.y));
         const int minCellIdZ =   max(0, (int)(minCellIdf.z));
 
-        const int maxCellIdX =  min((int)aGridRes.x, (int)(maxCellIdf.x));
-        const int maxCellIdY =  min((int)aGridRes.y, (int)(maxCellIdf.y));
-        const int maxCellIdZ =  min((int)aGridRes.z, (int)(maxCellIdf.z));
-
-        const uint numCells =
-            (maxCellIdX - minCellIdX + 1u) *
-            (maxCellIdY - minCellIdY + 1u) *
-            (maxCellIdZ - minCellIdZ + 1u);
+        const int maxCellIdP1X =  min((int)aGridRes.x, (int)(maxCellIdPlus1f.x));
+        const int maxCellIdP1Y =  min((int)aGridRes.y, (int)(maxCellIdPlus1f.y));
+        const int maxCellIdP1Z =  min((int)aGridRes.z, (int)(maxCellIdPlus1f.z));
+        const int numCells   = 
+              (maxCellIdP1X - minCellIdX )
+            * (maxCellIdP1Y - minCellIdY )
+            * (maxCellIdP1Z - minCellIdZ );
 
 #if HAPPYRAY__CUDA_ARCH__ >= 120
         uint nextSlot  = atomicAdd(&shMem[0], numCells);
@@ -159,11 +160,11 @@ GLOBAL void writePairs(
         startPosition += numCells;
 #endif
 
-        for (uint z = minCellIdZ; z <= maxCellIdZ; ++z)
+        for (uint z = minCellIdZ; z < maxCellIdP1Z; ++z)
         {
-            for (uint y = minCellIdY; y <= maxCellIdY; ++y)
+            for (uint y = minCellIdY; y < maxCellIdP1Y; ++y)
             {
-                for (uint x = minCellIdX; x <= maxCellIdX; ++x, ++nextSlot)
+                for (uint x = minCellIdX; x < maxCellIdP1X; ++x, ++nextSlot)
                 {
                     oPairs[2 * nextSlot] = x +
                         y * (uint)aGridRes.x +
@@ -178,15 +179,15 @@ GLOBAL void writePairs(
 
 //Explicit specialization for exact triangle insertion
 template<>
-GLOBAL void writePairs<Triangle, PrimitiveArray, true>(
-    PrimitiveArray<Triangle> aPrimitiveArray,
+GLOBAL void writePairs<Triangle, PrimitiveArray<Triangle>, true>(
+    PrimitiveArray<Triangle>    aPrimitiveArray,
     uint*                       oPairs,
     const uint                  aNumPrimitives,
     uint*                       aStartId,
-    const float3                 aGridRes,
-    const float3                 aBoundsMin,
-    const float3                 aCellSize,
-    const float3                 aCellSizeRCP
+    const float3                aGridRes,
+    const float3                aBoundsMin,
+    const float3                aCellSize,
+    const float3                aCellSizeRCP
     );
 
 template<int taBlockSize>
@@ -200,13 +201,12 @@ GLOBAL void prepareCellRanges(
                               const uint        aGridResZ
                               )
 {
-    extern SHARED uint shMem[];
 
     //padding
     if (threadId1D() == 0)
     {
         shMem[0] = 0u;
-        shMem[taBlockSize] = 0u;
+        shMem[taBlockSize + 1] = 0u;
     }
 
     uint *padShMem = shMem + 1;
@@ -237,6 +237,10 @@ GLOBAL void prepareCellRanges(
         if (instanceId < aNumPairs)
         {
             padShMem[threadId1D()] = aSortedPairs[instanceId].x;
+        }
+        if (instanceId == aNumPairs)
+        {
+            padShMem[threadId1D()] = aGridResX * aGridResY * aGridResZ;
         }
 
         SYNCTHREADS;

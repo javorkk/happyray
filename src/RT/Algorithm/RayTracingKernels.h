@@ -42,6 +42,7 @@
     RENDERTHREADSX * RENDERTHREADSY / WARPSIZE * 2 * sizeof(uint)              \
     /*End Macro*/
 
+extern SHARED uint sharedMem[];
 
 template<
     class tPrimitive,
@@ -61,7 +62,6 @@ template<
     int*                        aGlobalMemoryPtr
     )
 {
-    extern SHARED uint sharedMem[];
 #if __CUDA_ARCH__ >= 110
     volatile uint*  nextRayArray = sharedMem;
     volatile uint*  rayCountArray = nextRayArray + RENDERTHREADSY;

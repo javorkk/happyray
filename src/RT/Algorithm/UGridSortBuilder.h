@@ -131,10 +131,10 @@ public:
 #endif
         aMemoryManager.allocateRefCountsBuffer(numCounters + 1);
         
-        countPairs<tPrimitive, PrimitiveArray, sNUM_COUNTER_THREADS >
+        countPairs<tPrimitive, PrimitiveArray<tPrimitive>, sNUM_COUNTER_THREADS >
             <<< gridTotalSize, blockTotalSize, blockTotalSize.x * (sizeof(uint) + sizeof(float3)) >>>(
             aPrimitiveArray,
-            aPrimitiveArray.numPrimitives,
+            (uint)aPrimitiveArray.numPrimitives,
             aMemoryManager.getResolution(), 
             aMemoryManager.bounds.vtx[0],
             aMemoryManager.getCellSize(),
@@ -181,12 +181,12 @@ public:
         dim3 blockUnsortedGrid(sNUM_WRITE_THREADS);
         dim3 gridUnsortedGrid (sNUM_WRITE_BLOCKS);
 
-        writePairs<tPrimitive, PrimitiveArray, taExactTriangleInsertion>
+        writePairs<tPrimitive, PrimitiveArray<tPrimitive>, taExactTriangleInsertion>
             <<< gridUnsortedGrid, blockUnsortedGrid,
             sizeof(uint)/* + sizeof(float3) * blockUnsortedGrid.x*/ >>>(
             aPrimitiveArray,
             aMemoryManager.pairsBuffer,
-            aPrimitiveArray.numPrimitives,
+            (uint)aPrimitiveArray.numPrimitives,
             aMemoryManager.refCountsBuffer,
             aMemoryManager.getResolution(),
             aMemoryManager.bounds.vtx[0],

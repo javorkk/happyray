@@ -71,7 +71,6 @@ GLOBAL void simpleShade(
         float3 oRadiance;
         if (rayT < FLT_MAX && bestHit < aStorage.numPrimitives)
         {
-            //oRadiance = rep(rayT);
             tPrimitive prim = aStorage[bestHit];
             float3& vert0 = prim.vtx[0];
             float3& vert1 = prim.vtx[1];
@@ -105,6 +104,8 @@ GLOBAL void simpleShade(
             diffReflectance.z = 1.f-u-v;//1.f;//M_PI_RCP; //1.f - u - v;
 
             oRadiance =  diffReflectance * fmaxf(0.f, fabsf(dot(-normal,~rayDir[threadId1D()])));
+            //oRadiance = rep(rayT);
+
 
         }
         else

@@ -1,5 +1,5 @@
 /****************************************************************************/
-/* Copyright (c) 2011, Javor Kalojanov
+/* Copyright (c) 2013, Javor Kalojanov
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -25,29 +25,101 @@
 #pragma once
 #endif
 
-#ifndef UGRIDTRAVERSER_H_848B2A1F_2621_48BA_BB6C_A5940972E7C9
-#define UGRIDTRAVERSER_H_848B2A1F_2621_48BA_BB6C_A5940972E7C9
+#ifndef TLGRIDHIERARCHYTRAVERSER_H_INCLUDED_0B0B4785_A48A_499A_A074_914B2408323E
+#define TLGRIDHIERARCHYTRAVERSER_H_INCLUDED_0B0B4785_A48A_499A_A074_914B2408323E
+
 
 #include "CUDAStdAfx.h"
 #include "Core/Algebra.hpp"
 
-#include "RT/Structure/UniformGrid.h"
+#include "RT/Structure/TwoLevelGridHierarchy.h"
 #include "RT/Structure/PrimitiveArray.h"
+#include "RT/Algorithm/UGridTraverser.h"
 
 /////////////////////////////////////////////////////////////////
-//Uniform Grid Traversal Classes
+//Two Level Grid Hierarchy Traversal Classes
 /////////////////////////////////////////////////////////////////
+
+template<class tPrimitive, class tIntersector, bool taIsShadowRay = false>
+class GeometryInstanceIntersector
+{
+public:
+    DEVICE void operator()(
+        float3&                             aRayOrg,
+        float&                              oRayT,
+        uint&                               oBestHit,
+        const uint2&                        aIdRange,
+        const uint*                         aInstanceIndirection,
+        GeometryInstance*                   aInstances,
+        UniformGrid*                        aGrids,
+        uint*                               aPrimitiveIndirection,
+        PrimitiveArray<tPrimitive>&         aPrimitiveArray,
+        uint*                               aSharedMemory
+        ) const
+    {
+        //UniformGrid grid = aGrids[0];
+        //float3& aRayDirRCP = (((float3*)aSharedMemory)[threadId1D32()]);
+        //UGridTraverser<tPrimitive, tIntersector, taIsShadowRay> traverse;
+        //bool traversalFlag = true;
+        //traverse(aPrimitiveArray, grid, aRayOrg, aRayDirRCP, oRayT, oBestHit, traversalFlag, aSharedMemory);
+
+        //grid = aGrids[1];
+        //traversalFlag = true;
+        //traverse(aPrimitiveArray, grid, aRayOrg, aRayDirRCP, oRayT, oBestHit, traversalFlag, aSharedMemory);
+
+        for (uint it = aIdRange.x; it < aIdRange.y; ++ it)
+        {
+            const GeometryInstance instance = aInstances[aInstanceIndirection[it]];
+            BBox bounds = BBoxExtractor<GeometryInstance>::get(instance);
+
+            float tEntry;
+            float tExit;
+            float3& aRayDirRCP = (((float3*)aSharedMemory)[threadId1D32()]);
+
+            bounds.fastClip(aRayOrg, aRayDirRCP, tEntry, tExit);
+
+            if(!(tExit > tEntry && tExit >= 0.f && tEntry < oRayT))
+                continue;
+
+            float3 rayOrgT = instance.rotation0 * aRayOrg.x + instance.rotation1 * aRayOrg.y + 
+                instance.rotation2 * aRayOrg.z + instance.translation;
+            
+            float3 rayDirT = instance.rotation0 / aRayDirRCP.x + instance.rotation1 / aRayDirRCP.y + 
+                instance.rotation2 / aRayDirRCP.z;
+
+            float3 rayDirRCPtmp;//backup ray direction
+            rayDirRCPtmp.x = aRayDirRCP.x;
+            rayDirRCPtmp.y = aRayDirRCP.y;
+            rayDirRCPtmp.z = aRayDirRCP.z;
+            
+            aRayDirRCP.x = 1.f / rayDirT.x;
+            aRayDirRCP.y = 1.f / rayDirT.y;
+            aRayDirRCP.z = 1.f / rayDirT.z;
+
+            UniformGrid grid = aGrids[instance.index];
+            UGridTraverser<tPrimitive, tIntersector, taIsShadowRay> traverse;
+            bool traversalFlag = true;
+            traverse(aPrimitiveArray, grid, rayOrgT, aRayDirRCP, oRayT, oBestHit, traversalFlag, aSharedMemory);
+
+            //restore ray direction
+            aRayDirRCP.x = rayDirRCPtmp.x;
+            aRayDirRCP.y = rayDirRCPtmp.y;
+            aRayDirRCP.z = rayDirRCPtmp.z;
+
+        }//end for all intersection candidates
+    }//end operator()
+};
 
 #define MIN_DIMENSION(aX, aY, aZ)	                           \
     (aX < aY) ? ((aX < aZ) ? 0 : 2)	: ((aY < aZ) ? 1 : 2)
 
 template<class tPrimitive, class tIntersector, bool taIsShadowRay = false>
-class UGridTraverser
+class TLGridHierarchyTraverser
 {
 public:
     DEVICE void operator()(
         PrimitiveArray<tPrimitive>  aPrimitiveArray,
-        UniformGrid                 dcGrid,
+        TwoLevelGridHierarchy       dcGrid,
         float3&                     rayOrg,
         float3&                     rayDirRCP,
         float&                      rayT,
@@ -56,7 +128,7 @@ public:
         uint*                       sharedMemNew
         )
     {
-        tIntersector intersector;
+        GeometryInstanceIntersector< tPrimitive, tIntersector, taIsShadowRay > intersector;
         //////////////////////////////////////////////////////////////////////////
         //Traversal State
         float tMax[3];
@@ -115,9 +187,9 @@ public:
             cellId[2] = static_cast<int>(cellIdf.z);
 
             traversalFlag = traversalFlag && (  
-                (cellId[0] < dcGrid.res[0] && cellId[0] > -1) && 
-                (cellId[1] < dcGrid.res[1] && cellId[1] > -1) && 
-                (cellId[2] < dcGrid.res[2] && cellId[2] > -1) 
+                (cellId[0] != ((rayDirRCP.x > 0.f) ? dcGrid.res[0] : -1)) 
+                &&  (cellId[1] != ((rayDirRCP.y > 0.f) ? dcGrid.res[1] : -1))
+                &&  (cellId[2] != ((rayDirRCP.z > 0.f) ? dcGrid.res[2] : -1)) 
                 );
         }
         //////////////////////////////////////////////////////////////////////////
@@ -133,8 +205,9 @@ public:
                 //cellRange =  make_uint2(0u, 0u);
             }
 
-            intersector(rayOrg, rayDirRCP, rayT, bestHit,
-                cellRange, dcGrid.primitives, aPrimitiveArray, sharedMemNew);
+            intersector(rayOrg, rayT, bestHit, cellRange,
+                dcGrid.instanceIndices, dcGrid.instances, dcGrid.grids, dcGrid.primitives,
+                aPrimitiveArray, sharedMemNew);
 
             if (traversalFlag)
             {
@@ -172,4 +245,4 @@ public:
 
 #undef  MIN_DIMENSION
 
-#endif // UGRIDTRAVERSER_H_848B2A1F_2621_48BA_BB6C_A5940972E7C9
+#endif // TLGRIDHIERARCHYTRAVERSER_H_INCLUDED_0B0B4785_A48A_499A_A074_914B2408323E

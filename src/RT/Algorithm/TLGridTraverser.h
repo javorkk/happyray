@@ -116,9 +116,9 @@ public:
             cellId[2] = static_cast<int>(cellIdf.z);
 
             traversalFlag = traversalFlag && (  
-                (cellId[0] != ((rayDirRCP.x > 0.f) ? dcGrid.res[0] : -1)) 
-                &&  (cellId[1] != ((rayDirRCP.y > 0.f) ? dcGrid.res[1] : -1))
-                &&  (cellId[2] != ((rayDirRCP.z > 0.f) ? dcGrid.res[2] : -1)) 
+                (cellId[0] < dcGrid.res[0] && cellId[0] > -1) && 
+                (cellId[1] < dcGrid.res[1] && cellId[1] > -1) && 
+                (cellId[2] < dcGrid.res[2] && cellId[2] > -1) 
                 );
         }
         //////////////////////////////////////////////////////////////////////////

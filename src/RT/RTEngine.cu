@@ -47,13 +47,29 @@
 #include "RT/Integrator/PathTracer.h"
 #include "RT/Integrator/AOIntegrator.h" //USE_3D_TEXTURE defined there
 
+//////////////////////////////////////////////////////////////////////////
+//DEBUG only
+#include "RT/Structure/TwoLevelGridHierarchy.h"
+#include "RT/Structure/TLGridHierarchyMemoryManager.h"
+#include "RT/Algorithm/TLGridHierarchySortBuilder.h"
+#include "RT/Algorithm/TLGridHierarchyTraverser.h"
+//////////////////////////////////////////////////////////////////////////
+
 
 
 typedef Triangle    t_Primitive;
 
+//#define TLGRIDHIERARCHY
 #define TLGRID
 
-#ifdef TLGRID
+#ifdef TLGRIDHIERARCHY //DEBUG PURPOSES ONLY
+typedef TLGridHierarchyMemoryManager                t_MemoryManager;
+typedef TLGridHierarchySortBuilder< t_Primitive >   t_AccStructBuilder;
+typedef TwoLevelGridHierarchy                       t_AccStruct;
+#define Traverser_t                                 TLGridHierarchyTraverser
+float                                               sTopLevelDensity = 1.2f;
+float                                               sLeafLevelDensity = 5.f; //dummy
+#elif defined TLGRID
 typedef TLGridMemoryManager             t_MemoryManager;
 typedef TLGridSortBuilder<t_Primitive>  t_AccStructBuilder;
 typedef TwoLevelGrid                    t_AccStruct;
@@ -205,6 +221,12 @@ void RTEngine::buildAccStruct()
 {
     sBuilder.init(sMemoryManager, (uint)sTriangleArray.numPrimitives, sTopLevelDensity, sLeafLevelDensity);
     sBuilder.build(sMemoryManager, sTriangleArray);
+
+    //TLGridHierarchySortBuilder< t_Primitive > dbgBuilder;
+    //TLGridHierarchyMemoryManager dbgMemManager;
+    //dbgMemManager.bounds = sMemoryManager.bounds;
+    //dbgBuilder.init(dbgMemManager, (uint)sTriangleArray.numPrimitives, sTopLevelDensity, 5.f);
+    //dbgBuilder.build(dbgMemManager, sTriangleArray);
 }
 
 void RTEngine::setCamera(

@@ -34,6 +34,8 @@
 #include "RT/Primitive/Primitive.hpp"
 #include "RT/Primitive/BBox.hpp"
 
+extern SHARED uint shMem[];
+
 //Computes number of second-level-cells of a gird
 //A cell=(x,y,z) is mapped to a thread like this:
 //  x = threadIdx.x
@@ -163,7 +165,6 @@ GLOBAL void countLeafLevelPairs(
     //////////////////////////////////////////////////////////////////////////
     )
 {
-    extern SHARED uint shMem[];
     shMem[threadId1D()] = 0u;
 
     //uint* numTopLevelCells = shMem + blockSize() + threadId1D();
@@ -470,6 +471,10 @@ GLOBAL void prepareLeafCellRanges(
         if (instanceId < aNumPairs)
         {
             padShMem[threadId1D()] = aSortedPairs[instanceId].x;
+        }
+        if (instanceId == aNumPairs - 1)
+        {
+            padShMem[threadId1D() + 1] = padShMem[threadId1D()] + 1; //dummy
         }
 
         SYNCTHREADS;

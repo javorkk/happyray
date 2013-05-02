@@ -50,7 +50,7 @@ DEVICE bool axisTest(
 //////////////////////////////////////////////////////////////////////////
 
 template<>
-GLOBAL void writePairs<Triangle, PrimitiveArray, true>(
+GLOBAL void writePairs<Triangle, PrimitiveArray<Triangle>, true>(
     PrimitiveArray<Triangle> aPrimitiveArray,
     uint*                       oPairs,
     const uint                  aNumPrimitives,
@@ -84,23 +84,20 @@ GLOBAL void writePairs<Triangle, PrimitiveArray, true>(
         BBox bounds = BBoxExtractor<Triangle>::get(triangle);
 
         //float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
-        float3 minCellIdf =
-            max(rep(0.f), (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP );
-        const float3 maxCellIdf =
-            min(aGridRes - rep(1.f), (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP );
+        const float3 minCellIdf = (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP;
+        const float3 maxCellIdPlus1f = (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP + rep(1.f);
 
         const int minCellIdX =   max(0, (int)(minCellIdf.x));
         const int minCellIdY =   max(0, (int)(minCellIdf.y));
         const int minCellIdZ =   max(0, (int)(minCellIdf.z));
 
-        const int maxCellIdX =  min((int)aGridRes.x, (int)(maxCellIdf.x));
-        const int maxCellIdY =  min((int)aGridRes.y, (int)(maxCellIdf.y));
-        const int maxCellIdZ =  min((int)aGridRes.z, (int)(maxCellIdf.z));
-
-        const uint numCells =
-            (maxCellIdX - minCellIdX + 1u) *
-            (maxCellIdY - minCellIdY + 1u) *
-            (maxCellIdZ - minCellIdZ + 1u);
+        const int maxCellIdP1X =  min((int)aGridRes.x, (int)(maxCellIdPlus1f.x));
+        const int maxCellIdP1Y =  min((int)aGridRes.y, (int)(maxCellIdPlus1f.y));
+        const int maxCellIdP1Z =  min((int)aGridRes.z, (int)(maxCellIdPlus1f.z));
+        const int numCells   = 
+            (maxCellIdP1X - minCellIdX )
+            * (maxCellIdP1Y - minCellIdY )
+            * (maxCellIdP1Z - minCellIdZ );
 
 #if HAPPYRAY__CUDA_ARCH__ >= 120
         uint nextSlot  = atomicAdd(&shMem[0], numCells);
@@ -126,17 +123,17 @@ GLOBAL void writePairs<Triangle, PrimitiveArray, true>(
         float3 cellCenter;
         cellCenter.z = minCellCenter.z - aCellSize.z;
 
-        for (uint z = minCellIdZ; z <= maxCellIdZ; ++z)
+        for (uint z = minCellIdZ; z < maxCellIdP1Z; ++z)
         {
             cellCenter.z += aCellSize.z;
             cellCenter.y = minCellCenter.y - aCellSize.y;
 
-            for (uint y = minCellIdY; y <= maxCellIdY; ++y)
+            for (uint y = minCellIdY; y < maxCellIdP1Y; ++y)
             {
                 cellCenter.y += aCellSize.y;
                 cellCenter.x = minCellCenter.x - aCellSize.x;
 
-                for (uint x = minCellIdX; x <= maxCellIdX; ++x, ++nextSlot)
+                for (uint x = minCellIdX; x < maxCellIdP1X; ++x, ++nextSlot)
                 {
                     cellCenter.x += aCellSize.x;
 
