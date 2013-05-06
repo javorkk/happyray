@@ -130,6 +130,7 @@ public:
         retval.grids = gridsDevice;
         retval.leaves = leavesDevice;
         retval.primitives = primitiveIndices;
+        retval.numInstances = (uint)(instancesSize / sizeof(GeometryInstance));
         //retval.numPrimitiveReferences = primitiveIndicesSize / sizeof(uint);
         return retval;
     }

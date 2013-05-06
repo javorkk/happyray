@@ -19,6 +19,22 @@ struct  GeometryInstance : public Primitive<2>
     float3 rotation0, rotation1, rotation2, translation;
     float3 irotation0, irotation1, irotation2, itranslation;
 
+    //returns the new origin, overwrites the old direction
+    DEVICE HOST float3 transformRay(float3& aRayOrg, float3& oRayDirRCP) const
+    {
+        float3 rayOrgT = rotation0 * aRayOrg.x + rotation1 * aRayOrg.y + 
+            rotation2 * aRayOrg.z + translation;
+
+        float3 rayDirT = rotation0 / oRayDirRCP.x + rotation1 / oRayDirRCP.y + 
+            rotation2 / oRayDirRCP.z;
+
+        oRayDirRCP.x = 1.f / rayDirT.x;
+        oRayDirRCP.y = 1.f / rayDirT.y;
+        oRayDirRCP.z = 1.f / rayDirT.z;
+
+        return rayOrgT;
+    }
+
 };
 
 template<>
@@ -50,6 +66,7 @@ public:
     UniformGrid*    grids;
     t_Leaf*         leaves;
     uint*           primitives;
+    uint            numInstances;
     //uint  numPrimitiveReferences;
 
 

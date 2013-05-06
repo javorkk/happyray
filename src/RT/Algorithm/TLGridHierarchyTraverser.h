@@ -48,6 +48,7 @@ public:
         float3&                             aRayOrg,
         float&                              oRayT,
         uint&                               oBestHit,
+        uint&                               oBestHitInstance,
         const uint2&                        aIdRange,
         const uint*                         aInstanceIndirection,
         GeometryInstance*                   aInstances,
@@ -81,26 +82,23 @@ public:
             if(!(tExit > tEntry && tExit >= 0.f && tEntry < oRayT))
                 continue;
 
-            float3 rayOrgT = instance.rotation0 * aRayOrg.x + instance.rotation1 * aRayOrg.y + 
-                instance.rotation2 * aRayOrg.z + instance.translation;
-            
-            float3 rayDirT = instance.rotation0 / aRayDirRCP.x + instance.rotation1 / aRayDirRCP.y + 
-                instance.rotation2 / aRayDirRCP.z;
-
             float3 rayDirRCPtmp;//backup ray direction
             rayDirRCPtmp.x = aRayDirRCP.x;
             rayDirRCPtmp.y = aRayDirRCP.y;
             rayDirRCPtmp.z = aRayDirRCP.z;
             
-            aRayDirRCP.x = 1.f / rayDirT.x;
-            aRayDirRCP.y = 1.f / rayDirT.y;
-            aRayDirRCP.z = 1.f / rayDirT.z;
+           float3 rayOrgT = instance.transformRay(aRayOrg, aRayDirRCP);
 
             UniformGrid grid = aGrids[instance.index];
             UGridTraverser<tPrimitive, tIntersector, taIsShadowRay> traverse;
             bool traversalFlag = true;
+            uint bestHit = oBestHit;
             traverse(aPrimitiveArray, grid, rayOrgT, aRayDirRCP, oRayT, oBestHit, traversalFlag, aSharedMemory);
 
+            if (oBestHit != bestHit)
+            {
+                oBestHitInstance = it;
+            }
             //restore ray direction
             aRayDirRCP.x = rayDirRCPtmp.x;
             aRayDirRCP.y = rayDirRCPtmp.y;
@@ -129,6 +127,7 @@ public:
         )
     {
         GeometryInstanceIntersector< tPrimitive, tIntersector, taIsShadowRay > intersector;
+        uint bestHitInstance = dcGrid.numInstances;
         //////////////////////////////////////////////////////////////////////////
         //Traversal State
         float tMax[3];
@@ -205,7 +204,7 @@ public:
                 //cellRange =  make_uint2(0u, 0u);
             }
 
-            intersector(rayOrg, rayT, bestHit, cellRange,
+            intersector(rayOrg, rayT, bestHit, bestHitInstance, cellRange,
                 dcGrid.instanceIndices, dcGrid.instances, dcGrid.grids, dcGrid.primitives,
                 aPrimitiveArray, sharedMemNew);
 
@@ -239,7 +238,14 @@ public:
         }
         //end traversal loop
         //////////////////////////////////////////////////////////////////////////
-
+        
+        //transform the ray into the local coordinates of the hit instance
+        if(bestHitInstance < dcGrid.numInstances)
+        {
+            const GeometryInstance instance = dcGrid.instances[dcGrid.instanceIndices[bestHitInstance]];
+            float3 rayOrgT = instance.transformRay(rayOrg, rayDirRCP);
+            rayOrg = rayOrgT;
+        }
     }
 };
 

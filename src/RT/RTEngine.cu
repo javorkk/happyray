@@ -59,7 +59,7 @@
 
 typedef Triangle    t_Primitive;
 
-//#define TLGRIDHIERARCHY
+#define TLGRIDHIERARCHY
 #define TLGRID
 
 #ifdef TLGRIDHIERARCHY //DEBUG PURPOSES ONLY

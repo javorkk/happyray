@@ -333,17 +333,6 @@ public:
     {
 
         //////////////////////////////////////////////////////////////////////////
-        cudaEventCreate(&mScan);
-        cudaEventCreate(&mTopLevel);
-        cudaEventCreate(&mLeafCellCount);
-        cudaEventCreate(&mLeafRefsCount);
-        cudaEventCreate(&mLeafRefsWrite);
-        cudaEventCreate(&mSortLeafPairs);
-        cudaEventCreate(&mEnd);
-        //////////////////////////////////////////////////////////////////////////
-
-
-        //////////////////////////////////////////////////////////////////////////
         //DEBUG
         uint* primitiveCounts;
         MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&primitiveCounts, 4 * sizeof(uint) ) );
@@ -384,6 +373,27 @@ public:
         //END DEBUG
         //////////////////////////////////////////////////////////////////////////
 
+        build(aMemoryManager, 4, primitiveCounts, aPrimitiveArray);
+
+        MY_CUDA_SAFE_CALL( cudaFreeHost( primitiveCounts ) );
+        MY_CUDA_SAFE_CALL( cudaFreeHost( bounds ) );
+    }
+
+    HOST void build(
+        TLGridHierarchyMemoryManager&       aMemoryManager,
+        uint                                aNumUniqueInstances,
+        uint*                               aPrimitiveCounts,
+        PrimitiveArray<tPrimitive>&         aPrimitiveArray)
+    {
+        //////////////////////////////////////////////////////////////////////////
+        cudaEventCreate(&mScan);
+        cudaEventCreate(&mTopLevel);
+        cudaEventCreate(&mLeafCellCount);
+        cudaEventCreate(&mLeafRefsCount);
+        cudaEventCreate(&mLeafRefsWrite);
+        cudaEventCreate(&mSortLeafPairs);
+        cudaEventCreate(&mEnd);
+        //////////////////////////////////////////////////////////////////////////
 
         //////////////////////////////////////////////////////////////////////////
         //TOP LEVEL GRID CONSTRUCTION
@@ -403,7 +413,7 @@ public:
         countPairs<GeometryInstance, GeometryInstance*, sNUM_COUNTER_THREADS >
             <<< gridTotalSize, blockTotalSize,
             blockTotalSize.x * (sizeof(uint) + sizeof(float3))>>>(
-            deviceInstances,
+            aMemoryManager.instancesDevice,
             numInstances,
             aMemoryManager.getResolution(), 
             aMemoryManager.bounds.vtx[0],
@@ -455,7 +465,7 @@ public:
         writePairs<GeometryInstance, GeometryInstance*, false>
             <<< gridUnsortedGrid, blockUnsortedGrid,
             sizeof(uint)/* + sizeof(float3) * blockUnsortedGrid.x*/ >>>(
-            deviceInstances,
+            aMemoryManager.instancesDevice,
             aMemoryManager.topLevelPairsBuffer,
             numInstances,
             aMemoryManager.refCountsBuffer,
@@ -502,10 +512,7 @@ public:
         //////////////////////////////////////////////////////////////////////////
 
 
-        buildLevelTwo(aMemoryManager, primitiveCounts, 4, aPrimitiveArray);
-
-        MY_CUDA_SAFE_CALL( cudaFreeHost( primitiveCounts ) );
-        MY_CUDA_SAFE_CALL( cudaFreeHost( bounds ) );
+        buildLevelTwo(aMemoryManager, aPrimitiveCounts, aNumUniqueInstances, aPrimitiveArray);
     }
 
     //dummy to use instead of init
