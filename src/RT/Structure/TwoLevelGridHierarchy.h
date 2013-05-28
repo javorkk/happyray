@@ -6,7 +6,6 @@
 #define TWOLEVELGRIDHIERARCHY_H_INCLUDED_AA48BA45_DEA8_4023_B4C9_D8D125325683
 
 #include "CUDAStdAfx.h"
-#include "Textures.h"
 #include "RT/Primitive/Primitive.hpp"
 #include "RT/Primitive/BBox.hpp"
 #include "RT/Structure/UniformGrid.h"

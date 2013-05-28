@@ -84,11 +84,13 @@ public:
         *aHostPtr = *aOldHostPtr;
     }
 
-    HOST static void freeHostDeviceArrayPair(void* aHostPtr, void* aDevicePtr)
+    HOST static void freeHostDeviceArrayPair(void*& aHostPtr, void*& aDevicePtr)
     {
 
         MY_CUDA_SAFE_CALL( cudaFreeHost(aHostPtr) );
+        aHostPtr = NULL;
         MY_CUDA_SAFE_CALL( cudaFree(aDevicePtr) );
+        aDevicePtr = NULL;
     }
 
     HOST static void allocateDeviceArray(void** aPtr, size_t aSize,

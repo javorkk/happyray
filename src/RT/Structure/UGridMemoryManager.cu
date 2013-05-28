@@ -245,6 +245,7 @@ HOST void UGridMemoryManager::freePrimitiveIndicesBuffer()
         MY_CUDA_SAFE_CALL( cudaFree(primitiveIndices) );
         MY_CUDA_SAFE_CALL( cudaFreeHost(primitiveIndicesHost) );
         primitiveIndices = NULL;
+        primitiveIndicesHost = NULL;
     }
 }
 

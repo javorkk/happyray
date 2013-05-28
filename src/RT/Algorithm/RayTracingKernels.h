@@ -90,7 +90,7 @@ template<
 
         if (myRayIndex >= aNumRays) //keep whole warp active
         {
-            myRayIndex = aNumRays;
+            myRayIndex = aNumRays - 1u;
         }
 
         if (threadId1DInWarp32() == 0)
@@ -128,6 +128,7 @@ template<
         rayDir.y = 1.f / rayDirRCP.y;
         rayDir.z = 1.f / rayDirRCP.z;
 
+
         if(!taIsShadowRay)
         {
             if(rayT < FLT_MAX)
@@ -135,6 +136,7 @@ template<
         }
 
         oBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, aNumRays);
+
         //////////////////////////////////////////////////////////////////////////
 
     }

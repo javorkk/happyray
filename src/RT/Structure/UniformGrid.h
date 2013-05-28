@@ -67,6 +67,21 @@ public:
         //return fastDivide(getResolution(), vtx[1] - vtx[0]);
     }
 
+    //convert a 3D cell index into a linear one
+    HOST DEVICE int getCellIdLinear(int aIdX, int aIdY, int aIdZ)
+    {
+        return aIdX + aIdY * res[0] + aIdZ * res[0] * res[1];
+    }
+
+    //convert a 3D cell index into a linear one
+    HOST DEVICE int3 getCellId3D(int aLinearId)
+    {
+        return make_int3(
+            aLinearId % res[0],
+            (aLinearId % (res[0] * res[1])) / res[0],
+            aLinearId / (res[0] * res[1]) );
+    }
+
     HOST DEVICE uint2 getCell(int aIdX, int aIdY, int aIdZ)
     {
         return *((uint2*)((char*)cells.ptr
