@@ -93,10 +93,12 @@ public:
             UGridTraverser<tPrimitive, tIntersector, taIsShadowRay> traverse;
             bool traversalFlag = true;
             uint bestHit = oBestHit;
-            traverse(aPrimitiveArray, grid, rayOrgT, aRayDirRCP, oRayT, oBestHit, traversalFlag, aSharedMemory);
+            float rayT = oRayT;
+            traverse(aPrimitiveArray, grid, rayOrgT, aRayDirRCP, rayT, oBestHit, traversalFlag, aSharedMemory);
 
-            if (oBestHit != bestHit)
+            if (oBestHit != bestHit && rayT <= tExit && rayT >= tEntry)
             {
+                oRayT = rayT;
                 oBestHitInstance = it;
             }
             //restore ray direction

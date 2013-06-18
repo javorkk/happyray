@@ -21,11 +21,11 @@ struct  GeometryInstance : public Primitive<2>
     //returns the new origin, overwrites the old direction
     DEVICE HOST float3 transformRay(float3& aRayOrg, float3& oRayDirRCP) const
     {
-        float3 rayOrgT = rotation0 * aRayOrg.x + rotation1 * aRayOrg.y + 
-            rotation2 * aRayOrg.z + translation;
+        float3 rayOrgT = irotation0 * aRayOrg.x + irotation1 * aRayOrg.y + 
+            irotation2 * aRayOrg.z + itranslation;
 
-        float3 rayDirT = rotation0 / oRayDirRCP.x + rotation1 / oRayDirRCP.y + 
-            rotation2 / oRayDirRCP.z;
+        float3 rayDirT = irotation0 / oRayDirRCP.x + irotation1 / oRayDirRCP.y + 
+            irotation2 / oRayDirRCP.z;
 
         oRayDirRCP.x = 1.f / rayDirT.x;
         oRayDirRCP.y = 1.f / rayDirT.y;
