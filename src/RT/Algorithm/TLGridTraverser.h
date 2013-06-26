@@ -102,6 +102,10 @@ public:
             cellIdf.y = floorf(cellIdf.y);
             cellIdf.z = floorf(cellIdf.z);
 
+            cellIdf.x = min((float)dcGrid.res[0] - 1.f, max(cellIdf.x, 0.f));
+            cellIdf.y = min((float)dcGrid.res[1] - 1.f, max(cellIdf.y, 0.f));
+            cellIdf.z = min((float)dcGrid.res[2] - 1.f, max(cellIdf.z, 0.f));
+
             float3 tmp;
             tmp.x = (rayDirRCP.x > 0.f) ? 1.f : 0.f;
             tmp.y = (rayDirRCP.y > 0.f) ? 1.f : 0.f;

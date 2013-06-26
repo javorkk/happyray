@@ -94,12 +94,16 @@ public:
             const float3 entryPt = (tEntry >= 0.f) ?
                 rayOrg + rep(tEntry + EPS) / rayDirRCP : rayOrg;
 
-            float3 cellIdf = 
+            float3 cellIdf =
                 (entryPt - dcGrid.vtx[0]) * dcGrid.getCellSizeRCP();
 
             cellIdf.x = floorf(cellIdf.x);
             cellIdf.y = floorf(cellIdf.y);
             cellIdf.z = floorf(cellIdf.z);
+
+            cellIdf.x = min((float)dcGrid.res[0] - 1.f, max(cellIdf.x, 0.f));
+            cellIdf.y = min((float)dcGrid.res[1] - 1.f, max(cellIdf.y, 0.f));
+            cellIdf.z = min((float)dcGrid.res[2] - 1.f, max(cellIdf.z, 0.f));
 
             float3 tmp;
             tmp.x = (rayDirRCP.x > 0.f) ? 1.f : 0.f;
@@ -159,8 +163,8 @@ public:
                     fabsf(toPtr(rayDirRCP)[tMinDimension]);
 
                 traversalFlag = traversalFlag &&
-                    cellId[tMinDimension] != dcGrid.res[tMinDimension]
-                && cellId[tMinDimension] != -1;
+                    cellId[tMinDimension] < dcGrid.res[tMinDimension]
+                && cellId[tMinDimension] > -1;
                 //////////////////////////////////////////////////////////////////////////
             }
         }

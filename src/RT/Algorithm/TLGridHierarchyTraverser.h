@@ -72,8 +72,8 @@ public:
         {
             const GeometryInstance instance = aInstances[aInstanceIndirection[it]];
             BBox bounds = BBoxExtractor<GeometryInstance>::get(instance);
-            if(bounds.vtx[0].x > bounds.vtx[1].x || bounds.vtx[0].y > bounds.vtx[1].y || bounds.vtx[0].z > bounds.vtx[1].z)
-                continue;
+            //if(bounds.vtx[0].x > bounds.vtx[1].x || bounds.vtx[0].y > bounds.vtx[1].y || bounds.vtx[0].z > bounds.vtx[1].z)
+            //    continue;
 
             float tEntry;
             float tExit;
@@ -176,6 +176,10 @@ public:
             cellIdf.y = floorf(cellIdf.y);
             cellIdf.z = floorf(cellIdf.z);
 
+            cellIdf.x = min((float)dcGrid.res[0] - 1.f, max(cellIdf.x, 0.f));
+            cellIdf.y = min((float)dcGrid.res[1] - 1.f, max(cellIdf.y, 0.f));
+            cellIdf.z = min((float)dcGrid.res[2] - 1.f, max(cellIdf.z, 0.f));
+
             float3 tmp;
             tmp.x = (rayDirRCP.x > 0.f) ? 1.f : 0.f;
             tmp.y = (rayDirRCP.y > 0.f) ? 1.f : 0.f;
@@ -235,8 +239,8 @@ public:
                     fabsf(toPtr(rayDirRCP)[tMinDimension]);
 
                 traversalFlag = traversalFlag &&
-                    cellId[tMinDimension] != dcGrid.res[tMinDimension]
-                && cellId[tMinDimension] != -1;
+                    cellId[tMinDimension] < dcGrid.res[tMinDimension]
+                && cellId[tMinDimension] > -1;
                 //////////////////////////////////////////////////////////////////////////
             }
         }
