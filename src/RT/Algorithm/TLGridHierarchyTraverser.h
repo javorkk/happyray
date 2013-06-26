@@ -72,6 +72,8 @@ public:
         {
             const GeometryInstance instance = aInstances[aInstanceIndirection[it]];
             BBox bounds = BBoxExtractor<GeometryInstance>::get(instance);
+            if(bounds.vtx[0].x > bounds.vtx[1].x || bounds.vtx[0].y > bounds.vtx[1].y || bounds.vtx[0].z > bounds.vtx[1].z)
+                continue;
 
             float tEntry;
             float tExit;
@@ -96,7 +98,7 @@ public:
             float rayT = oRayT;
             traverse(aPrimitiveArray, grid, rayOrgT, aRayDirRCP, rayT, oBestHit, traversalFlag, aSharedMemory);
 
-            if (oBestHit != bestHit && rayT <= tExit && rayT >= tEntry)
+            if (oBestHit != bestHit && rayT < tExit && rayT >= tEntry)
             {
                 oRayT = rayT;
                 oBestHitInstance = it;
@@ -188,9 +190,9 @@ public:
             cellId[2] = static_cast<int>(cellIdf.z);
 
             traversalFlag = traversalFlag && (  
-                (cellId[0] != ((rayDirRCP.x > 0.f) ? dcGrid.res[0] : -1)) 
-                &&  (cellId[1] != ((rayDirRCP.y > 0.f) ? dcGrid.res[1] : -1))
-                &&  (cellId[2] != ((rayDirRCP.z > 0.f) ? dcGrid.res[2] : -1)) 
+                (cellId[0] < dcGrid.res[0] && cellId[0] > -1) && 
+                (cellId[1] < dcGrid.res[1] && cellId[1] > -1) && 
+                (cellId[2] < dcGrid.res[2] && cellId[2] > -1) 
                 );
         }
         //////////////////////////////////////////////////////////////////////////

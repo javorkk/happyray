@@ -145,13 +145,13 @@ GLOBAL void countPairsMultiUniformGrid(
         const float3 maxCellIdPlus1f =
             (bounds.vtx[1] - topLvlCellOrigin ) * subCellSizeRCP + rep(1.f);
 
-        const int minCellIdX =  max(0, (int)(minCellIdf.x));
-        const int minCellIdY =  max(0, (int)(minCellIdf.y));
-        const int minCellIdZ =  max(0, (int)(minCellIdf.z));
+        const int minCellIdX =  min(aGirds[gridId].res[0]-1, max(0, (int)(minCellIdf.x)));
+        const int minCellIdY =  min(aGirds[gridId].res[1]-1, max(0, (int)(minCellIdf.y)));
+        const int minCellIdZ =  min(aGirds[gridId].res[2]-1, max(0, (int)(minCellIdf.z)));
 
-        const int maxCellIdP1X =  min(aGirds[gridId].res[0], (int)(maxCellIdPlus1f.x));
-        const int maxCellIdP1Y =  min(aGirds[gridId].res[1], (int)(maxCellIdPlus1f.y));
-        const int maxCellIdP1Z =  min(aGirds[gridId].res[2], (int)(maxCellIdPlus1f.z));
+        const int maxCellIdP1X =  max(1, min(aGirds[gridId].res[0], (int)(maxCellIdPlus1f.x)));
+        const int maxCellIdP1Y =  max(1, min(aGirds[gridId].res[1], (int)(maxCellIdPlus1f.y)));
+        const int maxCellIdP1Z =  max(1, min(aGirds[gridId].res[2], (int)(maxCellIdPlus1f.z)));
 
         const int numCells =
             (maxCellIdP1X - minCellIdX) *
@@ -230,13 +230,13 @@ GLOBAL void writePairsMultiUniformGrid(
         const float3 maxCellIdPlus1f =
             (bounds.vtx[1] - topLvlCellOrigin ) * subCellSizeRCP + rep(1.f);
 
-        const int minCellIdX =  max(0, (int)(minCellIdf.x));
-        const int minCellIdY =  max(0, (int)(minCellIdf.y));
-        const int minCellIdZ =  max(0, (int)(minCellIdf.z));
+        const int minCellIdX =  min(aGirds[gridId].res[0]-1, max(0, (int)(minCellIdf.x)));
+        const int minCellIdY =  min(aGirds[gridId].res[1]-1, max(0, (int)(minCellIdf.y)));
+        const int minCellIdZ =  min(aGirds[gridId].res[2]-1, max(0, (int)(minCellIdf.z)));
 
-        const int maxCellIdP1X =  min(aGirds[gridId].res[0], (int)(maxCellIdPlus1f.x));
-        const int maxCellIdP1Y =  min(aGirds[gridId].res[1], (int)(maxCellIdPlus1f.y));
-        const int maxCellIdP1Z =  min(aGirds[gridId].res[2], (int)(maxCellIdPlus1f.z));
+        const int maxCellIdP1X =  max(1, min(aGirds[gridId].res[0], (int)(maxCellIdPlus1f.x)));
+        const int maxCellIdP1Y =  max(1, min(aGirds[gridId].res[1], (int)(maxCellIdPlus1f.y)));
+        const int maxCellIdP1Z =  max(1, min(aGirds[gridId].res[2], (int)(maxCellIdPlus1f.z)));
 
         const int numCells =
             (maxCellIdP1X - minCellIdX) *
