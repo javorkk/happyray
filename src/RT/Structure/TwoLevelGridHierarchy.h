@@ -15,11 +15,11 @@ struct  GeometryInstance : public Primitive<2>
     //float3 vtx[2]; //inherited -> bounding box
     uint index;
     //Transformation
-    float3 rotation0, rotation1, rotation2, translation;
+    //float3 rotation0, rotation1, rotation2, translation;
     float3 irotation0, irotation1, irotation2, itranslation;
 
     //returns the new origin, overwrites the old direction
-    DEVICE HOST float3 transformRay(float3& aRayOrg, float3& oRayDirRCP) const
+    DEVICE HOST float3 transformRay(const float3 aRayOrg, float3& oRayDirRCP) const
     {
         float3 rayOrgT = irotation0 * aRayOrg.x + irotation1 * aRayOrg.y + 
             irotation2 * aRayOrg.z + itranslation;
@@ -49,64 +49,52 @@ public:
     }
 };
 
-class TwoLevelGridHierarchy : public Primitive<2>
+class TwoLevelGridHierarchy : public UniformGrid
 {
 public:
     typedef uint2                      t_Cell;
     typedef uint2                      t_Leaf;
 
-    //float3 vtx[2]; //inherited -> bounding box
-    int res[3];
-    float3 cellSize;
-    float3 cellSizeRCP;
-    cudaPitchedPtr  cells;
+    //float3 vtx[2];            //inherited -> bounding box
+    //int res[3];               //inherited -> uniform grid
+    //float3 cellSize;          //inherited -> uniform grid
+    //float3 cellSizeRCP;       //inherited -> uniform grid
+    //cudaPitchedPtr  cells;    //inherited -> uniform grid
+    //uint* primitives;         //inherited -> uniform grid
     uint*           instanceIndices;
     GeometryInstance* instances;
     UniformGrid*    grids;
     t_Leaf*         leaves;
-    uint*           primitives;
+
     uint            numInstances;
     //uint  numPrimitiveReferences;
 
+    //////////////////////////////////////////////////////////////////////////
+    //inherited -> uniform grid
 
-    DEVICE const float3 getResolution() const
-    {
-        float3 retval;
-        retval.x = static_cast<float>(res[0]);
-        retval.y = static_cast<float>(res[1]);
-        retval.z = static_cast<float>(res[2]);
-        return retval;
-    }
+    //HOST DEVICE const float3 getResolution() const; 
 
-    DEVICE float3 getCellSize() const
-    {
-        return cellSize;
-        //return fastDivide(vtx[1] - vtx[0], getResolution());
-    }
+    //HOST DEVICE float3 getCellSize() const;
 
-    DEVICE float3 getCellSizeRCP() const
-    {
-        return cellSizeRCP;
-        //return fastDivide(getResolution(), vtx[1] - vtx[0]);
-    }
+    //HOST DEVICE float3 getCellSizeRCP() const;
 
-    DEVICE t_Cell getCell(int aIdX, int aIdY, int aIdZ)
-    {
-        return *((t_Cell*)((char*)cells.ptr
-            + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX);
-        //return tex3D(texGridCells, aIdX, aIdY,  aIdZ);
-    } 
+    //HOST DEVICE int getCellIdLinear(int aIdX, int aIdY, int aIdZ);
 
-    DEVICE float3 getCellCenter (int aIdX, int aIdY, int aIdZ) const
-    {
-        float3 cellIdf = make_float3((float)aIdX + 0.5f, (float)aIdY + 0.5f, (float)aIdZ + 0.5f);
-        return vtx[0] + cellIdf * cellSize;
-    }
+    //HOST DEVICE int3 getCellId3D(int aLinearId);
 
-    DEVICE uint getPrimitiveId(uint aId)
-    {
-        return primitives[aId];
-    }
+    //HOST DEVICE t_Cell getCell(int aIdX, int aIdY, int aIdZ);
+
+    //HOST DEVICE void setCell(int aIdX, int aIdY, int aIdZ, uint2 aVal);
+
+    //HOST DEVICE int3 getCellIdAt(float3 aPosition);
+
+    //HOST DEVICE uint2 getCellAt(float3 aPosition);
+
+    //HOST DEVICE float3 getCellCenter (int aIdX, int aIdY, int aIdZ) const;
+
+    //HOST DEVICE uint getPrimitiveId(uint aId);
+
+    //////////////////////////////////////////////////////////////////////////
 };
 
 template<>

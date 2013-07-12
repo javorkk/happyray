@@ -92,6 +92,17 @@ HOST void TLGridHierarchyMemoryManager::copyLeavesDeviceToHost()
     MY_CUDA_SAFE_CALL(cudaMemcpy(leavesHost, leavesDevice, leavesSize, cudaMemcpyDeviceToHost));
 }
 
+HOST void TLGridHierarchyMemoryManager::copyPrimitiveIndicesDeviceToHost()
+{
+    MY_CUDA_SAFE_CALL(cudaMemcpy(primitiveIndicesHost, primitiveIndices, primitiveIndicesSize, cudaMemcpyDeviceToHost));
+}
+
+HOST void TLGridHierarchyMemoryManager::copyPrimitiveIndicesHostToDevice()
+{
+    MY_CUDA_SAFE_CALL(cudaMemcpy(primitiveIndices, primitiveIndicesHost, primitiveIndicesSize, cudaMemcpyHostToDevice));
+}
+
+
 /////////////////////////////////////////////////////////////////////////
 //memory allocation
 //////////////////////////////////////////////////////////////////////////
@@ -99,7 +110,7 @@ HOST cudaPitchedPtr TLGridHierarchyMemoryManager::allocateHostCells()
 {
     checkResolution();
 
-    if(oldResX == resX && oldResY == resY && oldResZ == resZ)
+    if(oldResX == resX && oldResY == resY && oldResZ == resZ && cellsPtrHost.ptr != NULL)
     {
         return cellsPtrHost;
     }
@@ -125,7 +136,7 @@ HOST cudaPitchedPtr TLGridHierarchyMemoryManager::allocateDeviceCells()
 {
     checkResolution();
 
-    if(oldResX == resX && oldResY == resY && oldResZ == resZ)
+    if(oldResX == resX && oldResY == resY && oldResZ == resZ && cellsPtrDevice.ptr != NULL)
     {
         return cellsPtrDevice;
     }
@@ -233,6 +244,19 @@ HOST uint* TLGridHierarchyMemoryManager::allocatePrimitiveIndicesBuffer(const si
 
     return primitiveIndices;
 }
+
+
+HOST uint* TLGridHierarchyMemoryManager::allocatePrimitiveIndicesBufferHost( const size_t aNumPrimitives )
+{
+    primitiveIndicesSize = aNumPrimitives * sizeof(uint);
+    MY_CUDA_SAFE_CALL( cudaFreeHost(primitiveIndicesHost) );
+    MY_CUDA_SAFE_CALL(cudaHostAlloc((void**)&primitiveIndicesHost,
+        primitiveIndicesSize, cudaHostAllocDefault));
+
+    return primitiveIndicesHost;
+
+}
+
 
 HOST void TLGridHierarchyMemoryManager::allocateRefCountsBuffer(const size_t aNumSlots)
 {
@@ -414,5 +438,4 @@ HOST void TLGridHierarchyMemoryManager::checkResolution()
         resX = resY = resZ = 32;
     }
 }
-
 

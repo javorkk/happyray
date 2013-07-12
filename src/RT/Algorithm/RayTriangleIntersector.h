@@ -33,7 +33,7 @@
 #include "RT/Primitive/Triangle.hpp"
 #include "RT/Structure/PrimitiveArray.h"
 
-#define INTERSECTION_EPS 0.00001f
+#define INTERSECTION_EPS 0.000001f
 
 class MollerTrumboreIntersectionTest
 {

@@ -360,10 +360,10 @@ public:
             hostInstances[i].vtx[0] = aMemoryManager.bounds.vtx[0] + aMemoryManager.bounds.diagonal() * 0.25f * floorf(i*0.25f);
             hostInstances[i].vtx[1] = hostInstances[i].vtx[0] + aMemoryManager.bounds.diagonal() * 0.25f;
             hostInstances[i].index = i % 4;
-            hostInstances[i].rotation0   = make_float3(1.f, 0.f, 0.f);
-            hostInstances[i].rotation1   = make_float3(0.f, 1.f, 0.f);
-            hostInstances[i].rotation2   = make_float3(0.f, 0.f, 1.f);
-            hostInstances[i].translation = make_float3(0.f, 0.f, 0.f); //aMemoryManager.bounds.diagonal() * (float) (i / 4);
+            //hostInstances[i].rotation0   = make_float3(1.f, 0.f, 0.f);
+            //hostInstances[i].rotation1   = make_float3(0.f, 1.f, 0.f);
+            //hostInstances[i].rotation2   = make_float3(0.f, 0.f, 1.f);
+            //hostInstances[i].translation = make_float3(0.f, 0.f, 0.f); //aMemoryManager.bounds.diagonal() * (float) (i / 4);
             hostInstances[i].irotation0   = make_float3(1.f, 0.f, 0.f);
             hostInstances[i].irotation1   = make_float3(0.f, 1.f, 0.f);
             hostInstances[i].irotation2   = make_float3(0.f, 0.f, 1.f);
@@ -513,6 +513,11 @@ public:
 
 
         buildLevelTwo(aMemoryManager, aPrimitiveCounts, aNumUniqueInstances, aPrimitiveArray);
+        //////////////////////////////////////////////////////////////////////////
+        //DEBUG
+        //test(aMemoryManager, aNumUniqueInstances, aPrimitiveCounts, aPrimitiveArray);
+        //////////////////////////////////////////////////////////////////////////
+
     }
 
     //dummy to use instead of init
@@ -725,6 +730,294 @@ public:
         cudaEventElapsedTime(&elapsedTime, mDataUpload, mEnd);
         cudastd::logger::out << "Total:            " << elapsedTime << "ms\n";
         //////////////////////////////////////////////////////////////////////////
+    }
+
+    HOST void test(
+        TLGridHierarchyMemoryManager&       aMemoryManager,
+        uint                                aNumUniqueInstances,
+        uint*                               aPrimitiveCounts,
+        PrimitiveArray<tPrimitive>&         aPrimitiveArray)
+
+    {
+        //////////////////////////////////////////////////////////////////////////
+        //download data
+        //////////////////////////////////////////////////////////////////////////
+        aMemoryManager.allocateHostCells();
+        aMemoryManager.copyCellsDeviceToHost();
+        aMemoryManager.allocateHostInstances(aMemoryManager.instancesSize / sizeof(GeometryInstance));
+        aMemoryManager.copyInstancesDeviceToHost();
+        aMemoryManager.copyInstanceIndicesDeviceToHost();
+        aMemoryManager.allocateHostLeaves(aMemoryManager.leavesSize / sizeof(TLGridHierarchyMemoryManager::t_Leaf));
+        aMemoryManager.copyLeavesDeviceToHost();
+        aMemoryManager.allocatePrimitiveIndicesBufferHost(aMemoryManager.primitiveIndicesSize / sizeof(uint));
+        aMemoryManager.copyPrimitiveIndicesDeviceToHost();
+        aMemoryManager.copyGridsDeviceToHost();
+        
+        MY_CUDA_SAFE_CALL(cudaMemcpy(aPrimitiveArray.indicesBufferHostPtr, aPrimitiveArray.indicesBufferDevicePtr, aPrimitiveArray.indicesBufferSize, cudaMemcpyDeviceToHost));
+        MY_CUDA_SAFE_CALL(cudaMemcpy(aPrimitiveArray.vertexBufferHostPtr, aPrimitiveArray.vertexBufferDevicePtr, aPrimitiveArray.vertexBufferSize, cudaMemcpyDeviceToHost));
+        //////////////////////////////////////////////////////////////////////////
+        //top level test
+        //////////////////////////////////////////////////////////////////////////
+        const uint numInstanceIndices = (uint)(aMemoryManager.instanceIndicesSize / sizeof(uint));
+
+        TwoLevelGridHierarchy hierarchy = aMemoryManager.getParametersHost();
+
+        for (uint z = 0; z < hierarchy.res[2]; ++z)
+        {
+            for (uint y = 0; y < hierarchy.res[1]; ++y)
+            {
+                for (uint x = 0; x < hierarchy.res[0]; ++x)
+                {
+                    uint2 cell = hierarchy.getCell(x,y,z);
+                    for (uint k = cell.x; k < cell.y; ++k)
+                    {
+                        if (k >= numInstanceIndices)
+                        {
+                            cudastd::logger::out << "Invalid cell range [" << cell.x << ", " << cell.y << ") at cell " << x << " " << y << " " << z << " !\n";
+                            break;
+                        }
+                        GeometryInstance instance = hierarchy.instances[hierarchy.instanceIndices[k]];
+                        BBox bounds = BBoxExtractor<GeometryInstance>::get(instance);
+
+                        const int3 minCellId = hierarchy.getCellIdAt(bounds.vtx[0]);
+                        int3 maxCellIdPlus1 = hierarchy.getCellIdAt(bounds.vtx[1]);
+                        maxCellIdPlus1.x += 1;
+                        maxCellIdPlus1.y += 1;
+                        maxCellIdPlus1.z += 1;
+
+                        const int minCellIdX =  min(hierarchy.res[0]-1, max(0, minCellId.x));
+                        const int minCellIdY =  min(hierarchy.res[1]-1, max(0, minCellId.y));
+                        const int minCellIdZ =  min(hierarchy.res[2]-1, max(0, minCellId.z));
+
+                        const int maxCellIdP1X =  max(1, min(hierarchy.res[0], maxCellIdPlus1.x));
+                        const int maxCellIdP1Y =  max(1, min(hierarchy.res[1], maxCellIdPlus1.y));
+                        const int maxCellIdP1Z =  max(1, min(hierarchy.res[2], maxCellIdPlus1.z));
+
+                        if (minCellIdX > x || maxCellIdP1X <= x ||
+                            minCellIdY > y || maxCellIdP1Y <= y ||
+                            minCellIdZ > z || maxCellIdP1Z <= z)
+                        {
+                            cudastd::logger::out << "Instance " << hierarchy.instanceIndices[k]
+                                << " inserted in WRONG CELL " << x << " " << y << " " << z << " !\n";
+                            cudastd::logger::out << "Instance " << hierarchy.instanceIndices[k]
+                                << " belongs to cells ["
+                                << minCellIdX << ", " << maxCellIdP1X << ") [" 
+                                << minCellIdY << ", " << maxCellIdP1Y << ") ["
+                                << minCellIdZ << ", " << maxCellIdP1Z << ")\n";
+
+                        }
+                    }
+                }
+            }
+        }
+
+        for (uint it = 0; it < hierarchy.numInstances; ++it)
+        {
+            GeometryInstance instance = aMemoryManager.instancesHost[it];
+            BBox bounds = BBoxExtractor<GeometryInstance>::get(instance);
+
+            const int3 minCellId = hierarchy.getCellIdAt(bounds.vtx[0]);
+            int3 maxCellIdPlus1 = hierarchy.getCellIdAt(bounds.vtx[1]);
+            maxCellIdPlus1.x += 1;
+            maxCellIdPlus1.y += 1;
+            maxCellIdPlus1.z += 1;
+
+            const int minCellIdX =  min(hierarchy.res[0]-1, max(0, minCellId.x));
+            const int minCellIdY =  min(hierarchy.res[1]-1, max(0, minCellId.y));
+            const int minCellIdZ =  min(hierarchy.res[2]-1, max(0, minCellId.z));
+
+            const int maxCellIdP1X =  max(1, min(hierarchy.res[0], maxCellIdPlus1.x));
+            const int maxCellIdP1Y =  max(1, min(hierarchy.res[1], maxCellIdPlus1.y));
+            const int maxCellIdP1Z =  max(1, min(hierarchy.res[2], maxCellIdPlus1.z));
+            for (uint z = minCellIdZ; z < maxCellIdP1Z; ++z)
+            {
+                for (uint y = minCellIdY; y < maxCellIdP1Y; ++y)
+                {
+                    for (uint x = minCellIdX; x < maxCellIdP1X; ++x)
+                    {
+                        uint2 cell = hierarchy.getCell(x,y,z);
+                        bool inserted = false;
+                        for (uint k = cell.x; k < cell.y; ++k)
+                        {
+                            if (k < numInstanceIndices && hierarchy.instanceIndices[k] == it)
+                            {
+                                inserted = true;
+                                break;
+                            }
+                        }
+                        if (!inserted)
+                        {
+                            cudastd::logger::out << "Instance " << it << " NOT INSERTED in cell " << x
+                                << " " << y << " " << z << " !\n";
+                        }
+                    }//end for z
+                }//end for y
+            }//end for x
+
+        }        
+
+        //////////////////////////////////////////////////////////////////////////
+        //leaf level test
+        //////////////////////////////////////////////////////////////////////////
+        uint* scannedPrimitiveCounts = (uint*)malloc((aNumUniqueInstances + 1)* sizeof(uint));
+        memcpy_s(scannedPrimitiveCounts, (aNumUniqueInstances + 1)* sizeof(uint), aPrimitiveCounts, aNumUniqueInstances * sizeof(uint));
+        uint sum = 0;
+        for (int i = 0; i < aNumUniqueInstances; ++i)
+        {
+            uint oldsum = sum;
+            sum += scannedPrimitiveCounts[i];
+            scannedPrimitiveCounts[i] = oldsum;
+        }
+
+        scannedPrimitiveCounts[aNumUniqueInstances] = sum;
+        size_t cellCounts = 0;
+        for (int gridId = 0; gridId < aNumUniqueInstances; ++gridId)
+        {
+            UniformGrid grid = hierarchy.grids[gridId];
+            void* ptr = (void*)(hierarchy.leaves + cellCounts);
+            grid.cells.ptr = ptr;
+            grid.primitives = aMemoryManager.primitiveIndicesHost;
+            cellCounts += grid.res[0] * grid.res[1] * grid.res[2];
+
+            if (grid.vtx[0].x > grid.vtx[1].x ||
+                grid.vtx[0].y > grid.vtx[1].y ||
+                grid.vtx[0].z > grid.vtx[1].z ||
+                grid.vtx[0].x < hierarchy.vtx[0].x ||
+                grid.vtx[0].y < hierarchy.vtx[0].y ||
+                grid.vtx[0].z < hierarchy.vtx[0].z ||
+                grid.vtx[1].x > hierarchy.vtx[1].x ||
+                grid.vtx[1].y > hierarchy.vtx[1].y ||
+                grid.vtx[1].z > hierarchy.vtx[1].z
+                )
+            {
+                cudastd::logger::out << "Invalid bounds of grid " << gridId
+                    << " min ("
+                    << grid.vtx[0].x << ", "
+                    << grid.vtx[0].y << ", "
+                    << grid.vtx[0].z << ") "
+                    << ", max ("
+                    << grid.vtx[1].x << ", "
+                    << grid.vtx[1].y << ", "
+                    << grid.vtx[1].z << ") "
+                    << ", MIN ("
+                    << hierarchy.vtx[0].x << ", "
+                    << hierarchy.vtx[0].y << ", "
+                    << hierarchy.vtx[0].z << ") "
+                    << ", MAX ("
+                    << hierarchy.vtx[1].x << ", "
+                    << hierarchy.vtx[1].y << ", "
+                    << hierarchy.vtx[1].z << ")\n";
+            }
+
+            if (grid.res[0] < 1 ||
+                grid.res[1] < 1 ||
+                grid.res[2] < 1
+                )
+            {
+                cudastd::logger::out << "INVALID RESOLUTION of grid " << gridId
+                    << " resolution: ("
+                    << grid.res[0] << ", "
+                    << grid.res[1] << ", "
+                    << grid.res[2] << ")\n";
+            }
+
+            for (uint z = 0; z < grid.res[2]; ++z)
+            {
+                for (uint y = 0; y < grid.res[1]; ++y)
+                {
+                    for (uint x = 0; x < grid.res[0]; ++x)
+                    {
+                         uint2 cell = grid.getCell(x,y,z);
+                         for (uint k = cell.x; k < cell.y; ++k)
+                         {
+                             if (k >= aMemoryManager.primitiveIndicesSize / sizeof(uint))
+                             {
+                                 cudastd::logger::out << "Invalid cell range [" << cell.x << ", " << cell.y << ") at leaf level cell " << x << " " << y << " " << z
+                                     << " grid id " << gridId << " !\n";
+                                 break;
+                             }
+                             tPrimitive prim = aPrimitiveArray[grid.primitives[k]];
+                             BBox bounds = BBoxExtractor<tPrimitive>::get(prim);
+
+                             const int3 minCellId = grid.getCellIdAt(bounds.vtx[0]);
+                             int3 maxCellIdPlus1 = grid.getCellIdAt(bounds.vtx[1]);
+                             maxCellIdPlus1.x += 1;
+                             maxCellIdPlus1.y += 1;
+                             maxCellIdPlus1.z += 1;
+
+                             const int minCellIdX =  min(grid.res[0]-1, max(0, minCellId.x));
+                             const int minCellIdY =  min(grid.res[1]-1, max(0, minCellId.y));
+                             const int minCellIdZ =  min(grid.res[2]-1, max(0, minCellId.z));
+
+                             const int maxCellIdP1X =  max(1, min(grid.res[0], maxCellIdPlus1.x));
+                             const int maxCellIdP1Y =  max(1, min(grid.res[1], maxCellIdPlus1.y));
+                             const int maxCellIdP1Z =  max(1, min(grid.res[2], maxCellIdPlus1.z));
+
+                             if (minCellIdX > x || maxCellIdP1X <= x ||
+                                 minCellIdY > y || maxCellIdP1Y <= y ||
+                                 minCellIdZ > z || maxCellIdP1Z <= z)
+                             {
+                                 cudastd::logger::out << "Primitive " << k
+                                 << " inserted in WRONG LEAF CELL " << x << " " << y << " " << z 
+                                 << " grid id " << gridId <<" !\n";
+                                 cudastd::logger::out << "Primitive " << k
+                                 << " belongs to cells ["
+                                     << minCellIdX << ", " << maxCellIdP1X << ") [" 
+                                     << minCellIdY << ", " << maxCellIdP1Y << ") ["
+                                     << minCellIdZ << ", " << maxCellIdP1Z << ")\n";
+
+                             }
+                         }
+                    }
+                }
+            }
+
+            for (int primId = scannedPrimitiveCounts[gridId]; primId < scannedPrimitiveCounts[gridId + 1]; ++primId)
+            {
+                tPrimitive prim = aPrimitiveArray[primId];
+                BBox bounds = BBoxExtractor<tPrimitive>::get(prim);
+
+                const int3 minCellId = grid.getCellIdAt(bounds.vtx[0]);
+                int3 maxCellIdPlus1 = grid.getCellIdAt(bounds.vtx[1]);
+                maxCellIdPlus1.x += 1;
+                maxCellIdPlus1.y += 1;
+                maxCellIdPlus1.z += 1;
+
+                const int minCellIdX =  min(grid.res[0]-1, max(0, minCellId.x));
+                const int minCellIdY =  min(grid.res[1]-1, max(0, minCellId.y));
+                const int minCellIdZ =  min(grid.res[2]-1, max(0, minCellId.z));
+
+                const int maxCellIdP1X =  max(1, min(grid.res[0], maxCellIdPlus1.x));
+                const int maxCellIdP1Y =  max(1, min(grid.res[1], maxCellIdPlus1.y));
+                const int maxCellIdP1Z =  max(1, min(grid.res[2], maxCellIdPlus1.z));
+                for (uint z = minCellIdZ; z < maxCellIdP1Z; ++z)
+                {
+                    for (uint y = minCellIdY; y < maxCellIdP1Y; ++y)
+                    {
+                        for (uint x = minCellIdX; x < maxCellIdP1X; ++x)
+                        {
+                            uint2 cell = grid.getCell(x,y,z);
+                            bool inserted = false;
+                            for (uint k = cell.x; k < cell.y; ++k)
+                            {
+                                if (k < aMemoryManager.primitiveIndicesSize / sizeof(uint) && grid.primitives[k] == primId)
+                                {
+                                    inserted = true;
+                                    break;
+                                }
+                            }
+                            if (!inserted)
+                            {
+                                cudastd::logger::out << "Primitive " << primId << " NOT INSERTED in leaf cell " << x
+                                    << " " << y << " " << z << " grid id " << gridId <<" !\n";
+                            }
+                        }//end for z
+                    }//end for y
+                }//end for x
+            }
+        }
+        
+        free(scannedPrimitiveCounts);
     }
 };
 

@@ -146,7 +146,8 @@ GLOBAL void computeAOIllumination(
                 sharedVec[threadId1D()].x *= (0.7f * cosEyeNormal + 0.3f * sinZNormal);
                 sharedVec[threadId1D()].y *= (0.7f * cosEyeNormal + 0.2f * sinZNormal);
                 sharedVec[threadId1D()].z *= (0.9f * cosEyeNormal /*+ 0.1f * sinZNormal + 0.1f * (1.f  - sinZNormal)*/);
-
+                //DEBUG
+                //sharedVec[threadId1D()] = rep(0.01f*rayT);
             }
         }
         else if (myRayIndex < dcNumRays)

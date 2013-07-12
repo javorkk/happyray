@@ -41,6 +41,7 @@ public:
     size_t          gridsSize;
 
     uint* primitiveIndices;
+    uint* primitiveIndicesHost;
     size_t primitiveIndicesSize;
 
     //////////////////////////////////////////////////////////////////////////
@@ -68,7 +69,7 @@ public:
 
     TLGridHierarchyMemoryManager()
         :resX(0), resY(0), resZ(0), oldResX(0), oldResY(0), oldResZ(0), bounds(BBox::empty()),
-        leavesHost(NULL), leavesDevice(NULL), leavesSize(0), primitiveIndices(NULL), primitiveIndicesSize(0u),
+        leavesHost(NULL), leavesDevice(NULL), leavesSize(0), primitiveIndices(NULL), primitiveIndicesHost(NULL), primitiveIndicesSize(0u),
         instanceIndicesDevice(NULL), instanceIndicesHost(NULL), instanceIndicesSize(0),
         instancesDevice(NULL), instancesHost(NULL), instancesSize(0),
         gridsDevice(NULL), gridsHost(NULL), gridsSize(0),
@@ -135,6 +136,28 @@ public:
         return retval;
     }
 
+        HOST TwoLevelGridHierarchy getParametersHost() const
+    {
+        TwoLevelGridHierarchy retval;
+        retval.vtx[0] = bounds.vtx[0]; //bounds min
+        retval.vtx[1] = bounds.vtx[1]; //bounds max
+        retval.res[0] = resX;
+        retval.res[1] = resY;
+        retval.res[2] = resZ;
+        retval.cellSize = getCellSize();
+        retval.cellSizeRCP = getCellSizeRCP();
+        retval.cells = cellsPtrHost;
+        retval.instanceIndices = instanceIndicesHost;
+        retval.instances = instancesHost;
+        retval.grids = gridsHost;
+        retval.leaves = leavesHost;
+        retval.primitives = primitiveIndicesHost;
+        retval.numInstances = (uint)(instancesSize / sizeof(GeometryInstance));
+        //retval.numPrimitiveReferences = primitiveIndicesSize / sizeof(uint);
+        return retval;
+    }
+
+
     HOST void copyCellsDeviceToHost();
 
     HOST void copyCellsHostToDevice();
@@ -148,8 +171,11 @@ public:
     HOST void copyGridsHostToDevice();
 
     HOST void copyLeavesDeviceToHost();
-
     HOST void copyLeavesHostToDevice();
+
+    HOST void copyPrimitiveIndicesDeviceToHost();
+    HOST void copyPrimitiveIndicesHostToDevice();
+
 
     //////////////////////////////////////////////////////////////////////////
     //memory allocation
@@ -168,6 +194,7 @@ public:
     HOST void setDeviceLeavesToZero();
 
     HOST uint* allocatePrimitiveIndicesBuffer(const size_t aNumPrimitives);
+    HOST uint* allocatePrimitiveIndicesBufferHost(const size_t aNumPrimitives);
 
     HOST void allocateRefCountsBuffer(const size_t aNumSlots);
     HOST void allocateCellCountsBuffer(const size_t aNumCells);
