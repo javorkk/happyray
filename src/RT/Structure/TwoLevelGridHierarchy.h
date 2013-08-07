@@ -24,17 +24,14 @@ struct  GeometryInstance : public Primitive<2>
     DEVICE HOST float3 transformRay(const float3 aRayOrg, float3& oRayDirRCP) const
     {
         float3 rayOrgT = aRayOrg + itranslation;
-        if(fabsf(irotation0.y + irotation0.z + irotation1.x + irotation1.z + irotation2.x + irotation2.y) > 0.00001f)
-        {
-            rayOrgT = irotation0 * aRayOrg.x + irotation1 * aRayOrg.y + irotation2 * aRayOrg.z + itranslation;
+        rayOrgT = irotation0 * aRayOrg.x + irotation1 * aRayOrg.y + irotation2 * aRayOrg.z + itranslation;
 
-            float3 rayDirT = irotation0 / oRayDirRCP.x + irotation1 / oRayDirRCP.y + 
-                irotation2 / oRayDirRCP.z;
+        float3 rayDirT = irotation0 / oRayDirRCP.x + irotation1 / oRayDirRCP.y + 
+            irotation2 / oRayDirRCP.z;
 
-            oRayDirRCP.x = 1.f / rayDirT.x;
-            oRayDirRCP.y = 1.f / rayDirT.y;
-            oRayDirRCP.z = 1.f / rayDirT.z;
-        }
+        oRayDirRCP.x = 1.f / rayDirT.x;
+        oRayDirRCP.y = 1.f / rayDirT.y;
+        oRayDirRCP.z = 1.f / rayDirT.z;
 
         return rayOrgT;
     }
