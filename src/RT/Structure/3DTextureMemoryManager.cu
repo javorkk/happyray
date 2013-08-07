@@ -74,7 +74,7 @@ HOST cudaPitchedPtr TextureMemoryManager::allocateDataHost()
         resX * resY * resZ * sizeof(float3)));
 
     texelPtrHost = 
-        make_cudaPitchedPtr(texelsHost, resX * sizeof(float3), resX, resY);
+        make_cudaPitchedPtr(texelsHost, resX * sizeof(float3), resX * sizeof(float3), resY);
 
     return texelPtrHost;
 }
@@ -127,12 +127,13 @@ HOST void TextureMemoryManager::freeDataHost()
 
 HOST void TextureMemoryManager::cleanup()
 {
+    freeDataHost();
+
     if(oldResX + oldResY + oldResZ != 0)
     {
         freeDataDevice();
-        freeDataHost();
 
         oldResX = oldResY = oldResZ = 0;
-        resX = resY = resZ = 1;
+        resX = resY = resZ = -1;
     }
 }

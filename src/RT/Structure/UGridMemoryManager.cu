@@ -140,7 +140,7 @@ HOST cudaPitchedPtr UGridMemoryManager::allocateHostCells()
         resX * resY * resZ * sizeof(Cell)));
 
     cellsPtrHost = 
-        make_cudaPitchedPtr(cpuCells, resX * sizeof(Cell), resX, resY);
+        make_cudaPitchedPtr(cpuCells, resX * sizeof(Cell), resX * sizeof(Cell), resY);
 
     oldResX = resX;
     oldResY = resY;
@@ -159,9 +159,6 @@ HOST cudaPitchedPtr UGridMemoryManager::allocateDeviceCells()
     }
 
     freeCellMemoryDevice();
-
-    cellsPtrDevice =
-        make_cudaPitchedPtr(gpuCells, resX * sizeof(Cell), resX, resY);
 
     cudaExtent cellDataExtent = 
         make_cudaExtent(resX * sizeof(Cell), resY, resZ);

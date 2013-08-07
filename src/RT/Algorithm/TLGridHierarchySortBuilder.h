@@ -62,14 +62,14 @@ GLOBAL void countGridCellsMultiUniformGrid(
             const float magicConstant =
                 powf(lambda * static_cast<float>(oCellCounts[gridId]) / volume, 0.3333333f);
 
-            diagonal *= magicConstant;
-            int resX = static_cast<int>(diagonal.x);
-            int resY = static_cast<int>(diagonal.y);
-            int resZ = static_cast<int>(diagonal.z);
+            float3 resolution = diagonal * magicConstant;
+            int resX = static_cast<int>(resolution.x);
+            int resY = static_cast<int>(resolution.y);
+            int resZ = static_cast<int>(resolution.z);
             oGirds[gridId].res[0] = resX > 0 ? resX : 1;
             oGirds[gridId].res[1] = resY > 0 ? resY : 1;
             oGirds[gridId].res[2] = resZ > 0 ? resZ : 1;
-            float3 resolution = make_float3(oGirds[gridId].res[0], oGirds[gridId].res[1], oGirds[gridId].res[2]);
+            resolution = make_float3(oGirds[gridId].res[0], oGirds[gridId].res[1], oGirds[gridId].res[2]);
             oGirds[gridId].cellSize = diagonal / resolution;
             oGirds[gridId].cellSizeRCP = resolution / diagonal;
 
@@ -289,8 +289,8 @@ public:
     HOST void init(
         TLGridHierarchyMemoryManager&   aMemoryManager,
         const uint                      aNumInstances,
-        const float                     aTopLevelDensity = 0.0625f,
-        const float                     aLeafLevelDensity = 1.2f
+        const float                     aTopLevelDensity = 1.2f,
+        const float                     aLeafLevelDensity = 5.0f
         )
     {
         //////////////////////////////////////////////////////////////////////////
@@ -306,13 +306,13 @@ public:
         const float volume = diagonal.x * diagonal.y * diagonal.z;
         const float lambda = aTopLevelDensity;
         const float magicConstant =
-            powf(lambda * 16.f /*static_cast<float>(aNumInstances)*/ / volume, 0.3333333f);
+            powf(lambda * static_cast<float>(aNumInstances) / volume, 0.3333333f);
 
         diagonal *= magicConstant;
 
-        aMemoryManager.resX = static_cast<int>(diagonal.x);
-        aMemoryManager.resY = static_cast<int>(diagonal.y);
-        aMemoryManager.resZ = static_cast<int>(diagonal.z);
+        aMemoryManager.resX = cudastd::max(1, static_cast<int>(diagonal.x));
+        aMemoryManager.resY = cudastd::max(1, static_cast<int>(diagonal.y));
+        aMemoryManager.resZ = cudastd::max(1, static_cast<int>(diagonal.z));
 
         aMemoryManager.topLevelDensity = aTopLevelDensity;
         aMemoryManager.leafLevelDensity = aLeafLevelDensity;

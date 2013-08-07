@@ -109,6 +109,10 @@ template<
         float3 rayOrg;
         float3& rayDirRCP = (((float3*)sharedMemNew)[threadId1D32()]);
 
+        //DEBUG pt 1 of 2
+        //uint myValidIndex = myRayIndex;
+        //myRayIndex = 980;
+        
         float rayT  = aRayGenerator(rayOrg, rayDirRCP, myRayIndex, aNumRays);
         rayDirRCP.x = 1.f / rayDirRCP.x;
         rayDirRCP.y = 1.f / rayDirRCP.y;
@@ -135,10 +139,12 @@ template<
                 bestHit = dcGrid.primitives[bestHit];
         }
 
+        //DEBUG pt 2 of 2
+        //myRayIndex = myValidIndex;
+
         oBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, aNumRays);
 
         //////////////////////////////////////////////////////////////////////////
-
     }
 }
 

@@ -47,7 +47,7 @@ public:
 
 
     TextureMemoryManager()
-        :resX(1), resY(1), resZ(1), oldResX(0), oldResY(0), oldResZ(0), bounds(BBox::empty()),
+        :resX(-1), resY(-1), resZ(-1), oldResX(0), oldResY(0), oldResZ(0), bounds(BBox::empty()),
         texelsHost(NULL), texelsDevice(NULL)
     {}
 

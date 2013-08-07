@@ -127,8 +127,7 @@ public:
             //end ray/box intersection test
             //////////////////////////////////////////////////////////////////////////
 
-            const float3 entryPt = (tEntry >= 0.f) ?
-                rayOrgT + rep(tEntry + EPS) / aRayDirRCP : rayOrgT;
+            const float3 entryPt = /*(tEntry >= 0.f) ? rayOrgT + rep(tEntry + EPS) / aRayDirRCP :*/ rayOrgT;
 
             float3 cellIdf =
                 (entryPt - grid.vtx[0]) * grid.getCellSizeRCP();
@@ -137,9 +136,9 @@ public:
             cellIdf.y = floorf(cellIdf.y);
             cellIdf.z = floorf(cellIdf.z);
 
-            cellIdf.x = (aRayDirRCP.x > 0.f) ? min((float)grid.res[0] - 1.f, cellIdf.x) : max(cellIdf.x, 0.f);
-            cellIdf.y = (aRayDirRCP.y > 0.f) ? min((float)grid.res[1] - 1.f, cellIdf.y) : max(cellIdf.y, 0.f);
-            cellIdf.z = (aRayDirRCP.z > 0.f) ? min((float)grid.res[2] - 1.f, cellIdf.z) : max(cellIdf.z, 0.f);
+            //cellIdf.x = (aRayDirRCP.x > 0.f) ? min((float)grid.res[0] - 1.f, cellIdf.x) : max(cellIdf.x, 0.f);
+            //cellIdf.y = (aRayDirRCP.y > 0.f) ? min((float)grid.res[1] - 1.f, cellIdf.y) : max(cellIdf.y, 0.f);
+            //cellIdf.z = (aRayDirRCP.z > 0.f) ? min((float)grid.res[2] - 1.f, cellIdf.z) : max(cellIdf.z, 0.f);
 
 
             float3 tmp;
@@ -217,7 +216,7 @@ public:
             //end traversal loop
             //////////////////////////////////////////////////////////////////////////
 
-            if (bestHitNew != (uint)-1 && rayT < oRayT && rayT >= tEntryLvl1 && rayT < tExitLvl1)
+            if (bestHitNew != (uint)-1 /*&& rayT < oRayT && rayT >= tEntryLvl1 && rayT < tExitLvl1*/)
             {
                 oRayT = rayT;
                 oBestHitInstance = aInstanceIndirection[it];
@@ -285,8 +284,7 @@ public:
             //end ray/box intersection test
             //////////////////////////////////////////////////////////////////////////
 
-            const float3 entryPt = (tEntry >= 0.f) ?
-                rayOrg + rep(tEntry + EPS) / rayDirRCP : rayOrg;
+            const float3 entryPt = /*(tEntry >= 0.f) ? rayOrg + rep(tEntry + EPS) / rayDirRCP :*/ rayOrg;
 
             float3 cellIdf = 
                 (entryPt - dcGrid.vtx[0]) * dcGrid.getCellSizeRCP();
@@ -295,9 +293,9 @@ public:
             cellIdf.y = floorf(cellIdf.y);
             cellIdf.z = floorf(cellIdf.z);
 
-            cellIdf.x = (rayDirRCP.x > 0.f) ? min((float)dcGrid.res[0] - 1.f, cellIdf.x) : max(cellIdf.x, 0.f);
-            cellIdf.y = (rayDirRCP.y > 0.f) ? min((float)dcGrid.res[1] - 1.f, cellIdf.y) : max(cellIdf.y, 0.f);
-            cellIdf.z = (rayDirRCP.z > 0.f) ? min((float)dcGrid.res[2] - 1.f, cellIdf.z) : max(cellIdf.z, 0.f);
+            //cellIdf.x = (rayDirRCP.x > 0.f) ? min((float)dcGrid.res[0] - 1.f, cellIdf.x) : max(cellIdf.x, 0.f);
+            //cellIdf.y = (rayDirRCP.y > 0.f) ? min((float)dcGrid.res[1] - 1.f, cellIdf.y) : max(cellIdf.y, 0.f);
+            //cellIdf.z = (rayDirRCP.z > 0.f) ? min((float)dcGrid.res[2] - 1.f, cellIdf.z) : max(cellIdf.z, 0.f);
 
             float3 tmp;
             tmp.x = (rayDirRCP.x > 0.f) ? 1.f : 0.f;
@@ -315,31 +313,20 @@ public:
             bool traversalFlagOld = traversalFlag;
 
             if (toPtr(rayDirRCP)[0] > 0.f)
-            {
                 traversalFlag = traversalFlag && cellId[0] < dcGrid.res[0];
-            }
             else
-            {
                 traversalFlag = traversalFlag && cellId[0] > -1;
-            }
 
             if (toPtr(rayDirRCP)[1] > 0.f)
-            {
                 traversalFlag = traversalFlag && cellId[1] < dcGrid.res[1];
-            }
             else
-            {
                 traversalFlag = traversalFlag && cellId[1] > -1;
-            }
 
             if (toPtr(rayDirRCP)[2] > 0.f)
-            {
                 traversalFlag = traversalFlag && cellId[2] < dcGrid.res[2];
-            }
             else
-            {
                 traversalFlag = traversalFlag && cellId[2] > -1;
-            }
+
             //traversalFlag = traversalFlag && (  
             //    ((rayDirRCP.x > 0.f) ? cellId[0] < dcGrid.res[0] : cellId[0] > -1) && 
             //    ((rayDirRCP.y > 0.f) ? cellId[1] < dcGrid.res[1] : cellId[1] > -1) && 

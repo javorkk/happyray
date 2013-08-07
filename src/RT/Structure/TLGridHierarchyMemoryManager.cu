@@ -122,7 +122,7 @@ HOST cudaPitchedPtr TLGridHierarchyMemoryManager::allocateHostCells()
         resX * resY * resZ * sizeof(t_Cell)));
 
     cellsPtrHost = 
-        make_cudaPitchedPtr(cpuCells, resX * sizeof(t_Cell), resX, resY);
+        make_cudaPitchedPtr(cpuCells, resX * sizeof(t_Cell), resX * sizeof(t_Cell), resY);
 
     oldResX = resX;
     oldResY = resY;
@@ -142,10 +142,6 @@ HOST cudaPitchedPtr TLGridHierarchyMemoryManager::allocateDeviceCells()
     }
 
     freeCellMemoryDevice();
-
-    t_Cell* gpuCells = NULL;
-    cellsPtrDevice =
-        make_cudaPitchedPtr(gpuCells, resX * sizeof(t_Cell), resX, resY);
 
     cudaExtent cellDataExtent = 
         make_cudaExtent(resX * sizeof(t_Cell), resY, resZ);
