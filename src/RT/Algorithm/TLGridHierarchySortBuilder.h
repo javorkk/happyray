@@ -908,7 +908,28 @@ public:
                     << hierarchy.vtx[1].y << ", "
                     << hierarchy.vtx[1].z << ")\n";
             }
+            
+            float3 cellSize = (grid.vtx[1] - grid.vtx[0]) / grid.getResolution(); 
+            float3 cellSizeRCP = grid.getResolution() / (grid.vtx[1] - grid.vtx[0]);
 
+            if (fabsf(grid.cellSize.x - cellSize.x) > EPS ||
+                fabsf(grid.cellSize.y - cellSize.y) > EPS ||
+                fabsf(grid.cellSize.z - cellSize.z) > EPS ||
+                fabsf(grid.cellSizeRCP.x - cellSizeRCP.x) > EPS ||
+                fabsf(grid.cellSizeRCP.y - cellSizeRCP.y) > EPS ||
+                fabsf(grid.cellSizeRCP.z - cellSizeRCP.z) > EPS 
+                )
+            {
+                cudastd::logger::out << "INVALID CELL SIZE of grid " << gridId
+                    << " cell size: ("
+                    << cellSize.x << ", "
+                    << cellSize.y << ", "
+                    << cellSize.z << ") grid cell size: ("
+                    << grid.cellSize.x << ", "
+                    << grid.cellSize.y << ", "
+                    << grid.cellSize.z << ")\n";
+
+            }
             if (grid.res[0] < 1 ||
                 grid.res[1] < 1 ||
                 grid.res[2] < 1
