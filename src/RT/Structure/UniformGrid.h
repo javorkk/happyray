@@ -39,8 +39,8 @@ class UniformGrid : public Primitive<2>
 public:
     //float3 vtx[2]; //inherited -> bounding box
     int res[3];
-    float3 cellSize;
-    float3 cellSizeRCP;
+    //float3 cellSize;
+    //float3 cellSizeRCP;
     cudaPitchedPtr cells;
     uint* primitives;
     //uint  numPrimitiveReferences;
@@ -57,24 +57,38 @@ public:
 
     HOST DEVICE float3 getCellSize() const
     {
-        return cellSize;
-        //return fastDivide(vtx[1] - vtx[0], getResolution());
+        //return cellSize;
+        return fastDivide(vtx[1] - vtx[0], getResolution());
+    }
+
+    HOST DEVICE void setCellSize(const float3& aCellSize)
+    {
+        //set the variable if it exists
+        //cellSize = aCellSize;
+        //...do nothing
     }
 
     HOST DEVICE float3 getCellSizeRCP() const
     {
-        return cellSizeRCP;
-        //return fastDivide(getResolution(), vtx[1] - vtx[0]);
+        //return cellSizeRCP;
+        return fastDivide(getResolution(), vtx[1] - vtx[0]);
+    }
+
+    HOST DEVICE void setCellSizeRCP(const float3& aCellSizeRCP)
+    {
+        //set the variable if it exits
+        //cellSizeRCP = aCellSizeRCP;
+        //...or do nothing
     }
 
     //convert a 3D cell index into a linear one
-    HOST DEVICE int getCellIdLinear(int aIdX, int aIdY, int aIdZ)
+    HOST DEVICE int getCellIdLinear(int aIdX, int aIdY, int aIdZ) const
     {
         return aIdX + aIdY * res[0] + aIdZ * res[0] * res[1];
     }
 
     //convert a 3D cell index into a linear one
-    HOST DEVICE int3 getCellId3D(int aLinearId)
+    HOST DEVICE int3 getCellId3D(int aLinearId) const
     {
         return make_int3(
             aLinearId % res[0],
@@ -82,7 +96,7 @@ public:
             aLinearId / (res[0] * res[1]) );
     }
 
-    HOST DEVICE uint2 getCell(int aIdX, int aIdY, int aIdZ)
+    HOST DEVICE uint2 getCell(int aIdX, int aIdY, int aIdZ) const
     {
         return *((uint2*)((char*)cells.ptr
             + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX);
@@ -95,7 +109,7 @@ public:
             + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX) = aVal;
     } 
 
-    HOST DEVICE int3 getCellIdAt(float3 aPosition)
+    HOST DEVICE int3 getCellIdAt(float3 aPosition) const
     {
         float3 cellIdf = (aPosition - vtx[0]) * getCellSizeRCP();
         int3 cellId;
@@ -105,7 +119,7 @@ public:
         return cellId;
     }
 
-    HOST DEVICE uint2 getCellAt(float3 aPosition)
+    HOST DEVICE uint2 getCellAt(float3 aPosition) const
     {
         float3 cellIdf = (aPosition - vtx[0]) * getCellSizeRCP();
         return getCell(static_cast<int>(cellIdf.x),  static_cast<int>(cellIdf.y), static_cast<int>(cellIdf.z));
@@ -114,10 +128,10 @@ public:
     HOST DEVICE float3 getCellCenter(int aIdX, int aIdY, int aIdZ) const
     {
         float3 cellIdf = make_float3((float)aIdX + 0.5f, (float)aIdY + 0.5f, (float)aIdZ + 0.5f);
-        return vtx[0] + cellIdf * cellSize;
+        return vtx[0] + cellIdf * getCellSize();
     }
 
-    HOST DEVICE uint getPrimitiveId(uint aId)
+    HOST DEVICE uint getPrimitiveId(uint aId) const
     {
         return primitives[aId];
     }

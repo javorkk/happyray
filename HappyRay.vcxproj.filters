@@ -315,5 +315,6 @@
       <Filter>RT\Algorithm</Filter>
     </CudaCompile>
     <CudaCompile Include="src\RT\Structure\TLGridHierarchyMemoryManager.cu" />
+    <CudaCompile Include="src\RT\Algorithm\TLGridHierarchySortBuilder.cu" />
   </ItemGroup>
 </Project>

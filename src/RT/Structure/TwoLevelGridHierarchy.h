@@ -12,8 +12,9 @@
 
 
 
-struct  GeometryInstance : public Primitive<2>
+class  GeometryInstance : public Primitive<2>
 {
+public:
     //float3 vtx[2]; //inherited -> bounding box
     uint index;
     //Transformation
@@ -35,11 +36,10 @@ struct  GeometryInstance : public Primitive<2>
 
         return rayOrgT;
     }
-
 };
 
 template<>
-class BBoxExtractor<GeometryInstance>
+class BBoxExtractor< GeometryInstance >
 {
 public:
     DEVICE HOST static BBox get(const GeometryInstance& aUGrid)
@@ -63,13 +63,101 @@ public:
     //float3 cellSizeRCP;       //inherited -> uniform grid
     //cudaPitchedPtr  cells;    //inherited -> uniform grid
     //uint* primitives;         //inherited -> uniform grid
-    uint*           instanceIndices;
-    GeometryInstance* instances;
-    UniformGrid*    grids;
-    t_Leaf*         leaves;
 
-    uint            numInstances;
+    uint* mMemoryPtrHost;
+    uint* mMemoryPtrDevice;
+    //uint*           instanceIndices;
+    //GeometryInstance* instances;
+    //UniformGrid*    grids;
+    //t_Leaf*         leaves;
+    //uint            numInstances;
     //uint  numPrimitiveReferences;
+
+    HOST DEVICE uint* getInstanceIndices() const 
+    { 
+#ifdef __CUDA_ARCH__
+        return *(uint**)(mMemoryPtrDevice);
+#else
+        return *(uint**)(mMemoryPtrHost);
+#endif
+    }
+
+    HOST void setInstanceIndices(uint* val)
+    {
+        memcpy(mMemoryPtrHost, (void*)&val, sizeof(uint*));
+        MY_CUDA_SAFE_CALL(cudaMemcpy(mMemoryPtrDevice, mMemoryPtrHost, getParametersSize(), cudaMemcpyHostToDevice));
+    }
+
+    HOST DEVICE GeometryInstance* getInstances() const
+    {
+#ifdef __CUDA_ARCH__
+        return *(GeometryInstance**)(mMemoryPtrDevice + sizeof(uint*));
+#else
+        return *(GeometryInstance**)(mMemoryPtrHost + sizeof(uint*));
+#endif
+    }
+
+    HOST void setInstances(GeometryInstance* val)
+    { 
+        memcpy((void*)(mMemoryPtrHost + sizeof(uint*)), (void*)&val, sizeof(GeometryInstance*));
+        MY_CUDA_SAFE_CALL(cudaMemcpy(mMemoryPtrDevice, mMemoryPtrHost, getParametersSize(), cudaMemcpyHostToDevice));
+    }
+
+    HOST DEVICE UniformGrid* getGrids() const 
+    { 
+#ifdef __CUDA_ARCH__
+        return *(UniformGrid**)(mMemoryPtrDevice + sizeof(uint*) + sizeof(GeometryInstance*));
+#else
+        return *(UniformGrid**)(mMemoryPtrHost + sizeof(uint*) + sizeof(GeometryInstance*));
+#endif
+    }
+
+    HOST void setGrids(UniformGrid* val)
+    {
+        memcpy((void*)(mMemoryPtrHost + sizeof(uint*) + sizeof(GeometryInstance*)), (void*)&val, sizeof(UniformGrid*));
+        MY_CUDA_SAFE_CALL(cudaMemcpy(mMemoryPtrDevice, mMemoryPtrHost, getParametersSize(), cudaMemcpyHostToDevice));
+    }
+
+    HOST DEVICE t_Leaf* getLeaves() const
+    {
+#ifdef __CUDA_ARCH__
+        return *(t_Leaf**)(mMemoryPtrDevice + sizeof(uint*) + sizeof(GeometryInstance*) + sizeof(UniformGrid*));
+#else
+        return *(t_Leaf**)(mMemoryPtrHost + sizeof(uint*) + sizeof(GeometryInstance*) + sizeof(UniformGrid*));
+#endif 
+    }
+
+    HOST void setLeaves(t_Leaf* val)
+    {
+        memcpy((void*)(mMemoryPtrHost + sizeof(uint*) + sizeof(GeometryInstance*) + sizeof(UniformGrid*)), (void*)&val, sizeof(t_Leaf*));
+        MY_CUDA_SAFE_CALL(cudaMemcpy(mMemoryPtrDevice, mMemoryPtrHost, getParametersSize(), cudaMemcpyHostToDevice));
+    }
+
+    HOST DEVICE uint getNumInstances() const
+    { 
+#ifdef __CUDA_ARCH__
+        return *(uint*)(mMemoryPtrDevice + sizeof(uint*) + sizeof(GeometryInstance*) + sizeof(UniformGrid*) + sizeof(t_Leaf*));
+#else
+        return *(uint*)(mMemoryPtrHost + sizeof(uint*) + sizeof(GeometryInstance*) + sizeof(UniformGrid*) + sizeof(t_Leaf*));
+#endif 
+    }
+
+	HOST void setNumInstances(uint val)
+    {
+        memcpy((void*)(mMemoryPtrHost + sizeof(uint*) + sizeof(GeometryInstance*) + sizeof(UniformGrid*) + sizeof(t_Leaf*)), (void*)&val, sizeof(uint));
+        MY_CUDA_SAFE_CALL(cudaMemcpy(mMemoryPtrDevice, mMemoryPtrHost, getParametersSize(), cudaMemcpyHostToDevice));
+    }
+
+    static int getParametersSize()
+    {
+        return sizeof(uint*) + sizeof(GeometryInstance*) + sizeof(UniformGrid*) + sizeof(t_Leaf*) + sizeof(uint);
+    }
+
+    HOST void setMemoryPtr(uint* aHostPtr, uint* aDevicePtr)
+    {
+        mMemoryPtrHost = aHostPtr;
+        mMemoryPtrDevice = aDevicePtr;
+    }
 
     //////////////////////////////////////////////////////////////////////////
     //inherited -> uniform grid
@@ -100,7 +188,7 @@ public:
 };
 
 template<>
-class BBoxExtractor<TwoLevelGridHierarchy>
+class BBoxExtractor< TwoLevelGridHierarchy >
 {
 public:
     DEVICE HOST static BBox get(const TwoLevelGridHierarchy& aUGrid)

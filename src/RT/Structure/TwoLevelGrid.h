@@ -190,10 +190,24 @@ public:
         //return fastDivide(vtx[1] - vtx[0], getResolution());
     }
 
+    HOST DEVICE void setCellSize(const float3& aCellSize)
+    {
+        //set the variable if it exists
+        cellSize = aCellSize;
+        //...do nothing
+    }
+
     DEVICE float3 getCellSizeRCP() const
     {
         return cellSizeRCP;
         //return fastDivide(getResolution(), vtx[1] - vtx[0]);
+    }
+
+    HOST DEVICE void setCellSizeRCP(const float3& aCellSizeRCP)
+    {
+        //set the variable if it exits
+        cellSizeRCP = aCellSizeRCP;
+        //...or do nothing
     }
 
     DEVICE t_Cell getCell(int aIdX, int aIdY, int aIdZ)

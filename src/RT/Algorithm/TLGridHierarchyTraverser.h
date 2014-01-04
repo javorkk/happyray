@@ -95,11 +95,9 @@ public:
             float3 rayOrgT = instance.transformRay(aRayOrg, aRayDirRCP);
 
             UniformGrid grid = aGrids[instance.index];
-            UGridTraverser<tPrimitive, tIntersector, taIsShadowRay> traverse;
             bool traversalFlag = true;
             uint bestHitNew = (uint)-1;
             float rayT = oRayT;
-            //traverse(aPrimitiveArray, grid, rayOrgT, aRayDirRCP, rayT, bestHitNew, traversalFlag, aSharedMemory);
 
             tIntersector intersector;
             //////////////////////////////////////////////////////////////////////////
@@ -277,7 +275,7 @@ public:
 
             float tEntry;
             float tExit;
-            BBox bounds = BBoxExtractor<UniformGrid>::get(dcGrid);
+            BBox bounds = BBoxExtractor<TwoLevelGridHierarchy>::get(dcGrid);
             bounds.fastClip(rayOrg, rayDirRCP, tEntry, tExit);
 
             traversalFlag = traversalFlag && (tExit > tEntry && tExit >= 0.f);
@@ -310,8 +308,6 @@ public:
             cellId[1] = static_cast<int>(cellIdf.y);
             cellId[2] = static_cast<int>(cellIdf.z);
             
-            bool traversalFlagOld = traversalFlag;
-
             if (toPtr(rayDirRCP)[0] > 0.f)
                 traversalFlag = traversalFlag && cellId[0] < dcGrid.res[0];
             else
@@ -351,7 +347,7 @@ public:
             }
 
             traverser(rayOrg, rayT, bestHit, bestHitInstance, cellRange,
-                dcGrid.instanceIndices, dcGrid.instances, dcGrid.grids, dcGrid.primitives,
+                dcGrid.getInstanceIndices(), dcGrid.getInstances(), dcGrid.getGrids(), dcGrid.primitives,
                 aPrimitiveArray, sharedMemNew);
 
             /////////////////////////////////////////////////////////////////////////
@@ -392,7 +388,7 @@ public:
         //transform the ray into the local coordinates of the hit instance
         if(bestHitInstance != (uint)-1)
         {
-            const GeometryInstance instance = dcGrid.instances[bestHitInstance];
+            const GeometryInstance instance = dcGrid.getInstances()[bestHitInstance];
             float3 rayOrgT = instance.transformRay(rayOrg, rayDirRCP);
             rayOrg = rayOrgT;
         }

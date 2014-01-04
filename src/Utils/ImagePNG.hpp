@@ -36,6 +36,7 @@
 //Color components are in the range 0..1
 class Image
 {
+    std::vector<float3> m_bits;
 	uint m_width, m_height;
 public:
 	Image()

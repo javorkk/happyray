@@ -421,6 +421,12 @@ HOST void TLGridHierarchyMemoryManager::cleanup()
     freeTopLevelPairsBufferPair();
     freeLeafLevelPairsBufferPair();
 
+    MY_CUDA_SAFE_CALL(cudaFreeHost(paramPtrHost));
+    paramPtrHost = NULL;
+    MY_CUDA_SAFE_CALL(cudaFree(paramPtrDevice));
+    paramPtrDevice = NULL;
+
+
 }
 //////////////////////////////////////////////////////////////////////////
 //debug related
