@@ -573,6 +573,8 @@ void SDLGLApplication::printHelp()
     std::cerr << "Change render mode: m\n\n";
     std::cerr << "Toggle full-screen mode: F2\n\n";
     std::cerr << "Write screen-shot in output/output.png: t\n";
+    std::cerr << "Dump frames: n\n";
+
 
 }
 
@@ -634,6 +636,11 @@ void SDLGLApplication::nextRenderMode()
 void SDLGLApplication::dumpFrames()
 {
     mDumpFrames = !mDumpFrames;
+
+    std::cout << "AA samples per pixel: ";
+    std::cin >> mPixelSamplesPerDumpedFrame;
+    mPixelSamplesPerDumpedFrame = std::max(1, mPixelSamplesPerDumpedFrame);
+
 }
 
 void SDLGLApplication::pauseAnimation()
@@ -753,21 +760,27 @@ void SDLGLApplication::displayFrame()
             buildTime = CUDAApplication::nextFrame();
         }
 
-        switch ( mRenderMode ) 
+        for (int i = 0; i < mPixelSamplesPerDumpedFrame; ++i)
         {
-        case DEFAULT:
-            renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 0);
-            break;
-        case PATH_TRACE:
-            renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 1);
-            break;
-        case AMBIENT_OCCLUSION:
-        default:
-            renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 2);
-            break;
-        }//switch ( mRenderMode )
+            switch ( mRenderMode ) 
+            {
+            case DEFAULT:
+                renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 0);
+                break;
+            case PATH_TRACE:
+                renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 1);
+                break;
+            case AMBIENT_OCCLUSION:
+            default:
+                renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 2);
+                break;
+            }//switch ( mRenderMode )
 
-        
+            if (mPauseAnimation || !mDumpFrames)
+                break;
+
+            ++mNumImages;
+        }
 
         if(mPauseAnimation)
         {
@@ -806,7 +819,10 @@ void SDLGLApplication::displayFrame()
 #endif
 
         if(!mPauseAnimation && mDumpFrames)
+        {
             writeScreenShot();
+            cameraChanged();
+        }
     }
 }
 

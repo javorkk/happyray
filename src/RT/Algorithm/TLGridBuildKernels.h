@@ -128,6 +128,7 @@ GLOBAL void countLeafLevelCells(
 //  y = blockIdx.x
 //  z = blcokIdx.y
 //This completes the preparation of the top level cells for rendering
+template<int taDummy>
 GLOBAL void prepareTopLevelCellRanges(             
     uint*             aCellCounts,
     cudaPitchedPtr    oTopLevelCells
@@ -425,7 +426,7 @@ GLOBAL void writeLeafLevelPairs(
 
 }
 
-
+template<int taBlockSize>
 GLOBAL void prepareLeafCellRanges(
     uint*             oPrimitiveIndices,
     uint2*            aSortedPairs,

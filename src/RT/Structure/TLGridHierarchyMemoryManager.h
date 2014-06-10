@@ -44,6 +44,8 @@ public:
     uint* primitiveIndicesHost;
     size_t primitiveIndicesSize;
 
+    uint* paramPtrHost;
+    uint* paramPtrDevice;
     //////////////////////////////////////////////////////////////////////////
     //construction buffers
     //////////////////////////////////////////////////////////////////////////
@@ -73,6 +75,7 @@ public:
         instanceIndicesDevice(NULL), instanceIndicesHost(NULL), instanceIndicesSize(0),
         instancesDevice(NULL), instancesHost(NULL), instancesSize(0),
         gridsDevice(NULL), gridsHost(NULL), gridsSize(0),
+        paramPtrHost(NULL),paramPtrDevice(NULL),
         refCountsBuffer(NULL), refCountsBufferHost(NULL),
         refCountsBufferSize(0u),cellCountsBuffer(NULL),cellCountsBufferHost(NULL),
         cellCountsBufferSize(0u),
@@ -115,44 +118,68 @@ public:
     //////////////////////////////////////////////////////////////////////////
     //data transfer related
     //////////////////////////////////////////////////////////////////////////
-    HOST TwoLevelGridHierarchy getParameters() const
+    HOST TwoLevelGridHierarchy getParameters()
     {
         TwoLevelGridHierarchy retval;
+        if (paramPtrDevice != NULL || paramPtrHost != NULL)
+        {
+            MY_CUDA_SAFE_CALL(cudaFreeHost(paramPtrHost));
+            paramPtrHost = NULL;
+            MY_CUDA_SAFE_CALL(cudaFree(paramPtrDevice));
+            paramPtrDevice = NULL;
+        }
+        MY_CUDA_SAFE_CALL(cudaHostAlloc((void**)&paramPtrHost, TwoLevelGridHierarchy::getParametersSize(), cudaHostAllocDefault));
+        MY_CUDA_SAFE_CALL(cudaMalloc((void**)&paramPtrDevice, TwoLevelGridHierarchy::getParametersSize()));
+
+        retval.setMemoryPtr(paramPtrHost, paramPtrDevice);
+
         retval.vtx[0] = bounds.vtx[0]; //bounds min
         retval.vtx[1] = bounds.vtx[1]; //bounds max
         retval.res[0] = resX;
         retval.res[1] = resY;
         retval.res[2] = resZ;
-        retval.cellSize = getCellSize();
-        retval.cellSizeRCP = getCellSizeRCP();
+        retval.setCellSize(getCellSize());
+        retval.setCellSizeRCP(getCellSizeRCP());
         retval.cells = cellsPtrDevice;
-        retval.instanceIndices = instanceIndicesDevice;
-        retval.instances = instancesDevice;
-        retval.grids = gridsDevice;
-        retval.leaves = leavesDevice;
+        retval.setInstanceIndices(instanceIndicesDevice);
+        retval.setInstances(instancesDevice);
+        retval.setGrids(gridsDevice);
+        retval.setLeaves(leavesDevice);
         retval.primitives = primitiveIndices;
-        retval.numInstances = (uint)(instancesSize / sizeof(GeometryInstance));
+        retval.setNumInstances((uint)(instancesSize / sizeof(GeometryInstance)));
         //retval.numPrimitiveReferences = primitiveIndicesSize / sizeof(uint);
         return retval;
     }
 
-        HOST TwoLevelGridHierarchy getParametersHost() const
+    HOST TwoLevelGridHierarchy getParametersHost()
     {
         TwoLevelGridHierarchy retval;
+        if (paramPtrDevice != NULL || paramPtrHost != NULL)
+        {
+            MY_CUDA_SAFE_CALL(cudaFreeHost(paramPtrHost));
+            paramPtrHost = NULL;
+            MY_CUDA_SAFE_CALL(cudaFree(paramPtrDevice));
+            paramPtrDevice = NULL;
+        }
+        MY_CUDA_SAFE_CALL(cudaHostAlloc((void**)&paramPtrHost, TwoLevelGridHierarchy::getParametersSize(), cudaHostAllocDefault));
+        MY_CUDA_SAFE_CALL(cudaMalloc((void**)&paramPtrDevice, TwoLevelGridHierarchy::getParametersSize()));
+
+        retval.setMemoryPtr(paramPtrHost, paramPtrDevice);
+
         retval.vtx[0] = bounds.vtx[0]; //bounds min
         retval.vtx[1] = bounds.vtx[1]; //bounds max
         retval.res[0] = resX;
         retval.res[1] = resY;
         retval.res[2] = resZ;
-        retval.cellSize = getCellSize();
-        retval.cellSizeRCP = getCellSizeRCP();
+        retval.setCellSize(getCellSize());
+        retval.setCellSizeRCP(getCellSizeRCP());
         retval.cells = cellsPtrHost;
-        retval.instanceIndices = instanceIndicesHost;
-        retval.instances = instancesHost;
-        retval.grids = gridsHost;
-        retval.leaves = leavesHost;
+        retval.setInstanceIndices(instanceIndicesHost);
+        retval.setInstances(instancesHost);
+        retval.setGrids(gridsHost);
+        retval.setLeaves(leavesHost);
         retval.primitives = primitiveIndicesHost;
-        retval.numInstances = (uint)(instancesSize / sizeof(GeometryInstance));
+        retval.setNumInstances((uint)(instancesSize / sizeof(GeometryInstance)));
         //retval.numPrimitiveReferences = primitiveIndicesSize / sizeof(uint);
         return retval;
     }

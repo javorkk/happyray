@@ -34,7 +34,6 @@
 using namespace cudastd;
 
 //////////////////////////////////////////////////////////////////////////
-std::vector<float3> m_bits;
 
 Image::Image(uint _width, uint _height)
 : m_width(_width), m_height(_height)

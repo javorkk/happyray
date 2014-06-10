@@ -273,7 +273,7 @@ public:
         MY_CUT_CHECK_ERROR("Counting leaf level cells failed.\n");
         //////////////////////////////////////////////////////////////////////////
         
-        prepareTopLevelCellRanges<<< gridCellCount, blockCellCount >>>(
+        prepareTopLevelCellRanges<0><<< gridCellCount, blockCellCount >>>(
             aMemoryManager.cellCountsBuffer,
             aMemoryManager.cellsPtrDevice
             );
@@ -401,7 +401,7 @@ public:
         dim3 blockPrepLeafRng(sNUM_CELL_SETUP_THREADS);
         dim3 gridPrepLeafRng (sNUM_CELL_SETUP_BLOCKS );
 
-        prepareLeafCellRanges
+        prepareLeafCellRanges<sNUM_CELL_SETUP_THREADS>
             <<< gridPrepLeafRng, blockPrepLeafRng,
             (2 + blockPrepLeafRng.x) * sizeof(uint) >>>(
             aMemoryManager.primitiveIndices,

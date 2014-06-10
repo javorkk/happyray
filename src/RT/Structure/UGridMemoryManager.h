@@ -119,8 +119,8 @@ public:
         retval.res[0] = resX;
         retval.res[1] = resY;
         retval.res[2] = resZ;
-        retval.cellSize = getCellSize();
-        retval.cellSizeRCP = getCellSizeRCP();
+        retval.setCellSize(getCellSize());
+        retval.setCellSizeRCP(getCellSizeRCP());
         retval.cells = cellsPtrDevice;
         retval.primitives = primitiveIndices;
         //retval.numPrimitiveReferences = primitiveIndicesSize / sizeof(uint);
@@ -135,8 +135,8 @@ public:
         retval.res[0] = resX;
         retval.res[1] = resY;
         retval.res[2] = resZ;
-        retval.cellSize = getCellSize();
-        retval.cellSizeRCP = getCellSizeRCP();
+        retval.setCellSize(getCellSize());
+        retval.setCellSizeRCP(getCellSizeRCP());
         allocateHostCells();
         copyCellsDeviceToHost();
         copyPrimitiveIndicesDeviceToHost();

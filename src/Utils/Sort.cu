@@ -24,13 +24,13 @@
 #include "Sort.h"
 
 //#if HAPPYRAY__CUDA_ARCH__ < 200
-//#   define USE_CHAG_PP_SORT
+#   define USE_CHAG_PP_SORT
 //#endif
 
 #ifdef USE_CHAG_PP_SORT
 #   include "chag/pp/sort.cuh"
 #else
-#   include <thrust/detail/backend/cuda/detail/b40c/radixsort_api.h>
+#   include <thrust/system/cuda/detail/detail/b40c/radixsort_api.h>
 #   include <thrust/detail/util/align.h>
 
 /**
@@ -71,7 +71,7 @@ GLOBAL void SinglesToPairs(
 /**
  * Custom sorting storage-management structure for device vectors
  */
-struct PersistentRadixSortStorage : public thrust::detail::backend::cuda::detail::b40c_thrust::RadixSortStorage<uint, uint>
+struct PersistentRadixSortStorage : public thrust::system::cuda::detail::detail::b40c_thrust::RadixSortStorage<uint, uint>
 {
     PersistentRadixSortStorage(uint* keys = NULL, uint* values = NULL): RadixSortStorage<uint,uint>(keys, values)
     {}
@@ -184,15 +184,19 @@ void Sort::operator()(uint *&pData0,
     //    cudastd::logger::out << "Error: Radix Sort Values :  Pointer is not aligned!\n";
     //}
 
-    thrust::detail::backend::cuda::detail::b40c_thrust::RadixSortingEnactor<uint,uint> sorter(aNumElements);
+    thrust::system::cuda::detail::detail::b40c_thrust::RadixSortingEnactor<uint,uint> sorter(aNumElements);
     PersistentRadixSortStorage  storage;
 
-    typedef thrust::detail::cuda_device_space_tag space;
+    //typedef thrust::detail::cuda_device_space_tag space;
     // allocate temporary buffers
     //thrust::detail::uninitialized_array<uint,    space> temp_keys(num_elements);
     //thrust::detail::uninitialized_array<uint,    space> temp_values(num_elements);
-    thrust::detail::uninitialized_array<int,  space> temp_spine(sorter.SpineElements());
-    thrust::detail::uninitialized_array<bool, space> temp_from_alt(2);
+    //thrust::system::cuda::detail::uninitialized_array<int> temp_spine(sorter.SpineElements());
+    //thrust::system::cuda::detail::uninitialized_array<bool> temp_from_alt(2);
+    int* temp_spine;
+    cudaMalloc((void**)&temp_spine, sorter.SpineElements() * sizeof(int));
+    bool* temp_from_alt;
+    cudaMalloc((void**)&temp_from_alt, 2 * sizeof(bool));
 
     // define storage
     storage.d_keys             = thrust::raw_pointer_cast(&*keys);
@@ -225,7 +229,8 @@ void Sort::operator()(uint *&pData0,
     }
 
     SinglesToPairs<<< gridSize, blockSize>>>((uint2*)pData0, pData1, pData2, aNumElements);
-
+    cudaFree(temp_spine);
+    cudaFree(temp_from_alt);
     //DEBUG
     //cudaEventSynchronize(sortEvent);    
     //cudaEventDestroy(sortEvent);

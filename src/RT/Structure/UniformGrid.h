@@ -39,8 +39,8 @@ class UniformGrid : public Primitive<2>
 public:
     //float3 vtx[2]; //inherited -> bounding box
     int res[3];
-    float3 cellSize;
-    float3 cellSizeRCP;
+    //float3 cellSize;
+    //float3 cellSizeRCP;
     cudaPitchedPtr cells;
     uint* primitives;
     //uint  numPrimitiveReferences;
@@ -57,14 +57,28 @@ public:
 
     HOST DEVICE float3 getCellSize() const
     {
-        return cellSize;
-        //return fastDivide(vtx[1] - vtx[0], getResolution());
+        //return cellSize;
+        return fastDivide(vtx[1] - vtx[0], getResolution());
+    }
+
+    HOST DEVICE void setCellSize(const float3& aCellSize)
+    {
+        //set the variable if it exists
+        //cellSize = aCellSize;
+        //...do nothing
     }
 
     HOST DEVICE float3 getCellSizeRCP() const
     {
-        return cellSizeRCP;
-        //return fastDivide(getResolution(), vtx[1] - vtx[0]);
+        //return cellSizeRCP;
+        return fastDivide(getResolution(), vtx[1] - vtx[0]);
+    }
+
+    HOST DEVICE void setCellSizeRCP(const float3& aCellSizeRCP)
+    {
+        //set the variable if it exits
+        //cellSizeRCP = aCellSizeRCP;
+        //...or do nothing
     }
 
     //convert a 3D cell index into a linear one
@@ -114,7 +128,7 @@ public:
     HOST DEVICE float3 getCellCenter(int aIdX, int aIdY, int aIdZ) const
     {
         float3 cellIdf = make_float3((float)aIdX + 0.5f, (float)aIdY + 0.5f, (float)aIdZ + 0.5f);
-        return vtx[0] + cellIdf * cellSize;
+        return vtx[0] + cellIdf * getCellSize();
     }
 
     HOST DEVICE uint getPrimitiveId(uint aId) const

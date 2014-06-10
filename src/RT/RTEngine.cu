@@ -64,7 +64,7 @@ typedef Triangle    t_Primitive;
 
 #ifdef TLGRIDHIERARCHY //DEBUG PURPOSES ONLY
 typedef TLGridHierarchyMemoryManager                t_MemoryManager;
-typedef TLGridHierarchySortBuilder< t_Primitive >   t_AccStructBuilder;
+typedef TLGridHierarchySortBuilder                 t_AccStructBuilder;
 typedef TwoLevelGridHierarchy                       t_AccStruct;
 #define Traverser_t                                 TLGridHierarchyTraverser
 float                                               sTopLevelDensity = 1.2f;

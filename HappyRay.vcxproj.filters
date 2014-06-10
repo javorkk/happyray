@@ -314,6 +314,11 @@
     <CudaCompile Include="src\RT\Algorithm\UniformGridBuildKernels.cu">
       <Filter>RT\Algorithm</Filter>
     </CudaCompile>
-    <CudaCompile Include="src\RT\Structure\TLGridHierarchyMemoryManager.cu" />
+    <CudaCompile Include="src\RT\Structure\TLGridHierarchyMemoryManager.cu">
+      <Filter>RT\Structure</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\RT\Algorithm\TLGridHierarchySortBuilder.cu">
+      <Filter>RT\Algorithm</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

@@ -275,7 +275,7 @@ public:
 
             float tEntry;
             float tExit;
-            BBox bounds = BBoxExtractor<UniformGrid>::get(dcGrid);
+            BBox bounds = BBoxExtractor<TwoLevelGridHierarchy>::get(dcGrid);
             bounds.fastClip(rayOrg, rayDirRCP, tEntry, tExit);
 
             traversalFlag = traversalFlag && (tExit > tEntry && tExit >= 0.f);
@@ -347,7 +347,7 @@ public:
             }
 
             traverser(rayOrg, rayT, bestHit, bestHitInstance, cellRange,
-                dcGrid.instanceIndices, dcGrid.instances, dcGrid.grids, dcGrid.primitives,
+                dcGrid.getInstanceIndices(), dcGrid.getInstances(), dcGrid.getGrids(), dcGrid.primitives,
                 aPrimitiveArray, sharedMemNew);
 
             /////////////////////////////////////////////////////////////////////////
@@ -388,7 +388,7 @@ public:
         //transform the ray into the local coordinates of the hit instance
         if(bestHitInstance != (uint)-1)
         {
-            const GeometryInstance instance = dcGrid.instances[bestHitInstance];
+            const GeometryInstance instance = dcGrid.getInstances()[bestHitInstance];
             float3 rayOrgT = instance.transformRay(rayOrg, rayDirRCP);
             rayOrg = rayOrgT;
         }
