@@ -134,7 +134,7 @@ public:
     DEVICE float operator()()
     {
         seed = seed * 1664525 + 1013904223;
-        return (float)seed / 0x100000000;
+        return (float)seed / 0xFFFFFFFF;
 
     }
 };

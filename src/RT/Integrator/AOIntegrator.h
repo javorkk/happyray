@@ -42,7 +42,7 @@
 #include "RT/Algorithm/RayTracingKernels.h"
 #include "Utils/RandomNumberGenerators.hpp"
 
-static const int NUMAMBIENTOCCLUSIONSAMPLES  = 1;
+static const int NUMAMBIENTOCCLUSIONSAMPLES  = 4;
 
 //#define USE_3D_TEXTURE //instead of scene materials
 #ifdef USE_3D_TEXTURE
@@ -137,9 +137,9 @@ GLOBAL void computeAOIllumination(
                 t_Material material = aMaterialStorage[bestHit];
                 float3 diffReflectance = material.getDiffuseReflectance(rayOrg.x, rayOrg.y, rayOrg.z);
 
-                sharedVec[threadId1D()].x *= diffReflectance.x;
-                sharedVec[threadId1D()].y *= diffReflectance.y;
-                sharedVec[threadId1D()].z *= diffReflectance.z;
+                sharedVec[threadId1D()].x *= diffReflectance.x * M_PI;
+                sharedVec[threadId1D()].y *= diffReflectance.y * M_PI;
+                sharedVec[threadId1D()].z *= diffReflectance.z * M_PI;
 
                 float sinZNormal = fmaxf(0.f,sqrtf(1.f - normal.z));
                 float cosEyeNormal = fabsf(dot(rayDir, normal));
@@ -152,7 +152,7 @@ GLOBAL void computeAOIllumination(
         }
         else if (myRayIndex < dcNumRays)
         {
-            sharedVec[threadId1D()] = rep(1.f);
+            sharedVec[threadId1D()] = rep(0.f);
         }//endif hit point exists
 
         SYNCTHREADS;

@@ -23,9 +23,9 @@
 
 #include "Sort.h"
 
-#if HAPPYRAY__CUDA_ARCH__ < 200
+//#if HAPPYRAY__CUDA_ARCH__ < 200
 #   define USE_CHAG_PP_SORT
-#endif
+//#endif
 
 #ifdef USE_CHAG_PP_SORT
 #   include "chag/pp/sort.cuh"
