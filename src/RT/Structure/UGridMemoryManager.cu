@@ -230,8 +230,11 @@ HOST void UGridMemoryManager::freeCellMemoryDevice()
 
 HOST void UGridMemoryManager::freeCellMemoryHost()
 {
-    MY_CUDA_SAFE_CALL( cudaFreeHost((char*)cellsPtrHost.ptr) );
-    cellsPtrHost.ptr = NULL;
+    if(cellsPtrHost.ptr != NULL)
+    {
+        MY_CUDA_SAFE_CALL( cudaFreeHost((char*)cellsPtrHost.ptr) );
+        cellsPtrHost.ptr = NULL;
+    }
 }
 
 HOST void UGridMemoryManager::freePrimitiveIndicesBuffer()
