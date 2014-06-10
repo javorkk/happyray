@@ -97,9 +97,9 @@ GLOBAL void prepareLeavesPointersMultiUniformGrid(
 {
     for(uint gridId = globalThreadId1D(); gridId < aNumItems; gridId += numThreads())
     {
-        int xsize = oGirds[gridId].res[0];
+        int xsize = oGirds[gridId].res[0] * sizeof(uint2);
         int ysize = oGirds[gridId].res[1];
-        int pitch = xsize * sizeof(uint2);
+        int pitch = oGirds[gridId].res[0] * sizeof(uint2);
         void* ptr = (void*)(aLeavesBasePtr + aCellCounts[gridId]);
         oGirds[gridId].cells.xsize = xsize;
         oGirds[gridId].cells.ysize = ysize;
@@ -284,13 +284,14 @@ class TLGridHierarchySortBuilder
     cudaEvent_t mStart, mDataUpload, mScan;
     cudaEvent_t mTopLevel, mLeafCellCount, mLeafRefsCount,
         mLeafRefsWrite, mSortLeafPairs, mEnd;
-
+    bool mSetLeafResolution;
 public:
     HOST void init(
         TLGridHierarchyMemoryManager&   aMemoryManager,
         const uint                      aNumInstances,
         const float                     aTopLevelDensity = 1.2f,
-        const float                     aLeafLevelDensity = 5.0f
+        const float                     aLeafLevelDensity = 5.0f,
+        bool                            aSetLeafResolution = true
         )
     {
         //////////////////////////////////////////////////////////////////////////
@@ -320,6 +321,7 @@ public:
         aMemoryManager.allocateDeviceCells();
         aMemoryManager.setDeviceCellsToZero();
         
+        mSetLeafResolution = aSetLeafResolution;
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mDataUpload, 0);
         cudaEventSynchronize(mDataUpload);
@@ -524,8 +526,9 @@ public:
     HOST void initEvents(
         TLGridHierarchyMemoryManager&   aMemoryManager,
         const uint                      aNumInstances,
-        const float                     aTopLevelDensity = 0.0625f,
-        const float                     aLeafLevelDensity = 1.2f
+        const float                     aTopLevelDensity = 1.2f,
+        const float                     aLeafLevelDensity = 5.0f,
+        bool                            aSetLeafResolution = true
         )
     {
         //////////////////////////////////////////////////////////////////////////
@@ -535,7 +538,7 @@ public:
         cudaEventRecord(mStart, 0);
         cudaEventSynchronize(mStart);
         //////////////////////////////////////////////////////////////////////////
-
+        mSetLeafResolution = aSetLeafResolution;
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mDataUpload, 0);
         cudaEventSynchronize(mDataUpload);
@@ -561,7 +564,7 @@ public:
             aNumGrids,
             aMemoryManager.leafLevelDensity,
             aMemoryManager.gridsDevice,
-            true,
+            mSetLeafResolution,
             aMemoryManager.cellCountsBuffer
             );
 

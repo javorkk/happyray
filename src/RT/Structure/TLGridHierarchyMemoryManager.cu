@@ -75,6 +75,20 @@ HOST void TLGridHierarchyMemoryManager::copyInstanceIndicesDeviceToHost()
 HOST void TLGridHierarchyMemoryManager::copyGridsDeviceToHost()
 {
     MY_CUDA_SAFE_CALL(cudaMemcpy(gridsHost, gridsDevice, gridsSize, cudaMemcpyDeviceToHost));
+    if(leavesHost != NULL)
+    {
+        char* basePtr = (char*)gridsHost[0].cells.ptr;
+        size_t numGrids = gridsSize / sizeof(UniformGrid);    
+        for(size_t gridId = 0; gridId < numGrids; ++gridId)
+        {
+            char* ptr = (char*)gridsHost[gridId].cells.ptr;
+            gridsHost[gridId].cells.ptr = (char*)leavesHost + ((char*)ptr - (char*)basePtr);
+        }
+    }
+    else
+    {
+        cudastd::logger::out << "Warning: Copied uniform grids form device to host, without correcting their cells-pointers\n";
+    }
 }
 
 HOST void TLGridHierarchyMemoryManager::copyGridsHostToDevice()

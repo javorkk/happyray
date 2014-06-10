@@ -68,13 +68,13 @@ public:
     }
 
     //convert a 3D cell index into a linear one
-    HOST DEVICE int getCellIdLinear(int aIdX, int aIdY, int aIdZ)
+    HOST DEVICE int getCellIdLinear(int aIdX, int aIdY, int aIdZ) const
     {
         return aIdX + aIdY * res[0] + aIdZ * res[0] * res[1];
     }
 
     //convert a 3D cell index into a linear one
-    HOST DEVICE int3 getCellId3D(int aLinearId)
+    HOST DEVICE int3 getCellId3D(int aLinearId) const
     {
         return make_int3(
             aLinearId % res[0],
@@ -82,7 +82,7 @@ public:
             aLinearId / (res[0] * res[1]) );
     }
 
-    HOST DEVICE uint2 getCell(int aIdX, int aIdY, int aIdZ)
+    HOST DEVICE uint2 getCell(int aIdX, int aIdY, int aIdZ) const
     {
         return *((uint2*)((char*)cells.ptr
             + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX);
@@ -95,7 +95,7 @@ public:
             + aIdY * cells.pitch + aIdZ * cells.pitch * cells.ysize) + aIdX) = aVal;
     } 
 
-    HOST DEVICE int3 getCellIdAt(float3 aPosition)
+    HOST DEVICE int3 getCellIdAt(float3 aPosition) const
     {
         float3 cellIdf = (aPosition - vtx[0]) * getCellSizeRCP();
         int3 cellId;
@@ -105,7 +105,7 @@ public:
         return cellId;
     }
 
-    HOST DEVICE uint2 getCellAt(float3 aPosition)
+    HOST DEVICE uint2 getCellAt(float3 aPosition) const
     {
         float3 cellIdf = (aPosition - vtx[0]) * getCellSizeRCP();
         return getCell(static_cast<int>(cellIdf.x),  static_cast<int>(cellIdf.y), static_cast<int>(cellIdf.z));
@@ -117,7 +117,7 @@ public:
         return vtx[0] + cellIdf * cellSize;
     }
 
-    HOST DEVICE uint getPrimitiveId(uint aId)
+    HOST DEVICE uint getPrimitiveId(uint aId) const
     {
         return primitives[aId];
     }

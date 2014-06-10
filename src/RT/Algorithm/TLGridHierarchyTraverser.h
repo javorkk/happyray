@@ -95,11 +95,9 @@ public:
             float3 rayOrgT = instance.transformRay(aRayOrg, aRayDirRCP);
 
             UniformGrid grid = aGrids[instance.index];
-            UGridTraverser<tPrimitive, tIntersector, taIsShadowRay> traverse;
             bool traversalFlag = true;
             uint bestHitNew = (uint)-1;
             float rayT = oRayT;
-            //traverse(aPrimitiveArray, grid, rayOrgT, aRayDirRCP, rayT, bestHitNew, traversalFlag, aSharedMemory);
 
             tIntersector intersector;
             //////////////////////////////////////////////////////////////////////////
@@ -310,8 +308,6 @@ public:
             cellId[1] = static_cast<int>(cellIdf.y);
             cellId[2] = static_cast<int>(cellIdf.z);
             
-            bool traversalFlagOld = traversalFlag;
-
             if (toPtr(rayDirRCP)[0] > 0.f)
                 traversalFlag = traversalFlag && cellId[0] < dcGrid.res[0];
             else
