@@ -177,11 +177,98 @@ GLOBAL void writePairs(
     }
 }
 
+template<class tPrimitive, class tPrimitiveArray, bool tExactInsertion>
+GLOBAL void writeKeysAndValues(
+    tPrimitiveArray             aPrimitiveArray,
+    uint*                       oKeys,
+    uint*                       oValues,
+    const uint                  aNumPrimitives,
+    uint*                       aStartId,
+    const float3                 aGridRes,
+    const float3                 aBoundsMin,
+    const float3                 aCellSize,
+    const float3                 aCellSizeRCP
+    )
+{
+
+#if HAPPYRAY__CUDA_ARCH__ >= 120
+
+    if (threadId1D() == 0)
+    {
+        shMem[0] = aStartId[blockId1D()];
+    }
+
+    SYNCTHREADS;
+
+#else
+
+    uint startPosition = aStartId[globalThreadId1D()];
+
+#endif
+
+    for(int primitiveId = globalThreadId1D(); primitiveId < aNumPrimitives; primitiveId += numThreads())
+    {
+        const tPrimitive prim = aPrimitiveArray[primitiveId];
+        BBox bounds = BBoxExtractor<tPrimitive>::get(prim);
+
+        //float3& minCellIdf = ((float3*)(shMem + blockSize()))[threadId1D()];
+        const float3 minCellIdf = (bounds.vtx[0] - aBoundsMin) * aCellSizeRCP;
+        const float3 maxCellIdPlus1f = (bounds.vtx[1] - aBoundsMin) * aCellSizeRCP + rep(1.f);
+
+        const int minCellIdX =   max(0, (int)(minCellIdf.x));
+        const int minCellIdY =   max(0, (int)(minCellIdf.y));
+        const int minCellIdZ =   max(0, (int)(minCellIdf.z));
+
+        const int maxCellIdP1X =  min((int)aGridRes.x, (int)(maxCellIdPlus1f.x));
+        const int maxCellIdP1Y =  min((int)aGridRes.y, (int)(maxCellIdPlus1f.y));
+        const int maxCellIdP1Z =  min((int)aGridRes.z, (int)(maxCellIdPlus1f.z));
+        const int numCells   = 
+            (maxCellIdP1X - minCellIdX )
+            * (maxCellIdP1Y - minCellIdY )
+            * (maxCellIdP1Z - minCellIdZ );
+
+#if HAPPYRAY__CUDA_ARCH__ >= 120
+        uint nextSlot  = atomicAdd(&shMem[0], numCells);
+#else
+        uint nextSlot = startPosition;
+        startPosition += numCells;
+#endif
+
+        for (uint z = minCellIdZ; z < maxCellIdP1Z; ++z)
+        {
+            for (uint y = minCellIdY; y < maxCellIdP1Y; ++y)
+            {
+                for (uint x = minCellIdX; x < maxCellIdP1X; ++x, ++nextSlot)
+                {
+                    oKeys[nextSlot] = x +
+                        y * (uint)aGridRes.x +
+                        z * (uint)(aGridRes.x * aGridRes.y);
+                    oValues[nextSlot] = primitiveId;
+                }//end for z
+            }//end for y
+        }//end for x
+
+    }
+}
 //Explicit specialization for exact triangle insertion
 template<>
 GLOBAL void writePairs<Triangle, PrimitiveArray<Triangle>, true>(
     PrimitiveArray<Triangle>    aPrimitiveArray,
     uint*                       oPairs,
+    const uint                  aNumPrimitives,
+    uint*                       aStartId,
+    const float3                aGridRes,
+    const float3                aBoundsMin,
+    const float3                aCellSize,
+    const float3                aCellSizeRCP
+    );
+
+//Explicit specialization for exact triangle insertion
+template<>
+GLOBAL void writeKeysAndValues<Triangle, PrimitiveArray<Triangle>, true>(
+    PrimitiveArray<Triangle>    aPrimitiveArray,
+    uint*                       oKeys,
+    uint*                       oValues,
     const uint                  aNumPrimitives,
     uint*                       aStartId,
     const float3                aGridRes,
@@ -294,7 +381,110 @@ GLOBAL void prepareCellRanges(
 
 }
 
+template<int taBlockSize>
+GLOBAL void prepareCellRanges(
+    uint*             oPrimitiveIndices,
+    uint*             aSortedKeys,
+    uint*             aSortedValues,
+    const uint        aNumPairs,
+    cudaPitchedPtr    aGridCellsPtr,
+    const uint        aGridResX,
+    const uint        aGridResY,
+    const uint        aGridResZ
+    )
+{
 
+    //padding
+    if (threadId1D() == 0)
+    {
+        shMem[0] = 0u;
+        shMem[taBlockSize + 1] = 0u;
+    }
+
+    uint *padShMem = shMem + 1;
+    padShMem[threadId1D()] = 0u;
+
+    SYNCTHREADS;
+
+    const int numJobs = aNumPairs + (blockSize() - aNumPairs % blockSize());
+
+    for(int instanceId = globalThreadId1D();
+        instanceId < numJobs;
+        instanceId += numThreads())
+    {
+        //load blockSize() + 2 input elements in shared memory
+
+        SYNCTHREADS;
+
+        if (threadId1D() == 0 && instanceId > 0u)
+        {
+            //padding left
+            shMem[0] = aSortedKeys[instanceId - 1];
+        }
+        if (threadId1D() == 0 && instanceId + blockSize() < aNumPairs)
+        {
+            //padding right
+            padShMem[blockSize()] = aSortedKeys[instanceId + blockSize()];
+        }
+        if (instanceId < aNumPairs)
+        {
+            padShMem[threadId1D()] = aSortedKeys[instanceId];
+        }
+        if (instanceId == aNumPairs)
+        {
+            padShMem[threadId1D()] = aGridResX * aGridResY * aGridResZ;
+        }
+
+        SYNCTHREADS;
+
+        //Check if the two neighboring cell indices are different
+        //which means that at this point there is an end of and a begin of a range
+
+        //compare left neighbor
+        if (instanceId > 0 && instanceId < aNumPairs && padShMem[threadId1D()] != shMem[threadId1D()]
+        && padShMem[threadId1D()] < aGridResX * aGridResY * aGridResZ)
+        {
+            //begin of range
+            uint cellIdX =  padShMem[threadId1D()] % aGridResX;
+            uint cellIdY = (padShMem[threadId1D()] % (aGridResX * aGridResY)) / aGridResX;
+            uint cellIdZ =  padShMem[threadId1D()] / (aGridResX * aGridResY);
+
+            uint2* cell = (uint2*)((char*)aGridCellsPtr.ptr
+                + cellIdY * aGridCellsPtr.pitch
+                + cellIdZ * aGridCellsPtr.pitch * aGridCellsPtr.ysize) + cellIdX;
+
+            cell->x = instanceId;
+        }
+
+        //compare right neighbor
+        if (instanceId < aNumPairs && padShMem[threadId1D()] != padShMem[threadId1D() + 1]
+        && padShMem[threadId1D()] < aGridResX * aGridResY * aGridResZ)
+        {
+            //end of range
+            uint cellIdX =  padShMem[threadId1D()] % aGridResX;
+            uint cellIdY = (padShMem[threadId1D()] % (aGridResX * aGridResY)) / aGridResX;
+            uint cellIdZ =  padShMem[threadId1D()] / (aGridResX * aGridResY);
+
+            uint2* cell = (uint2*)((char*)aGridCellsPtr.ptr
+                + cellIdY * aGridCellsPtr.pitch
+                + cellIdZ * aGridCellsPtr.pitch * aGridCellsPtr.ysize) + cellIdX;
+
+            cell->y = instanceId + 1;
+        }
+
+    }//end for(uint startId = blockId1D() * blockSize()...
+
+    SYNCTHREADS;
+
+    //compact the primitive indices from the sorted pairs to the output indices
+    for(int instanceId = globalThreadId1D();
+        instanceId < aNumPairs;
+        instanceId += numThreads())
+    {
+        oPrimitiveIndices[instanceId] = aSortedValues[instanceId];
+    }
+
+}
 template<class tPrimitive, template<class> class tPrimitiveArray>
 GLOBAL void checkGridCells(
                     tPrimitiveArray<tPrimitive>     aPrimitives,

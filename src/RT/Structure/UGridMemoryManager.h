@@ -174,6 +174,9 @@ public:
 
     HOST void allocatePairsBufferPair(const size_t aNumPairs);
 
+    HOST void allocateKeyValueBuffers(const size_t aNumKeys);
+
+
     //////////////////////////////////////////////////////////////////////////
     //memory deallocation
     //////////////////////////////////////////////////////////////////////////
@@ -186,6 +189,8 @@ public:
     HOST void freeRefCountsBuffer();
 
     HOST void freePairsBufferPair();
+
+    HOST void freeKeyValueBuffers();
 
     HOST void cleanup();
     //////////////////////////////////////////////////////////////////////////

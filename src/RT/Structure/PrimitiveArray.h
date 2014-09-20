@@ -95,7 +95,7 @@ public:
         uint indices[tPrimitive::NUM_VERTICES];
 
 
-#pragma unroll 3
+//#pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
 #ifdef __CUDA_ARCH__
@@ -107,7 +107,7 @@ public:
 
         tPrimitive result;
 
-#pragma unroll 3
+//#pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
 #ifdef __CUDA_ARCH__
@@ -196,7 +196,7 @@ public:
     {
         uint indices[tPrimitive::NUM_VERTICES];
 
-#pragma unroll 3
+//#pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
 #ifdef __CUDA_ARCH__
@@ -208,7 +208,7 @@ public:
 
         t_AttribStruct result;
 
-#pragma unroll 3
+//#pragma unroll 3
         for(uint i = 0; i < tPrimitive::NUM_VERTICES; ++i)
         {
 #ifdef __CUDA_ARCH__

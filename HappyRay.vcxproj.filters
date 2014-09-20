@@ -232,17 +232,17 @@
     <ClInclude Include="src\RT\Primitive\Plane.hpp">
       <Filter>RT\Primitive</Filter>
     </ClInclude>
-    <ClInclude Include="src\RT\Structure\TwoLevelGridHierarchy.h">
-      <Filter>Headers</Filter>
-    </ClInclude>
     <ClInclude Include="src\RT\Structure\TLGridHierarchyMemoryManager.h">
-      <Filter>Headers</Filter>
+      <Filter>RT\Structure</Filter>
     </ClInclude>
     <ClInclude Include="src\RT\Algorithm\TLGridHierarchySortBuilder.h">
-      <Filter>Headers</Filter>
+      <Filter>RT\Algorithm</Filter>
     </ClInclude>
     <ClInclude Include="src\RT\Algorithm\TLGridHierarchyTraverser.h">
-      <Filter>Headers</Filter>
+      <Filter>RT\Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Structure\TwoLevelGridHierarchy.h">
+      <Filter>RT\Structure</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

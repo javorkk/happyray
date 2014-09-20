@@ -511,6 +511,92 @@ GLOBAL void prepareLeafCellRanges(
 
 }
 
+template<int taBlockSize>
+GLOBAL void prepareLeafCellRanges(
+    uint*             oPrimitiveIndices,
+    uint*             aSortedKeys,
+    uint*             aSortedValues,
+    const uint        aNumPairs,
+    uint2*            oGridCells
+    )
+{
+    extern SHARED uint shMem[];
+
+    //padding
+    if (threadId1D() == 0)
+    {
+        shMem[0] = 0u;
+        shMem[blockSize()] = 0u;
+    }
+
+    uint *padShMem = shMem + 1;
+    padShMem[threadId1D()] = 0u;
+
+    SYNCTHREADS;
+
+    const int numJobs = aNumPairs + (blockSize() - aNumPairs % blockSize());
+
+    for(int instanceId = globalThreadId1D();
+        instanceId < numJobs;
+        instanceId += numThreads())
+    {
+        //load blockSize() + 2 input elements in shared memory
+
+        SYNCTHREADS;
+
+
+        if (threadId1D() == 0 && instanceId > 0u)
+        {
+            //padding left
+            shMem[0] = aSortedKeys[instanceId - 1];
+        }
+        if (threadId1D() == 0 && instanceId + blockSize() < aNumPairs)
+        {
+            //padding right
+            padShMem[blockSize()] = aSortedKeys[instanceId + blockSize()];
+        }
+        if (instanceId < aNumPairs)
+        {
+            padShMem[threadId1D()] = aSortedKeys[instanceId];
+        }
+        if (instanceId == aNumPairs - 1)
+        {
+            padShMem[threadId1D() + 1] = padShMem[threadId1D()] + 1; //dummy
+        }
+
+        SYNCTHREADS;
+
+        //Check if the two neighboring cell indices are different
+        //which means that at this point there is an end of and a begin of a range
+
+        //compare left neighbor
+        if (instanceId > 0 && instanceId < aNumPairs && padShMem[threadId1D()] != shMem[threadId1D()])
+        {
+            //begin of range
+            oGridCells[padShMem[threadId1D()]].x = instanceId;
+        }
+
+        //compare right neighbor
+        if (instanceId < aNumPairs && padShMem[threadId1D()] != padShMem[threadId1D() + 1])
+        {
+            //end of range
+            oGridCells[padShMem[threadId1D()]].y = instanceId + 1;
+        }
+
+    }//end for(uint startId = blockId1D() * blockSize()...
+
+    SYNCTHREADS;
+
+    //compact triangle indices from aInIndices to oFaceSoup.indices
+    for(int instanceId = globalThreadId1D();
+        instanceId < aNumPairs;
+        instanceId += numThreads())
+    {
+        oPrimitiveIndices[instanceId] = aSortedValues[instanceId];
+    }
+
+}
+
 template<int taDummy>
 GLOBAL void computeLeafLevelTraversalCost(
     const float3     aCellSize,

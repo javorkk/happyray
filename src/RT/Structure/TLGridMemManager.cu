@@ -101,7 +101,7 @@ HOST cudaPitchedPtr TLGridMemoryManager::allocateDeviceCells()
 
     freeCellMemoryDevice();
 
-    t_Cell* gpuCells = NULL;
+    //t_Cell* gpuCells = NULL;
 
     cudaExtent cellDataExtent = 
         make_cudaExtent(resX * sizeof(t_Cell), resY, resZ);

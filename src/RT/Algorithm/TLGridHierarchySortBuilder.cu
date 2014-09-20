@@ -8,6 +8,8 @@
 #include "Utils/Scan.h"
 #include "Utils/Sort.h"
 
+#include <thrust/device_ptr.h>
+#include <thrust/sort.h>
 
 extern SHARED uint shMem[];
 
@@ -156,13 +158,14 @@ GLOBAL void countPairsMultiUniformGrid(
 }
 
 template<class tPrimitive>
-GLOBAL void writePairsMultiUniformGrid(
+GLOBAL void writeKeysAndValuesMultiUniformGrid(
     PrimitiveArray<tPrimitive>  aPrimitiveArray,
     UniformGrid*                aGirds,
     const uint                  aNumGrids,
     uint*                       aScannedPrimitivesPerGrid,
     uint*                       aStartId,
-    uint*                       oPairs
+    uint*                       oKeys,
+    uint*                       oValues
     )
 {
 
@@ -224,10 +227,10 @@ GLOBAL void writePairsMultiUniformGrid(
             {
                 for (uint x = minCellIdX; x < maxCellIdP1X; ++x, ++nextSlot)
                 {
-                    oPairs[2 * nextSlot] = x + y * aGirds[gridId].res[0] +
+                    oKeys[nextSlot] = x + y * aGirds[gridId].res[0] +
                         z * aGirds[gridId].res[0] * aGirds[gridId].res[1] +
                         cellOffset;
-                    oPairs[2 * nextSlot + 1] = primId;
+                    oValues[nextSlot] = primId;
                 }//end for z
             }//end for y
         }//end for x
@@ -417,17 +420,20 @@ GLOBAL void writePairsMultiUniformGrid(
 
 
         const uint numTopLevelPairs = aMemoryManager.refCountsBufferHost[numCounters];
-        aMemoryManager.allocateTopLevelPairsBufferPair(numTopLevelPairs);
+        //aMemoryManager.allocateTopLevelPairsBufferPair(numTopLevelPairs);
+        
+        aMemoryManager.allocateTopLevelKeyValueBuffers(numTopLevelPairs);
 
 
         dim3 blockUnsortedGrid(sNUM_WRITE_THREADS);
         dim3 gridUnsortedGrid (sNUM_WRITE_BLOCKS);
 
-        writePairs<GeometryInstance, GeometryInstance*, false>
+        writeKeysAndValues<GeometryInstance, GeometryInstance*, false>
             <<< gridUnsortedGrid, blockUnsortedGrid,
             sizeof(uint)/* + sizeof(float3) * blockUnsortedGrid.x*/ >>>(
             aMemoryManager.instancesDevice,
-            aMemoryManager.topLevelPairsBuffer,
+            aMemoryManager.topLevelPairsPingBufferKeys,
+            aMemoryManager.topLevelPairsPingBufferValues,
             numInstances,
             aMemoryManager.refCountsBuffer,
             aMemoryManager.getResolution(),
@@ -438,13 +444,17 @@ GLOBAL void writePairsMultiUniformGrid(
         MY_CUT_CHECK_ERROR("Writing primitive-cell pairs failed.\n");
 
 
-        const uint numCellsPlus1 = aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ;
-        uint numBits = 9u;
-        while (numCellsPlus1 >> numBits != 0u){numBits += 1u;}
-        numBits = cudastd::min(32u, numBits + 1u);
+        //const uint numCellsPlus1 = aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ;
+        //uint numBits = 9u;
+        //while (numCellsPlus1 >> numBits != 0u){numBits += 1u;}
+        //numBits = cudastd::min(32u, numBits + 1u);
 
-        Sort radixSort;
-        radixSort(aMemoryManager.topLevelPairsBuffer, aMemoryManager.topLevelPairsPingBufferKeys, numTopLevelPairs, numBits);
+        //Sort radixSort;
+        //radixSort(aMemoryManager.topLevelPairsBuffer, aMemoryManager.topLevelPairsPingBufferKeys, numTopLevelPairs, numBits);
+
+        thrust::device_ptr<unsigned int> dev_keys(aMemoryManager.topLevelPairsPingBufferKeys);
+        thrust::device_ptr<unsigned int> dev_values(aMemoryManager.topLevelPairsPingBufferValues);
+        thrust::sort_by_key(dev_keys, (dev_keys + numTopLevelPairs), dev_values);
 
         MY_CUT_CHECK_ERROR("Sorting primitive-cell pairs failed.\n");
 
@@ -456,7 +466,8 @@ GLOBAL void writePairsMultiUniformGrid(
         prepareCellRanges< sNUM_CELL_SETUP_THREADS >
             <<< gridPrepRng, blockPrepRng, (2 + blockPrepRng.x) * sizeof(uint)>>>(
             aMemoryManager.instanceIndicesDevice,
-            (uint2*)aMemoryManager.topLevelPairsBuffer,
+            aMemoryManager.topLevelPairsPingBufferKeys,
+            aMemoryManager.topLevelPairsPingBufferValues,
             numTopLevelPairs,
             aMemoryManager.cellsPtrDevice,
             static_cast<uint>(aMemoryManager.resX),
@@ -567,19 +578,21 @@ GLOBAL void writePairsMultiUniformGrid(
 
         const uint numLeafLevelPairs = aMemoryManager.refCountsBufferHost[numCounters];
 
-        aMemoryManager.allocateLeafLevelPairsBufferPair(numLeafLevelPairs);
+        //aMemoryManager.allocateLeafLevelPairsBufferPair(numLeafLevelPairs);
+        aMemoryManager.allocateLeafLevelKeyValueBuffers(numLeafLevelPairs);
 
         dim3 blockRefWrite = sNUM_WRITE_THREADS;
         dim3 gridRefWrite  = sNUM_WRITE_BLOCKS;
 
-        writePairsMultiUniformGrid<Triangle>
+        writeKeysAndValuesMultiUniformGrid<Triangle>
             <<< gridRefWrite, blockRefWrite,  sizeof(uint)>>>(
             aPrimitiveArray,            
             aMemoryManager.gridsDevice,
             aNumGrids,
             aMemoryManager.cellCountsBuffer,
             aMemoryManager.refCountsBuffer,
-            aMemoryManager.leafLevelPairsBuffer
+            aMemoryManager.leafLevelPairsPingBufferKeys,
+            aMemoryManager.leafLevelPairsPingBufferValues
             );
 
         //////////////////////////////////////////////////////////////////////////
@@ -589,12 +602,17 @@ GLOBAL void writePairsMultiUniformGrid(
         //////////////////////////////////////////////////////////////////////////
 
 
-        uint numBits = 7u;
-        while (numLeafCells >> numBits != 0u){numBits += 1u;}
-        numBits = cudastd::min(32u, numBits + 1u);
+        //uint numBits = 7u;
+        //while (numLeafCells >> numBits != 0u){numBits += 1u;}
+        //numBits = cudastd::min(32u, numBits + 1u);
 
-        Sort radixSort;
-        radixSort(aMemoryManager.leafLevelPairsBuffer, aMemoryManager.leafLevelPairsPingBufferKeys, numLeafLevelPairs, numBits);
+        //Sort radixSort;
+        //radixSort(aMemoryManager.leafLevelPairsBuffer, aMemoryManager.leafLevelPairsPingBufferKeys, numLeafLevelPairs, numBits);
+
+        thrust::device_ptr<unsigned int> dev_keys(aMemoryManager.leafLevelPairsPingBufferKeys);
+        thrust::device_ptr<unsigned int> dev_values(aMemoryManager.leafLevelPairsPingBufferValues);
+        thrust::sort_by_key(dev_keys, (dev_keys + numLeafLevelPairs), dev_values);
+
 
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mSortLeafPairs, 0);
@@ -607,11 +625,12 @@ GLOBAL void writePairsMultiUniformGrid(
         dim3 blockPrepLeafRng(sNUM_CELL_SETUP_THREADS);
         dim3 gridPrepLeafRng (sNUM_CELL_SETUP_BLOCKS );
 
-        prepareLeafCellRanges<2>
+        prepareLeafCellRanges<sNUM_CELL_SETUP_BLOCKS>
             <<< gridPrepLeafRng, blockPrepLeafRng,
             (2 + blockPrepLeafRng.x) * sizeof(uint) >>>(
             aMemoryManager.primitiveIndices,
-            (uint2*)aMemoryManager.leafLevelPairsBuffer,
+            aMemoryManager.topLevelPairsPingBufferKeys,
+            aMemoryManager.topLevelPairsPingBufferValues,
             numLeafLevelPairs,
             (uint2*)aMemoryManager.leavesDevice
             );

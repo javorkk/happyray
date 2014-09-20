@@ -226,7 +226,10 @@ public:
     HOST void allocateRefCountsBuffer(const size_t aNumSlots);
     HOST void allocateCellCountsBuffer(const size_t aNumCells);
     HOST void allocateTopLevelPairsBufferPair(const size_t aNumPairs);
+    HOST void allocateTopLevelKeyValueBuffers(const size_t aNumKeys);
+
     HOST void allocateLeafLevelPairsBufferPair(const size_t aNumPairs);
+    HOST void allocateLeafLevelKeyValueBuffers(const size_t aNumKeys);
 
     //////////////////////////////////////////////////////////////////////////
     //memory deallocation
@@ -246,7 +249,9 @@ public:
     HOST void freeRefCountsBuffer();
     HOST void freeCellCountsBuffer();
     HOST void freeTopLevelPairsBufferPair();
+    HOST void freeTopLevelKeyValueBuffers();
     HOST void freeLeafLevelPairsBufferPair();
+    HOST void freeeafLevelKeyValueBuffers();
 
     HOST void cleanup();
     //////////////////////////////////////////////////////////////////////////

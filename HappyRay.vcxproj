@@ -174,7 +174,7 @@
       <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MTd</Runtime>
-      <CodeGeneration>compute_20,sm_20</CodeGeneration>
+      <CodeGeneration>compute_12,sm_12;compute_20,sm_20;compute_30,sm_30</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -251,7 +251,7 @@
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
       <Runtime>MT</Runtime>
       <PtxAsOptionV>true</PtxAsOptionV>
-      <CodeGeneration>compute_20,sm_20</CodeGeneration>
+      <CodeGeneration>compute_12,sm_12;compute_20,sm_20;compute_30,sm_30</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
