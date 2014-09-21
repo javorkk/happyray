@@ -487,7 +487,7 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
         buildLevelTwo(aMemoryManager, aPrimitiveCounts, aNumUniqueInstances, aPrimitiveArray);
         //////////////////////////////////////////////////////////////////////////
         //DEBUG
-        //test(aMemoryManager, aNumUniqueInstances, aPrimitiveCounts, aPrimitiveArray);
+        test(aMemoryManager, aNumUniqueInstances, aPrimitiveCounts, aPrimitiveArray);
         //////////////////////////////////////////////////////////////////////////
 
     }
@@ -625,12 +625,12 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
         dim3 blockPrepLeafRng(sNUM_CELL_SETUP_THREADS);
         dim3 gridPrepLeafRng (sNUM_CELL_SETUP_BLOCKS );
 
-        prepareLeafCellRanges<sNUM_CELL_SETUP_BLOCKS>
+        prepareLeafCellRanges<sNUM_CELL_SETUP_THREADS>
             <<< gridPrepLeafRng, blockPrepLeafRng,
             (2 + blockPrepLeafRng.x) * sizeof(uint) >>>(
             aMemoryManager.primitiveIndices,
-            aMemoryManager.topLevelPairsPingBufferKeys,
-            aMemoryManager.topLevelPairsPingBufferValues,
+            aMemoryManager.leafLevelPairsPingBufferKeys,
+            aMemoryManager.leafLevelPairsPingBufferValues,
             numLeafLevelPairs,
             (uint2*)aMemoryManager.leavesDevice
             );

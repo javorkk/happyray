@@ -433,7 +433,9 @@ HOST void TLGridHierarchyMemoryManager::cleanup()
     freeRefCountsBuffer();
     freeCellCountsBuffer();
     freeTopLevelPairsBufferPair();
+    freeTopLevelKeyValueBuffers();
     freeLeafLevelPairsBufferPair();
+    freeeafLevelKeyValueBuffers();
 
     MY_CUDA_SAFE_CALL(cudaFreeHost(paramPtrHost));
     paramPtrHost = NULL;
@@ -449,9 +451,9 @@ HOST void TLGridHierarchyMemoryManager::checkResolution()
 {
     if (resX <= 0 || resY <= 0 || resZ <= 0)
     {
-        cudastd::logger::out << "Invalid grid resolution!" 
-            << " Setting grid resolution to 32 x 32 x 32\n";
-        resX = resY = resZ = 32;
+        cudastd::logger::out << "Invalid grid hierarchy top-level resolution!" 
+            << " Setting it to 2 x 2 x 2\n";
+        resX = resY = resZ = 2;
     }
 }
 

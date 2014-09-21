@@ -121,17 +121,7 @@ public:
     HOST TwoLevelGridHierarchy getParameters()
     {
         TwoLevelGridHierarchy retval;
-        if (paramPtrDevice != NULL || paramPtrHost != NULL)
-        {
-            MY_CUDA_SAFE_CALL(cudaFreeHost(paramPtrHost));
-            paramPtrHost = NULL;
-            MY_CUDA_SAFE_CALL(cudaFree(paramPtrDevice));
-            paramPtrDevice = NULL;
-        }
-        MY_CUDA_SAFE_CALL(cudaHostAlloc((void**)&paramPtrHost, TwoLevelGridHierarchy::getParametersSize(), cudaHostAllocDefault));
-        MY_CUDA_SAFE_CALL(cudaMalloc((void**)&paramPtrDevice, TwoLevelGridHierarchy::getParametersSize()));
-
-        retval.setMemoryPtr(paramPtrHost, paramPtrDevice);
+        retval.allocatePtrs();
 
         retval.vtx[0] = bounds.vtx[0]; //bounds min
         retval.vtx[1] = bounds.vtx[1]; //bounds max
@@ -154,17 +144,7 @@ public:
     HOST TwoLevelGridHierarchy getParametersHost()
     {
         TwoLevelGridHierarchy retval;
-        if (paramPtrDevice != NULL || paramPtrHost != NULL)
-        {
-            MY_CUDA_SAFE_CALL(cudaFreeHost(paramPtrHost));
-            paramPtrHost = NULL;
-            MY_CUDA_SAFE_CALL(cudaFree(paramPtrDevice));
-            paramPtrDevice = NULL;
-        }
-        MY_CUDA_SAFE_CALL(cudaHostAlloc((void**)&paramPtrHost, TwoLevelGridHierarchy::getParametersSize(), cudaHostAllocDefault));
-        MY_CUDA_SAFE_CALL(cudaMalloc((void**)&paramPtrDevice, TwoLevelGridHierarchy::getParametersSize()));
-
-        retval.setMemoryPtr(paramPtrHost, paramPtrDevice);
+        retval.allocatePtrs();
 
         retval.vtx[0] = bounds.vtx[0]; //bounds min
         retval.vtx[1] = bounds.vtx[1]; //bounds max

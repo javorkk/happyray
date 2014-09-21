@@ -63,15 +63,15 @@ public:
     //float3 cellSizeRCP;       //inherited -> uniform grid
     //cudaPitchedPtr  cells;    //inherited -> uniform grid
     //uint* primitives;         //inherited -> uniform grid
-
+//#define  HACKED_PARAMETERS
+#ifdef HACKED_PARAMETERS
     uint* mMemoryPtrHost;
     uint* mMemoryPtrDevice;
-    //uint*           instanceIndices;
-    //GeometryInstance* instances;
-    //UniformGrid*    grids;
-    //t_Leaf*         leaves;
-    //uint            numInstances;
-    //uint  numPrimitiveReferences;
+
+    TwoLevelGridHierarchy():mMemoryPtrHost(NULL), mMemoryPtrDevice(NULL)
+    {
+
+    }
 
     HOST DEVICE uint* getInstanceIndices() const 
     { 
@@ -159,6 +159,101 @@ public:
         mMemoryPtrDevice = aDevicePtr;
     }
 
+    HOST void allocatePtrs()
+    {
+        MY_CUDA_SAFE_CALL(cudaHostAlloc((void**)&mMemoryPtrHost, TwoLevelGridHierarchy::getParametersSize(), cudaHostAllocDefault));
+        MY_CUDA_SAFE_CALL(cudaMalloc((void**)&mMemoryPtrDevice, TwoLevelGridHierarchy::getParametersSize()));
+    }
+
+    HOST void freePtrs()
+    {
+        if (mMemoryPtrDevice != NULL || mMemoryPtrHost != NULL)
+        {
+            MY_CUDA_SAFE_CALL(cudaFreeHost(mMemoryPtrHost));
+            mMemoryPtrHost = NULL;
+            MY_CUDA_SAFE_CALL(cudaFree(mMemoryPtrDevice));
+            mMemoryPtrDevice = NULL;
+        }
+    }
+#else    
+    uint*           instanceIndices;
+    GeometryInstance* instances;
+    UniformGrid*    grids;
+    t_Leaf*         leaves;
+    uint            numInstances;
+    uint  numPrimitiveReferences;
+
+    HOST DEVICE uint* getInstanceIndices() const 
+    { 
+
+        return instanceIndices;
+    }
+
+    HOST void setInstanceIndices(uint* val)
+    {
+        instanceIndices = val;
+    }
+
+    HOST DEVICE GeometryInstance* getInstances() const
+    {
+        return instances;
+    }
+
+    HOST void setInstances(GeometryInstance* val)
+    { 
+        instances = val;
+    }
+
+    HOST DEVICE UniformGrid* getGrids() const 
+    { 
+        return grids;
+    }
+
+    HOST void setGrids(UniformGrid* val)
+    {
+        grids = val;
+    }
+
+    HOST DEVICE t_Leaf* getLeaves() const
+    {
+        return leaves; 
+    }
+
+    HOST void setLeaves(t_Leaf* val)
+    {
+        leaves = val;
+    }
+
+    HOST DEVICE uint getNumInstances() const
+    { 
+        return numInstances;
+    }
+
+    HOST void setNumInstances(uint val)
+    {
+        numInstances = val;
+    }
+
+    static int getParametersSize()
+    {
+        return sizeof(uint);
+    }
+
+    HOST void setMemoryPtr(uint* aHostPtr, uint* aDevicePtr)
+    {
+        //dummy
+    }
+
+    HOST void allocatePtrs()
+    {
+        //dummy
+    }
+
+    HOST void freePtrs()
+    {
+        //dummy
+    }
+#endif
     //////////////////////////////////////////////////////////////////////////
     //inherited -> uniform grid
 

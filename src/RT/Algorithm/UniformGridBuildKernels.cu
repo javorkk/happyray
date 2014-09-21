@@ -355,7 +355,7 @@ GLOBAL void writeKeysAndValues<Triangle, PrimitiveArray<Triangle>, true>(
                             y * (uint)aGridRes.x +
                             z * (uint)(aGridRes.x * aGridRes.y);
 
-                        oValues[nextSlot + 1] =
+                        oValues[nextSlot] =
                             triangleId;
                     }
                     else
@@ -363,7 +363,7 @@ GLOBAL void writeKeysAndValues<Triangle, PrimitiveArray<Triangle>, true>(
                         oKeys[nextSlot] = 
                             (uint)(aGridRes.x * aGridRes.y * aGridRes.z);
 
-                        oValues[nextSlot + 1] = 
+                        oValues[nextSlot] = 
                             triangleId;
                     }
                 }//end for z
