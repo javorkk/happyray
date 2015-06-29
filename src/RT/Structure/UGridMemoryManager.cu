@@ -289,6 +289,7 @@ HOST void UGridMemoryManager::cleanup()
     freePrimitiveIndicesBuffer();
     freeRefCountsBuffer();
     freePairsBufferPair();
+    freeKeyValueBuffers();
 }
 //////////////////////////////////////////////////////////////////////////
 //debug related
