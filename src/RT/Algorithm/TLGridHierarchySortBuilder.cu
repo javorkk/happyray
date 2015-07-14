@@ -328,10 +328,11 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
             //hostInstances[i].rotation1   = make_float3(0.f, 1.f, 0.f);
             //hostInstances[i].rotation2   = make_float3(0.f, 0.f, 1.f);
             //hostInstances[i].translation = make_float3(0.f, 0.f, 0.f); //aMemoryManager.bounds.diagonal() * (float) (i / 4);
-            hostInstances[i].irotation0   = make_float3(1.f, 0.f, 0.f);
-            hostInstances[i].irotation1   = make_float3(0.f, 1.f, 0.f);
-            hostInstances[i].irotation2   = make_float3(0.f, 0.f, 1.f);
-            hostInstances[i].itranslation =  make_float3(0.f, 0.f, 0.f); //aMemoryManager.bounds.diagonal() * (float) (-i / 4);
+            //hostInstances[i].irotation0   = make_float3(1.f, 0.f, 0.f);
+            //hostInstances[i].irotation1   = make_float3(0.f, 1.f, 0.f);
+            //hostInstances[i].irotation2   = make_float3(0.f, 0.f, 1.f);
+            //hostInstances[i].itranslation =  make_float3(0.f, 0.f, 0.f); //aMemoryManager.bounds.diagonal() * (float) (-i / 4);
+            hostInstances[i].setIdentityTransormation();
         }
         aMemoryManager.copyInstancesHostToDevice();
         //END DEBUG
@@ -682,11 +683,11 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
 
         TwoLevelGridHierarchy hierarchy = aMemoryManager.getParametersHost();
 
-        for (uint z = 0; z < hierarchy.res[2]; ++z)
+        for (int z = 0; z < hierarchy.res[2]; ++z)
         {
-            for (uint y = 0; y < hierarchy.res[1]; ++y)
+            for (int y = 0; y < hierarchy.res[1]; ++y)
             {
-                for (uint x = 0; x < hierarchy.res[0]; ++x)
+                for (int x = 0; x < hierarchy.res[0]; ++x)
                 {
                     uint2 cell = hierarchy.getCell(x,y,z);
                     for (uint k = cell.x; k < cell.y; ++k)
@@ -749,11 +750,11 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
             const int maxCellIdP1X =  max(1, min(hierarchy.res[0], maxCellIdPlus1.x));
             const int maxCellIdP1Y =  max(1, min(hierarchy.res[1], maxCellIdPlus1.y));
             const int maxCellIdP1Z =  max(1, min(hierarchy.res[2], maxCellIdPlus1.z));
-            for (uint z = minCellIdZ; z < maxCellIdP1Z; ++z)
+            for (int z = minCellIdZ; z < maxCellIdP1Z; ++z)
             {
-                for (uint y = minCellIdY; y < maxCellIdP1Y; ++y)
+                for (int y = minCellIdY; y < maxCellIdP1Y; ++y)
                 {
-                    for (uint x = minCellIdX; x < maxCellIdP1X; ++x)
+                    for (int x = minCellIdX; x < maxCellIdP1X; ++x)
                     {
                         uint2 cell = hierarchy.getCell(x,y,z);
                         bool inserted = false;
@@ -782,7 +783,7 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
         uint* scannedPrimitiveCounts = (uint*)malloc((aNumUniqueInstances + 1)* sizeof(uint));
         memcpy_s(scannedPrimitiveCounts, (aNumUniqueInstances + 1)* sizeof(uint), aPrimitiveCounts, aNumUniqueInstances * sizeof(uint));
         uint sum = 0;
-        for (int i = 0; i < aNumUniqueInstances; ++i)
+        for (uint i = 0; i < aNumUniqueInstances; ++i)
         {
             uint oldsum = sum;
             sum += scannedPrimitiveCounts[i];
@@ -791,7 +792,7 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
 
         scannedPrimitiveCounts[aNumUniqueInstances] = sum;
         size_t cellCounts = 0;
-        for (int gridId = 0; gridId < aNumUniqueInstances; ++gridId)
+        for (uint gridId = 0; gridId < aNumUniqueInstances; ++gridId)
         {
             UniformGrid grid = hierarchy.getGrids()[gridId];
             void* ptr = (void*)(hierarchy.getLeaves() + cellCounts);
@@ -862,11 +863,11 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
                     << grid.res[2] << ")\n";
             }
 
-            for (uint z = 0; z < grid.res[2]; ++z)
+            for (int z = 0; z < grid.res[2]; ++z)
             {
-                for (uint y = 0; y < grid.res[1]; ++y)
+                for (int y = 0; y < grid.res[1]; ++y)
                 {
-                    for (uint x = 0; x < grid.res[0]; ++x)
+                    for (int x = 0; x < grid.res[0]; ++x)
                     {
                          uint2 cell = grid.getCell(x,y,z);
                          for (uint k = cell.x; k < cell.y; ++k)
@@ -913,7 +914,7 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
                 }
             }
 
-            for (int primId = scannedPrimitiveCounts[gridId]; primId < scannedPrimitiveCounts[gridId + 1]; ++primId)
+            for (uint primId = scannedPrimitiveCounts[gridId]; primId < scannedPrimitiveCounts[gridId + 1]; ++primId)
             {
                 Triangle prim = aPrimitiveArray[primId];
                 BBox bounds = BBoxExtractor<Triangle>::get(prim);
@@ -931,11 +932,11 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
                 const int maxCellIdP1X =  max(1, min(grid.res[0], maxCellIdPlus1.x));
                 const int maxCellIdP1Y =  max(1, min(grid.res[1], maxCellIdPlus1.y));
                 const int maxCellIdP1Z =  max(1, min(grid.res[2], maxCellIdPlus1.z));
-                for (uint z = minCellIdZ; z < maxCellIdP1Z; ++z)
+                for (int z = minCellIdZ; z < maxCellIdP1Z; ++z)
                 {
-                    for (uint y = minCellIdY; y < maxCellIdP1Y; ++y)
+                    for (int y = minCellIdY; y < maxCellIdP1Y; ++y)
                     {
-                        for (uint x = minCellIdX; x < maxCellIdP1X; ++x)
+                        for (int x = minCellIdX; x < maxCellIdP1X; ++x)
                         {
                             uint2 cell = grid.getCell(x,y,z);
                             bool inserted = false;

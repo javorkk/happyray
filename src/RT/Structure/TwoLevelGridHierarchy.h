@@ -19,23 +19,91 @@ public:
     uint index;
     //Transformation
     //float3 rotation0, rotation1, rotation2, translation;
-    float3 irotation0, irotation1, irotation2, itranslation;
+    //float3 irotation0, irotation1, irotation2, itranslation;
+    quaternion4f irotation;
+    float3 itranslation;
 
-    //returns the new origin, overwrites the old direction
+    DEVICE HOST void setIdentityTransormation()
+    {
+        irotation = make_quaternion4f(0.f, 0.f, 0.f, 1.f);
+        itranslation = make_float3(0.f, 0.f, 0.f);
+    }
+
+    DEVICE HOST bool isIdentityTransformation()
+    {
+        return fabsf(itranslation.x) + fabsf(itranslation.y) + fabsf(itranslation.z) < EPS &&
+            isIdentity(irotation, EPS);
+    }
+
+
+    DEVICE HOST void setTransformation(
+        float m00, float m10, float m20, float m30,
+        float m01, float m11, float m21, float m31,
+        float m02, float m12, float m22, float m32
+        //float m03, float m13, float m23, float m33 -> assumed last row: 0 0 0 1
+        )
+    {
+        itranslation.x = m30;
+        itranslation.y = m31;
+        itranslation.z = m32;
+
+        irotation = quaternion4f(
+            m00, m10, m20,
+            m01, m11, m21,
+            m02, m12, m22);
+    }
+
+    DEVICE HOST void getTransformation(
+        float& m00, float& m10, float& m20, float& m30,
+        float& m01, float& m11, float& m21, float& m31,
+        float& m02, float& m12, float& m22, float& m32
+        //float m03, float m13, float m23, float m33 -> assumed last row: 0 0 0 1
+        ) const
+    {
+        m30 = itranslation.x;
+        m31 = itranslation.y;
+        m32 = itranslation.z;
+
+        irotation.toMatrix3f(
+            m00, m10, m20,
+            m01, m11, m21,
+            m02, m12, m22);
+    }
+
     DEVICE HOST float3 transformRay(const float3 aRayOrg, float3& oRayDirRCP) const
     {
+        float3 rayDirT;
+        rayDirT.x = 1.f / oRayDirRCP.x;
+        rayDirT.y = 1.f / oRayDirRCP.y;
+        rayDirT.z = 1.f / oRayDirRCP.z;
+
+        oRayDirRCP = irotation(rayDirT);
+
+        oRayDirRCP.x = 1.f / oRayDirRCP.x;
+        oRayDirRCP.y = 1.f / oRayDirRCP.y;
+        oRayDirRCP.z = 1.f / oRayDirRCP.z;
+
         float3 rayOrgT = aRayOrg + itranslation;
-        rayOrgT = irotation0 * aRayOrg.x + irotation1 * aRayOrg.y + irotation2 * aRayOrg.z + itranslation;
-
-        float3 rayDirT = irotation0 / oRayDirRCP.x + irotation1 / oRayDirRCP.y + 
-            irotation2 / oRayDirRCP.z;
-
-        oRayDirRCP.x = 1.f / rayDirT.x;
-        oRayDirRCP.y = 1.f / rayDirT.y;
-        oRayDirRCP.z = 1.f / rayDirT.z;
+        rayOrgT = irotation(aRayOrg) + itranslation;
 
         return rayOrgT;
     }
+
+    //returns the new origin, overwrites the old direction
+    //DEVICE HOST float3 transformRay(const float3 aRayOrg, float3& oRayDirRCP) const
+    //{
+    //    float3 rayOrgT = aRayOrg + itranslation;
+    //    rayOrgT = irotation0 * aRayOrg.x + irotation1 * aRayOrg.y + irotation2 * aRayOrg.z + itranslation;
+
+    //    float3 rayDirT = irotation0 / oRayDirRCP.x + irotation1 / oRayDirRCP.y + 
+    //        irotation2 / oRayDirRCP.z;
+
+    //    oRayDirRCP.x = 1.f / rayDirT.x;
+    //    oRayDirRCP.y = 1.f / rayDirT.y;
+    //    oRayDirRCP.z = 1.f / rayDirT.z;
+
+    //    return rayOrgT;
+    //}
 };
 
 template<>
