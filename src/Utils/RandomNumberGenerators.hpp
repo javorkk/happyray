@@ -28,7 +28,7 @@
 #ifndef RANDOMNUMBERGENERATORS_HPP_INCLUDED_BDE88087_89C9_450C_8EC2_2511FF0A99E4
 #define RANDOMNUMBERGENERATORS_HPP_INCLUDED_BDE88087_89C9_450C_8EC2_2511FF0A99E4
 
-#include "../CUDAStdAfx.h"
+#include "CUDAStdAfx.h"
 
 //////////////////////////////////////////////////////////////////////////
 //George Marsaglia's KISS (Keep It Simple Stupid) random number generator.
@@ -127,11 +127,11 @@ class SimpleRandomNumberGenerator
 {
 public:
     uint seed;
-    DEVICE SimpleRandomNumberGenerator(const uint aSeed)
+    DEVICE HOST SimpleRandomNumberGenerator(const uint aSeed)
         :seed(aSeed)
     {}
 
-    DEVICE float operator()()
+    DEVICE HOST float operator()()
     {
         seed = seed * 1664525 + 1013904223;
         return (float)seed / 0xFFFFFFFF;
@@ -196,7 +196,7 @@ class HaltonNumberGenerator
 
 public:
 
-    DEVICE float operator()(const int aSeed, const int aDimension,
+    DEVICE HOST float operator()(const int aSeed, const int aDimension,
         const float* aPrimesRCP) const
     {
         if (aDimension < 11)
@@ -209,7 +209,11 @@ public:
             while (seed)
             {
                 float tmp = seed * BASISRCP;
+#ifdef __CUDA_ARCH___
                 seed = truncf(tmp);
+#else
+                seed = static_cast<int>(tmp);
+#endif
                 res += basisRCP * (tmp - seed);
                 basisRCP *= aPrimesRCP[aDimension];
 

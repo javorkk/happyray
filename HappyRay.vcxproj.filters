@@ -36,6 +36,9 @@
     <Filter Include="RT\Integrator">
       <UniqueIdentifier>{ce82bf06-36ff-4485-a95c-23d86452b5f7}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Test">
+      <UniqueIdentifier>{3b731f8b-8e68-447c-9ff6-ec73bbde20a6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="contrib\include\chag\pp\ext\detail\common.cu.inl">
@@ -244,6 +247,9 @@
     <ClInclude Include="src\RT\Structure\TwoLevelGridHierarchy.h">
       <Filter>RT\Structure</Filter>
     </ClInclude>
+    <ClInclude Include="src\Test\TestAlgebra.h">
+      <Filter>Test</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\stdafx.cpp">
@@ -281,6 +287,9 @@
     </ClCompile>
     <ClCompile Include="src\RT\Primitive\Triangle.cpp">
       <Filter>RT\Primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Test\TestAlgebra.cpp">
+      <Filter>Test</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

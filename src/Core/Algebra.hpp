@@ -278,11 +278,29 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
 #undef _DEF_SCALAR_OP3
 #undef _DEF_SCALAR_OP3_SYM
 
+    DEVICE HOST float determinant(const float3& col0, const float3& col1, const float3& col2)
+    {
+        return col0.x * col1.y * col2.z + col1.x * col2.y * col0.z + col2.x * col0.y * col1.z -
+            col2.x * col1.y * col0.z - col1.x * col0.y * col2.z - col0.x * col2.y * col1.z;
+    }
+
+    DEVICE HOST float determinant(
+        float m00, float m10, float m20,
+        float m01, float m11, float m21,
+        float m02, float m12, float m22
+        )
+    {
+        return m00 * m11 * m22 + m10 * m21 * m02 + m20 * m01 * m12 -
+            m20 * m11 * m02 - m10 * m01 * m22 - m00 * m21 * m12;
+    }
+
     //struct quaternion3f;
 
     struct quaternion4f
     {
         float x, y, z, w;
+
+        DEVICE HOST quaternion4f() {}
 
         DEVICE HOST quaternion4f(float aX, float aY, float aZ, float aW) :x(aX), y(aY), z(aZ), w(aW) {}
 
@@ -303,37 +321,37 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
                 const float s = 0.5f / r;
 
                 w = 0.5f * r;
-                x = (m21 - m12) * s;
-                y = (m02 - m20) * s; 
-                z = (m10 - m01) * s; 
+                x = (m12 - m21) * s;
+                y = (m20 - m02) * s;
+                z = (m01 - m10) * s;
             }
             else if ((m00 > m11) && (m00 > m22))
             { 
                 const float r = sqrtf(1.f + m00 - m11 - m22);
                 const float s = 0.5f / r;
 
-                w = (m21 - m12) * s;
+                w = (m12 - m21) * s;
                 x = 0.5f * r;
-                y = (m01 + m10) * s; 
-                z = (m02 + m20) * s; 
+                y = (m10 + m01) * s;
+                z = (m20 + m02) * s;
             }
             else if (m11 > m22)
             { 
                 const float r = sqrtf(1.f + m11 - m00 - m22);
                 const float s = 0.5f / r;
 
-                w = (m02 - m20) * s;
-                x = (m01 + m10) * s; 
+                w = (m20 - m02) * s;
+                x = (m10 + m01) * s;
                 y = 0.5f * r;
-                z = (m12 + m21) * s; 
+                z = (m21 + m12) * s;
             }
             else
             { 
-                const float r = sqrtf(1.0 + m22 - m00 - m11);
+                const float r = sqrtf(1.f + m22 - m00 - m11);
                 const float s = 0.5f / r;
-                w = (m10 - m01) * s;
-                x = (m02 + m20) * s;
-                y = (m12 + m21) * s;
+                w = (m01 - m10) * s;
+                x = (m20 + m02) * s;
+                y = (m21 + m12) * s;
                 z = 0.5f * r;
             }
         }
@@ -386,7 +404,7 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
 
             const float zz = z * z;
 
-            oMxx = 2.f * (yy + xx); oMyx = 2.f * (xy - wz); oMzx = 2.f * (xz + wy);
+            oMxx = 2.f * (yy + zz); oMyx = 2.f * (xy - wz); oMzx = 2.f * (xz + wy);
             oMxy = 2.f * (xy + wz); oMyy = 2.f * (xx + zz); oMzy = 2.f * (yz - wx);
             oMxz = 2.f * (xz - wy); oMyz = 2.f * (yz + wx); oMzz = 2.f * (xx + yy);
             oMxx = 1.f - oMxx;
@@ -460,7 +478,18 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
             );
     }
 
-    DEVICE HOST float3 operator *(const quaternion4f& aQ, const float3& aV)
+    DEVICE HOST float3 transformVecRCP(const quaternion4f& aQ, const float3& aV_RCP)
+    {
+        quaternion4f result = quaternion4f(
+            aQ.w / aV_RCP.x + /*aQ.x / aV_RCP.w +*/ aQ.y / aV_RCP.z - aQ.z / aV_RCP.y,
+            aQ.w / aV_RCP.y + /*aQ.y / aV_RCP.w +*/ aQ.z / aV_RCP.x - aQ.x / aV_RCP.z,
+            aQ.w / aV_RCP.z + /*aQ.z / aV_RCP.w +*/ aQ.x / aV_RCP.y - aQ.y / aV_RCP.x,
+            /*aQ.w * aV_RCP.w*/ - aQ.x / aV_RCP.x - aQ.y / aV_RCP.y - aQ.z / aV_RCP.z
+            ) * aQ.conjugate();
+        return make_float3(result.x, result.y, result.z);
+    }
+
+    DEVICE HOST float3 transformVec(const quaternion4f& aQ, const float3& aV)
     {
         quaternion4f result = aQ * quaternion4f(aV.x, aV.y, aV.z, 0.f) * aQ.conjugate();
         return make_float3(result.x, result.y, result.z);

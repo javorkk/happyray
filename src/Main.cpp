@@ -27,7 +27,7 @@
 #include "StdAfx.hpp"
 #include "Application/SDLGLApplication.hpp"
 
-#include "RT/Primitive/Plane.hpp"
+//#include "Test/TestAlgebra.h"
 
 #ifdef _WIN32
 int wmain (int argc, char* argv[])
@@ -35,7 +35,11 @@ int wmain (int argc, char* argv[])
 int main(int argc, char* argv[])
 #endif
 {
-     SDLGLApplication app;
+    //TestQuaternions test;
+    //if (test.run() != 0)
+    //    return 1;
+
+    SDLGLApplication app;
     app.init(argc, argv);
     app.initVideo();
 

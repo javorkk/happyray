@@ -55,7 +55,7 @@
 //////////////////////////////////////////////////////////////////////////
 //some windows specific macros
 #ifdef _WIN32
-#	define RANDNUM (float)(rand()/(RAND_MAX - 1));
+#	define RANDNUM (float)(rand()/(RAND_MAX - 1))
 #   define SEEDTIME srand(static_cast<unsigned int>(time(0)));
 #else
 #	define RANDNUM drand48()

@@ -6,11 +6,11 @@
 #define TWOLEVELGRIDHIERARCHY_H_INCLUDED_AA48BA45_DEA8_4023_B4C9_D8D125325683
 
 #include "CUDAStdAfx.h"
+#include "Core/Algebra.hpp"
 #include "RT/Primitive/Primitive.hpp"
 #include "RT/Primitive/BBox.hpp"
 #include "RT/Structure/UniformGrid.h"
 
-#define USE_QUATERNIONS
 
 class  GeometryInstance : public Primitive<2>
 {
@@ -18,44 +18,22 @@ public:
     //float3 vtx[2]; //inherited -> bounding box
     uint index;
     //Transformation
-    //float3 rotation0, rotation1, rotation2, translation;
-#ifdef USE_QUATERNIONS
     float sign;
-    quaternion4f irotation;
-#else
-    float3 irotation0, irotation1, irotation2;
-#endif        
+    quaternion4f irotation;      
     float3 itranslation;
 
     DEVICE HOST void setIdentityTransormation()
     {
-#ifdef USE_QUATERNIONS
+        sign = 1.f;
         irotation = make_quaternion4f(0.f, 0.f, 0.f, 1.f);
-#else
-        irotation0 = make_float3(1.f, 0.f, 0.f);
-        irotation1 = make_float3(0.f, 1.f, 0.f);
-        irotation2 = make_float3(0.f, 0.f, 1.f);
-#endif
         itranslation = make_float3(0.f, 0.f, 0.f);
     }
 
     DEVICE HOST bool isIdentityTransformation()
     {
-#ifdef USE_QUATERNIONS
         return fabsf(itranslation.x) + fabsf(itranslation.y) + fabsf(itranslation.z) < EPS
                 && isIdentity(irotation, EPS)
                 && sign > 0.f;
-#else
-        float3 vec0 = irotation0 - make_float3(1.f, 0.f, 0.f);
-        float3 vec1 = irotation1 - make_float3(0.f, 1.f, 0.f);
-        float3 vec2 = irotation2 - make_float3(0.f, 0.f, 1.f);
-        float3 vec3 = itranslation;
-        return dot(vec0, vec0) <= EPS &&
-               dot(vec1, vec1) <= EPS &&
-               dot(vec2, vec2) <= EPS &&
-               dot(vec3, vec3) <= EPS;
-
-#endif
     }
 
 
@@ -70,7 +48,6 @@ public:
         itranslation.y = m31;
         itranslation.z = m32;
 
-#ifdef USE_QUATERNIONS
         const float det = m00 * m11 * m22 + m10 * m21 * m02 + m20 * m01 * m12 -
                           m20 * m11 * m02 - m10 * m01 * m22 - m00 * m21 * m12;
         if(det > 0.f)
@@ -89,11 +66,6 @@ public:
                 -m01, m11, m21,
                 -m02, m12, m22);
         }
-#else
-        irotation0 = make_float3(m00, m01, m02);
-        irotation1 = make_float3(m10, m11, m12);
-        irotation2 = make_float3(m20, m21, m22);
-#endif
     }
 
     DEVICE HOST void getTransformation(
@@ -103,8 +75,6 @@ public:
         //float m03, float m13, float m23, float m33 -> assumed last row: 0 0 0 1
         ) const
     {
-
-#ifdef USE_QUATERNIONS
         if(sign > 0.f)
         {
             irotation.toMatrix3f(
@@ -126,7 +96,106 @@ public:
         m30 = itranslation.x;
         m31 = itranslation.y;
         m32 = itranslation.z;
-#else
+    }
+
+    DEVICE HOST float3 transformRay(const float3 aRayOrg, float3& oRayDirRCP) const
+    {
+
+        if(sign > 0.f)
+        {
+
+            oRayDirRCP = transformVecRCP(irotation, oRayDirRCP);
+
+            oRayDirRCP.x = 1.f / oRayDirRCP.x;
+            oRayDirRCP.y = 1.f / oRayDirRCP.y;
+            oRayDirRCP.z = 1.f / oRayDirRCP.z;
+
+            float3 rayOrgT = transformVec(irotation, aRayOrg) + itranslation;
+
+            return rayOrgT;
+        }
+        else
+        {
+            float3 col0, col1, col2;
+            irotation.toMatrix3f(
+                col0.x, col1.x, col2.x,
+                col0.y, col1.y, col2.y,
+                col0.z, col1.z, col2.z
+                );
+            col0 = -col0;
+
+            float3 rayDirT = col0 / oRayDirRCP.x + col1 / oRayDirRCP.y +
+                col2 / oRayDirRCP.z;
+
+            oRayDirRCP.x = 1.f / rayDirT.x;
+            oRayDirRCP.y = 1.f / rayDirT.y;
+            oRayDirRCP.z = 1.f / rayDirT.z;
+
+            float3 rayOrgT = col0 * aRayOrg.x + col1 * aRayOrg.y + col2 * aRayOrg.z + itranslation;
+
+            return rayOrgT;
+        }
+    }
+};
+
+class  GeometryInstanceMatrix : public Primitive<2>
+{
+public:
+    //float3 vtx[2]; //inherited -> bounding box
+    uint index;
+    //Transformation
+    //float3 rotation0, rotation1, rotation2, translation;
+    float3 irotation0, irotation1, irotation2;    
+    float3 itranslation;
+
+    DEVICE HOST void setIdentityTransormation()
+    {
+
+        irotation0 = make_float3(1.f, 0.f, 0.f);
+        irotation1 = make_float3(0.f, 1.f, 0.f);
+        irotation2 = make_float3(0.f, 0.f, 1.f);
+        itranslation = make_float3(0.f, 0.f, 0.f);
+    }
+
+    DEVICE HOST bool isIdentityTransformation()
+    {
+
+        float3 vec0 = irotation0 - make_float3(1.f, 0.f, 0.f);
+        float3 vec1 = irotation1 - make_float3(0.f, 1.f, 0.f);
+        float3 vec2 = irotation2 - make_float3(0.f, 0.f, 1.f);
+        float3 vec3 = itranslation;
+        return dot(vec0, vec0) <= EPS &&
+            dot(vec1, vec1) <= EPS &&
+            dot(vec2, vec2) <= EPS &&
+            dot(vec3, vec3) <= EPS;
+
+    }
+
+
+    DEVICE HOST void setTransformation(
+        float m00, float m10, float m20, float m30,
+        float m01, float m11, float m21, float m31,
+        float m02, float m12, float m22, float m32
+        //float m03, float m13, float m23, float m33 -> assumed last row: 0 0 0 1
+        )
+    {
+        itranslation.x = m30;
+        itranslation.y = m31;
+        itranslation.z = m32;
+
+        irotation0 = make_float3(m00, m01, m02);
+        irotation1 = make_float3(m10, m11, m12);
+        irotation2 = make_float3(m20, m21, m22);
+    }
+
+    DEVICE HOST void getTransformation(
+        float& m00, float& m10, float& m20, float& m30,
+        float& m01, float& m11, float& m21, float& m31,
+        float& m02, float& m12, float& m22, float& m32
+        //float m03, float m13, float m23, float m33 -> assumed last row: 0 0 0 1
+        ) const
+    {
+
         m00 = irotation0.x;
         m01 = irotation0.y;
         m02 = irotation0.z;
@@ -142,61 +211,15 @@ public:
         m30 = itranslation.x;
         m31 = itranslation.y;
         m32 = itranslation.z;
-#endif
     }
 
-
-#ifdef USE_QUATERNIONS
-    DEVICE HOST float3 transformRay(const float3 aRayOrg, float3& oRayDirRCP) const
-    {
-
-        if(sign > 0.f)
-        {
-            float3 rayDirT;
-            rayDirT.x = 1.f / oRayDirRCP.x;
-            rayDirT.y = 1.f / oRayDirRCP.y;
-            rayDirT.z = 1.f / oRayDirRCP.z;
-
-            oRayDirRCP = irotation * rayDirT;
-
-            oRayDirRCP.x = 1.f / oRayDirRCP.x;
-            oRayDirRCP.y = 1.f / oRayDirRCP.y;
-            oRayDirRCP.z = 1.f / oRayDirRCP.z;
-
-            float3 rayOrgT = irotation * aRayOrg + itranslation;
-
-            return rayOrgT;
-        }
-        else
-         {
-             float3 col0, col1, col2;
-             irotation.toMatrix3f(
-                 col0.x,  col1.x, col2.x,
-                 col0.y,  col1.y, col2.y,
-                 col0.z,  col1.z, col2.z
-             );
-             col0 = -col0;
-             
-             float3 rayDirT = col0 / oRayDirRCP.x + col1 / oRayDirRCP.y + 
-                 col2 / oRayDirRCP.z;
- 
-             oRayDirRCP.x = 1.f / oRayDirRCP.x;
-             oRayDirRCP.y = 1.f / oRayDirRCP.y;
-             oRayDirRCP.z = 1.f / oRayDirRCP.z;
-            
-             float3 rayOrgT = col0 * aRayOrg.x + col1 * aRayOrg.y + col2 * aRayOrg.z + itranslation;
- 
-             return rayOrgT;
-         }
-    }
-#else
     //returns the new origin, overwrites the old direction
     DEVICE HOST float3 transformRay(const float3 aRayOrg, float3& oRayDirRCP) const
     {
         float3 rayOrgT = aRayOrg + itranslation;
         rayOrgT = irotation0 * aRayOrg.x + irotation1 * aRayOrg.y + irotation2 * aRayOrg.z + itranslation;
 
-        float3 rayDirT = irotation0 / oRayDirRCP.x + irotation1 / oRayDirRCP.y + 
+        float3 rayDirT = irotation0 / oRayDirRCP.x + irotation1 / oRayDirRCP.y +
             irotation2 / oRayDirRCP.z;
 
         oRayDirRCP.x = 1.f / rayDirT.x;
@@ -205,7 +228,6 @@ public:
 
         return rayOrgT;
     }
-#endif
 
 };
 
@@ -214,6 +236,19 @@ class BBoxExtractor< GeometryInstance >
 {
 public:
     DEVICE HOST static BBox get(const GeometryInstance& aUGrid)
+    {
+        BBox result;
+        result.vtx[0] = aUGrid.vtx[0];
+        result.vtx[1] = aUGrid.vtx[1];
+        return result;
+    }
+};
+
+template<>
+class BBoxExtractor< GeometryInstanceMatrix >
+{
+public:
+    DEVICE HOST static BBox get(const GeometryInstanceMatrix& aUGrid)
     {
         BBox result;
         result.vtx[0] = aUGrid.vtx[0];
