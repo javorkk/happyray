@@ -278,55 +278,63 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
 #undef _DEF_SCALAR_OP3
 #undef _DEF_SCALAR_OP3_SYM
 
+    //struct quaternion3f;
+
     struct quaternion4f
     {
         float x, y, z, w;
 
         DEVICE HOST quaternion4f(float aX, float aY, float aZ, float aW) :x(aX), y(aY), z(aZ), w(aW) {}
 
+        //DEVICE HOST quaternion4f(quaternion3f aQ) :x(aQ.x), y(aQ.y), z(aQ.z), w(1.f - aQ.x - aQ.y - aQ.z) {}
+
         DEVICE HOST quaternion4f(
-            float aMxx, float aMyx, float aMzx,
-            float aMxy, float aMyy, float aMzy,
-            float aMxz, float aMyz, float aMzz
+            float m00, float m10, float m20,
+            float m01, float m11, float m21,
+            float m02, float m12, float m22
             )
         {
-            const float t = aMxx + aMyy + aMzz;
-            if (t > 0.f)
-            {
-                const float r = sqrtf(1.f + t);
-                const float s = 0.5f / r;
-                w = 0.5f * r;
-                x = (aMzy - aMyz) * s;
-                y = (aMxz - aMzx) * s;
-                z = (aMyx - aMxy) * s;
-            }
-            else if (aMxx >= aMyy && aMxx >= aMzz)
-            {
-                const float r = sqrtf(1.f + aMxx - aMyy - aMzz);
-                const float s = 0.5f / r;
-                w = (aMzy - aMyz) * s;
-                x = 0.5f * r; 
-                y = (aMxz - aMzx) * s;
-                z = (aMyx - aMxy) * s;
 
-            }
-            else if (aMyy >= aMxx && aMyy >= aMzz)
-            {
-                const float r = sqrtf(1.f + aMyy - aMxx - aMzz);
+            float tr = m00 + m11 + m22;
+
+            if (tr > 0.f)
+            { 
+                const float r = sqrtf(tr + 1.f);
                 const float s = 0.5f / r;
-                w = (aMxz - aMzx) * s;
-                x = (aMzy - aMyz) * s;
-                y = 0.5f * r; 
-                z = (aMyx - aMxy) * s;
+
+                w = 0.5f * r;
+                x = (m21 - m12) * s;
+                y = (m02 - m20) * s; 
+                z = (m10 - m01) * s; 
             }
-            else if (aMzz >= aMxx && aMzz >= aMyy)
-            {
-                const float r = sqrtf(1.f + aMzz - aMxx - aMyy);
+            else if ((m00 > m11) && (m00 > m22))
+            { 
+                const float r = sqrtf(1.f + m00 - m11 - m22);
                 const float s = 0.5f / r;
-                w = (aMyx - aMxy) * s; 
-                x = (aMzy - aMyz) * s;
-                y = (aMxz - aMzx) * s;
-                z = 0.5f * r; 
+
+                w = (m21 - m12) * s;
+                x = 0.5f * r;
+                y = (m01 + m10) * s; 
+                z = (m02 + m20) * s; 
+            }
+            else if (m11 > m22)
+            { 
+                const float r = sqrtf(1.f + m11 - m00 - m22);
+                const float s = 0.5f / r;
+
+                w = (m02 - m20) * s;
+                x = (m01 + m10) * s; 
+                y = 0.5f * r;
+                z = (m12 + m21) * s; 
+            }
+            else
+            { 
+                const float r = sqrtf(1.0 + m22 - m00 - m11);
+                const float s = 0.5f / r;
+                w = (m10 - m01) * s;
+                x = (m02 + m20) * s;
+                y = (m12 + m21) * s;
+                z = 0.5f * r;
             }
         }
 
@@ -381,11 +389,46 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
             oMxx = 2.f * (yy + xx); oMyx = 2.f * (xy - wz); oMzx = 2.f * (xz + wy);
             oMxy = 2.f * (xy + wz); oMyy = 2.f * (xx + zz); oMzy = 2.f * (yz - wx);
             oMxz = 2.f * (xz - wy); oMyz = 2.f * (yz + wx); oMzz = 2.f * (xx + yy);
-            oMxx = 1 - oMxx;
-            oMyy = 1 - oMyy;
-            oMzz = 1 - oMzz;
+            oMxx = 1.f - oMxx;
+            oMyy = 1.f - oMyy;
+            oMzz = 1.f - oMzz;
+
+            if (fabsf(oMxx) < EPS ) oMxx = 0.f;
+            if (fabsf(oMxy) < EPS ) oMxy = 0.f;
+            if (fabsf(oMxz) < EPS ) oMxz = 0.f;
+            if (fabsf(oMyx) < EPS ) oMyx = 0.f;
+            if (fabsf(oMyy) < EPS ) oMyy = 0.f;
+            if (fabsf(oMyz) < EPS ) oMyz = 0.f;
+            if (fabsf(oMzx) < EPS ) oMzx = 0.f;
+            if (fabsf(oMzy) < EPS ) oMzy = 0.f;
+            if (fabsf(oMzz) < EPS ) oMzz = 0.f;
+
+            if (fabsf(1.f - oMxx) < EPS ) oMxx = 1.f;
+            if (fabsf(1.f - oMxy) < EPS ) oMxy = 1.f;
+            if (fabsf(1.f - oMxz) < EPS ) oMxz = 1.f;
+            if (fabsf(1.f - oMyx) < EPS ) oMyx = 1.f;
+            if (fabsf(1.f - oMyy) < EPS ) oMyy = 1.f;
+            if (fabsf(1.f - oMyz) < EPS ) oMyz = 1.f;
+            if (fabsf(1.f - oMzx) < EPS ) oMzx = 1.f;
+            if (fabsf(1.f - oMzy) < EPS ) oMzy = 1.f;
+            if (fabsf(1.f - oMzz) < EPS ) oMzz = 1.f;
+
+            if (fabsf(1.f + oMxx) < EPS ) oMxx = -1.f;
+            if (fabsf(1.f + oMxy) < EPS ) oMxy = -1.f;
+            if (fabsf(1.f + oMxz) < EPS ) oMxz = -1.f;
+            if (fabsf(1.f + oMyx) < EPS ) oMyx = -1.f;
+            if (fabsf(1.f + oMyy) < EPS ) oMyy = -1.f;
+            if (fabsf(1.f + oMyz) < EPS ) oMyz = -1.f;
+            if (fabsf(1.f + oMzx) < EPS ) oMzx = -1.f;
+            if (fabsf(1.f + oMzy) < EPS ) oMzy = -1.f;
+            if (fabsf(1.f + oMzz) < EPS ) oMzz = -1.f;
+
         }
 
+        DEVICE HOST quaternion4f conjugate() const
+        {
+            return quaternion4f(-x, -y, -z, w);
+        }
     };
 
     DEVICE HOST quaternion4f make_quaternion4f(float aX, float aY, float aZ, float aW) { return quaternion4f(aX, aY, aZ, aW); }
@@ -397,7 +440,15 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
     DEVICE HOST quaternion4f operator /(const quaternion4f& aQ, float aS) { return quaternion4f(aQ.x / aS, aQ.y / aS, aQ.z / aS, aQ.w / aS); }
     DEVICE HOST quaternion4f operator *(const quaternion4f& aQ, float aS) { return quaternion4f(aQ.x * aS, aQ.y * aS, aQ.z * aS, aQ.w * aS); }
 
-    DEVICE HOST quaternion4f operator ~(const quaternion4f& aQ) { return aQ / magnitude(aQ); }
+    DEVICE HOST quaternion4f operator ~(const quaternion4f& aQ)
+    { 
+        const float magSQR = magnitudeSQR(aQ);
+        if (fabsf(magSQR) > EPS && fabsf(magSQR - 1.0f) > EPS) {
+            float mag = sqrtf(magSQR);
+            return aQ / mag;
+        }
+        return aQ;
+    }
 
     DEVICE HOST quaternion4f operator *(const quaternion4f& aQ1, const quaternion4f& aQ2)
     { 
@@ -409,9 +460,20 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
             );
     }
 
+    DEVICE HOST float3 operator *(const quaternion4f& aQ, const float3& aV)
+    {
+        quaternion4f result = aQ * quaternion4f(aV.x, aV.y, aV.z, 0.f) * aQ.conjugate();
+        return make_float3(result.x, result.y, result.z);
+    }
+
     DEVICE HOST bool isIdentity(const quaternion4f& aQ, float aEPS)
     {
         return fabsf(aQ.x) + fabsf(aQ.y) + fabsf(aQ.z) < aEPS && fabsf(aQ.w - 1.f) < aEPS;
+    }
+
+    DEVICE HOST bool isZero(const quaternion4f& aQ, float aEPS)
+    {
+        return fabsf(aQ.x) + fabsf(aQ.y) + fabsf(aQ.z) + fabsf(aQ.w) < aEPS;
     }
 
 

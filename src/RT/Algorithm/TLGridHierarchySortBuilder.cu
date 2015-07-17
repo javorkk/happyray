@@ -802,13 +802,15 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
 
             if (grid.vtx[0].x > grid.vtx[1].x ||
                 grid.vtx[0].y > grid.vtx[1].y ||
-                grid.vtx[0].z > grid.vtx[1].z ||
-                grid.vtx[0].x < hierarchy.vtx[0].x ||
-                grid.vtx[0].y < hierarchy.vtx[0].y ||
-                grid.vtx[0].z < hierarchy.vtx[0].z ||
-                grid.vtx[1].x > hierarchy.vtx[1].x ||
-                grid.vtx[1].y > hierarchy.vtx[1].y ||
-                grid.vtx[1].z > hierarchy.vtx[1].z
+                grid.vtx[0].z > grid.vtx[1].z
+
+                //invalid if the grid is not instanced with identity 
+                //|| grid.vtx[0].x < hierarchy.vtx[0].x 
+                //|| grid.vtx[0].y < hierarchy.vtx[0].y 
+                //|| grid.vtx[0].z < hierarchy.vtx[0].z 
+                //|| grid.vtx[1].x > hierarchy.vtx[1].x 
+                //|| grid.vtx[1].y > hierarchy.vtx[1].y 
+                //|| grid.vtx[1].z > hierarchy.vtx[1].z
                 )
             {
                 cudastd::logger::out << "Invalid bounds of grid " << gridId

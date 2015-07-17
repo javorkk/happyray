@@ -38,7 +38,7 @@
 #include "RT/Algorithm/UniformGridBuildKernels.h"
 
 #include "Utils/Scan.h"
-#define CHAG_SORT
+//#define CHAG_SORT
 #ifdef CHAG_SORT
 #include "Utils/Sort.h"
 #else
