@@ -94,7 +94,7 @@ public:
             
             float3 rayOrgT = instance.transformRay(aRayOrg, aRayDirRCP);
 
-            UniformGrid grid = aGrids[instance.index];
+            UniformGrid grid = aGrids[instance.getIndex()];
             bool traversalFlag = true;
             uint bestHitNew = (uint)-1;
             float rayT = oRayT;

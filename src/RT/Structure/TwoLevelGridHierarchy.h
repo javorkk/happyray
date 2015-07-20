@@ -14,26 +14,68 @@
 
 class  GeometryInstance : public Primitive<2>
 {
-public:
+    static const uint FLAG_SHIFT = 0u;
+    static const uint FLAG_MASK = 0x1u;
+    static const uint FLAG_MASKNEG = 0xFFFFFFFEu;
+
     //float3 vtx[2]; //inherited -> bounding box
-    uint index;
-    //Transformation
-    float sign;
-    quaternion4f irotation;      
+
+    //Transformation    
+    uint indexAndSign;//last bit -> sign flag, 0:31 bit -> index
+
+    quaternion3f irotation;
     float3 itranslation;
+
+public:
+
+
+    DEVICE HOST float getSign() const
+    {
+        return indexAndSign & FLAG_MASK ? 1.f : -1.f;
+    }
+
+    DEVICE HOST bool isNoReflection() const
+    {
+        return indexAndSign & FLAG_MASK;
+    }
+
+    DEVICE HOST void setSign(float aSign)
+    {
+        indexAndSign = aSign < 0.f ? indexAndSign | FLAG_MASK : indexAndSign & FLAG_MASKNEG;
+    }
+
+    DEVICE HOST void setNoReflection()
+    {
+        indexAndSign = indexAndSign | FLAG_MASK;
+    }
+
+    DEVICE HOST void setReflection()
+    {
+        indexAndSign = indexAndSign & FLAG_MASKNEG;
+    }
+
+    DEVICE HOST uint getIndex() const
+    {
+        return indexAndSign >> 1;
+    }
+
+    DEVICE HOST void setIndex(uint aIndex)
+    {
+        indexAndSign = (indexAndSign & FLAG_MASK) | (aIndex << 1);
+    }
 
     DEVICE HOST void setIdentityTransormation()
     {
-        sign = 1.f;
+        setNoReflection();
         irotation = make_quaternion4f(0.f, 0.f, 0.f, 1.f);
         itranslation = make_float3(0.f, 0.f, 0.f);
     }
 
-    DEVICE HOST bool isIdentityTransformation()
+    DEVICE HOST bool isIdentityTransformation() const
     {
         return fabsf(itranslation.x) + fabsf(itranslation.y) + fabsf(itranslation.z) < EPS
                 && isIdentity(irotation, EPS)
-                && sign > 0.f;
+                && isNoReflection();
     }
 
 
@@ -52,16 +94,16 @@ public:
                           m20 * m11 * m02 - m10 * m01 * m22 - m00 * m21 * m12;
         if(det > 0.f)
         {
-            sign = 1.f;
-            irotation = ~quaternion4f(
+            setNoReflection();
+            irotation = quaternion3f(
                 m00, m10, m20,
                 m01, m11, m21,
                 m02, m12, m22);
         }
         else
         {
-            sign = -1.f;
-            irotation = ~quaternion4f(
+            setReflection();
+            irotation = quaternion3f(
                 -m00, m10, m20,
                 -m01, m11, m21,
                 -m02, m12, m22);
@@ -75,7 +117,7 @@ public:
         //float m03, float m13, float m23, float m33 -> assumed last row: 0 0 0 1
         ) const
     {
-        if(sign > 0.f)
+        if (isNoReflection())
         {
             irotation.toMatrix3f(
                 m00, m10, m20,
@@ -101,7 +143,7 @@ public:
     DEVICE HOST float3 transformRay(const float3 aRayOrg, float3& oRayDirRCP) const
     {
 
-        if(sign > 0.f)
+        if (isNoReflection())
         {
 
             oRayDirRCP = transformVecRCP(irotation, oRayDirRCP);

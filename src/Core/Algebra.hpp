@@ -294,8 +294,6 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
             m20 * m11 * m02 - m10 * m01 * m22 - m00 * m21 * m12;
     }
 
-    //struct quaternion3f;
-
     struct quaternion4f
     {
         float x, y, z, w;
@@ -303,8 +301,6 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
         DEVICE HOST quaternion4f() {}
 
         DEVICE HOST quaternion4f(float aX, float aY, float aZ, float aW) :x(aX), y(aY), z(aZ), w(aW) {}
-
-        //DEVICE HOST quaternion4f(quaternion3f aQ) :x(aQ.x), y(aQ.y), z(aQ.z), w(1.f - aQ.x - aQ.y - aQ.z) {}
 
         DEVICE HOST quaternion4f(
             float m00, float m10, float m20,
@@ -315,7 +311,7 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
 
             float tr = m00 + m11 + m22;
 
-            if (tr > 0.f)
+            if (tr > -EPS)
             { 
                 const float r = sqrtf(tr + 1.f);
                 const float s = 0.5f / r;
@@ -503,6 +499,110 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
     DEVICE HOST bool isZero(const quaternion4f& aQ, float aEPS)
     {
         return fabsf(aQ.x) + fabsf(aQ.y) + fabsf(aQ.z) + fabsf(aQ.w) < aEPS;
+    }
+
+    struct quaternion3f
+    {
+        float x, y, z;
+
+        DEVICE HOST quaternion3f() {}
+
+        DEVICE HOST quaternion3f(float aX, float aY, float aZ) : x(aX), y(aY), z(aZ)
+        {}
+
+        DEVICE HOST quaternion3f(float aX, float aY, float aZ, float aW)
+        {
+            quaternion4f result = ~make_quaternion4f(aX, aY, aZ, aW);
+            x = result.x;
+            y = result.y;
+            z = result.z;
+        }
+
+        DEVICE HOST quaternion3f(const quaternion4f& aQ)
+        {
+            quaternion4f result = ~aQ;
+            x = result.x;
+            y = result.y;
+            z = result.z;
+        }
+
+        DEVICE HOST quaternion3f(
+            float m00, float m10, float m20,
+            float m01, float m11, float m21,
+            float m02, float m12, float m22
+            )
+        {
+            quaternion4f result = ~quaternion4f(
+                m00, m10, m20,
+                m01, m11, m21,
+                m02, m12, m22);
+
+            x = result.x;
+            y = result.y;
+            z = result.z;
+        }
+
+        DEVICE HOST float3 operator ()(const float3& aVec) const
+        {
+            const float w = sqrtf(1.f - x * x - y * y - z * z);
+            quaternion4f expandedQ = make_quaternion4f(x, y, z, w);
+            return expandedQ(aVec);
+        }
+
+        DEVICE HOST void toMatrix3f(
+            float& m00, float& m10, float& m20,
+            float& m01, float& m11, float& m21,
+            float& m02, float& m12, float& m22) const
+        {
+            const float w = sqrtf(1.f - x * x - y * y - z * z);
+
+            quaternion4f expandedQ = make_quaternion4f(x, y, z, w);
+            expandedQ.toMatrix3f(
+                m00, m10, m20,
+                m01, m11, m21,
+                m02, m12, m22);
+        }
+    };
+
+    DEVICE HOST quaternion3f operator *(const quaternion3f& aQ1, const quaternion3f& aQ2)
+    {
+        const float aQ1w = sqrtf(1.f - aQ1.x * aQ1.x - aQ1.y * aQ1.y - aQ1.z * aQ1.z);
+        const float aQ2w = sqrtf(1.f - aQ2.x * aQ2.x - aQ2.y * aQ2.y - aQ2.z * aQ2.z);
+        return quaternion3f(
+            aQ1w * aQ2.x + aQ1.x * aQ2w + aQ1.y * aQ2.z - aQ1.z * aQ2.y,
+            aQ1w * aQ2.y + aQ1.y * aQ2w + aQ1.z * aQ2.x - aQ1.x * aQ2.z,
+            aQ1w * aQ2.z + aQ1.z * aQ2w + aQ1.x * aQ2.y - aQ1.y * aQ2.x//,
+            //aQ1w * aQ2w - aQ1.x * aQ2.x - aQ1.y * aQ2.y - aQ1.z * aQ2.z
+            );
+    }
+
+    DEVICE HOST float3 transformVecRCP(const quaternion3f& aQ, const float3& aV_RCP)
+    {
+        const float aQw = sqrtf(1.f - aQ.x * aQ.x - aQ.y * aQ.y - aQ.z * aQ.z);
+        quaternion4f result = quaternion4f(
+            aQw / aV_RCP.x + /*aQ.x / aV_RCP.w +*/ aQ.y / aV_RCP.z - aQ.z / aV_RCP.y,
+            aQw / aV_RCP.y + /*aQ.y / aV_RCP.w +*/ aQ.z / aV_RCP.x - aQ.x / aV_RCP.z,
+            aQw / aV_RCP.z + /*aQ.z / aV_RCP.w +*/ aQ.x / aV_RCP.y - aQ.y / aV_RCP.x,
+            /*aQw * aV_RCP.w*/ -aQ.x / aV_RCP.x - aQ.y / aV_RCP.y - aQ.z / aV_RCP.z
+            ) * quaternion4f(-aQ.x, -aQ.y, -aQ.z, aQw);
+        return make_float3(result.x, result.y, result.z);
+    }
+
+    DEVICE HOST float3 transformVec(const quaternion3f& aQ, const float3& aV)
+    {
+        const float aQw = sqrtf(1.f - aQ.x * aQ.x - aQ.y * aQ.y - aQ.z * aQ.z);
+        quaternion4f result = quaternion4f(aQ.x, aQ.y, aQ.z, aQw) * quaternion4f(aV.x, aV.y, aV.z, 0.f) * quaternion4f(-aQ.x, -aQ.y, -aQ.z, aQw);
+        return make_float3(result.x, result.y, result.z);
+    }
+
+    DEVICE HOST bool isIdentity(const quaternion3f& aQ, float aEPS)
+    {
+        return fabsf(aQ.x) + fabsf(aQ.y) + fabsf(aQ.z) < aEPS;
+    }
+
+    DEVICE HOST bool isZero(const quaternion3f& aQ, float aEPS)
+    {
+        return fabsf(aQ.x) + fabsf(aQ.y) + fabsf(aQ.z)< aEPS;
     }
 
 

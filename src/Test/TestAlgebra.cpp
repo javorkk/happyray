@@ -106,19 +106,17 @@ bool TestQuaternions::run() const
     instanceM.vtx[0] = make_float3(-10.f, -10.f, -10.f);
     instanceM.vtx[1] = make_float3(10.f, 10.f, 10.f);
 
-    instanceQ.index = 0u;
-    instanceM.index = 0u;
+    instanceQ.setIndex(124u);
+    instanceM.index = 124u;
+
+    if (instanceQ.getIndex() != instanceM.index)
+    {
+        cudastd::logger::out << "Object index mismatch! \n";
+        return 1;
+    }
 
     float3 RayOrg;
     float3 RayDirRCP;
-
-    float3 RayOrgQ;
-    float3 RayDirRCPQ;
-
-    float3 RayOrgM;
-    float3 RayDirRCPM;
-
-
     
     ///////////////////////////////////////////////////////
     //Test Identity
