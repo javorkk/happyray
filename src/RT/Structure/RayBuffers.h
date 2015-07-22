@@ -33,7 +33,7 @@
 
 class SimpleRayBuffer
 {
-    //static const int ELEMENTSIZE = 8;
+    //static const int ELEMENTSIZE = 8 + 1; //+ 1 for instance id
     void* mMemoryPtr;
 public:
     SimpleRayBuffer(void* aMemPtr): mMemoryPtr(aMemPtr)
@@ -181,6 +181,17 @@ public:
     {
         return *((uint*)mMemoryPtr + aRayId + aNumRays * 7);
     }
+
+    HOST DEVICE uint loadBestHitInstance(const uint aRayId, const uint aNumRays)
+    {
+        return *((uint*)mMemoryPtr + aRayId + aNumRays * 8);
+    }
+
+    HOST DEVICE void storeBestHitInstance(const uint aId, const uint aRayId,
+        const uint aNumRays)
+    {
+        *((float*)mMemoryPtr + aRayId + aNumRays * 8) = aId;
+    }
 };
 
 
@@ -240,6 +251,17 @@ public:
         return *((float3*)((char*)mMemoryPtr + aNumSamples * sizeof(float3)) + aSampleId);
     }    
 
+    HOST DEVICE uint loadBestHitInstance(const uint aRayId, const uint aNumRays)
+    {
+        return (uint)-1;//dummy
+    }
+
+    HOST DEVICE void storeBestHitInstance(const uint aId, const uint aRayId,
+        const uint aNumRays)
+    {
+        //dummy
+    }
+
 };
 
 class AOIlluminationBuffer: public DirectIlluminationBuffer
@@ -260,6 +282,17 @@ public:
             float3* rayOut = ((float3*)mMemoryPtr) + aRayId;
             *rayOut = rep(0.f);
         }
+    }
+
+    HOST DEVICE uint loadBestHitInstance(const uint aRayId, const uint aNumRays)
+    {
+        return (uint)-1;//dummy
+    }
+
+    HOST DEVICE void storeBestHitInstance(const uint aId, const uint aRayId,
+        const uint aNumRays)
+    {
+        //dummy
     }
 
 };

@@ -137,13 +137,15 @@ template<
         {
             if(rayT < FLT_MAX)
                 bestHit = dcGrid.primitives[bestHit];
+
+            if (traverse.getBestHitInstance() != (uint)-1)
+                oBuffer.storeBestHitInstance(traverse.getBestHitInstance(), myRayIndex, aNumRays);
         }
 
         //DEBUG pt 2 of 2
         //myRayIndex = myValidIndex;
 
-        oBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, aNumRays);
-
+        oBuffer.store(rayOrg, rayDir, rayT, bestHit, myRayIndex, aNumRays);        
         //////////////////////////////////////////////////////////////////////////
     }
 }

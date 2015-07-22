@@ -46,6 +46,8 @@ template<class tPrimitive, class tIntersector, bool taIsShadowRay = false>
 class TLGridTraverser
 {
 public:
+    DEVICE uint getBestHitInstance(){ return (uint)-1; }
+
     DEVICE void operator()(
         PrimitiveArray<tPrimitive>  aPrimitiveArray,
         TwoLevelGrid                dcGrid,

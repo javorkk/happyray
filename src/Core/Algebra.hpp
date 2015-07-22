@@ -407,35 +407,35 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
             oMyy = 1.f - oMyy;
             oMzz = 1.f - oMzz;
 
-            if (fabsf(oMxx) < EPS ) oMxx = 0.f;
-            if (fabsf(oMxy) < EPS ) oMxy = 0.f;
-            if (fabsf(oMxz) < EPS ) oMxz = 0.f;
-            if (fabsf(oMyx) < EPS ) oMyx = 0.f;
-            if (fabsf(oMyy) < EPS ) oMyy = 0.f;
-            if (fabsf(oMyz) < EPS ) oMyz = 0.f;
-            if (fabsf(oMzx) < EPS ) oMzx = 0.f;
-            if (fabsf(oMzy) < EPS ) oMzy = 0.f;
-            if (fabsf(oMzz) < EPS ) oMzz = 0.f;
+            oMxx = fabsf(oMxx) < EPS ? 0.f : oMxx;
+            oMxy = fabsf(oMxy) < EPS ? 0.f : oMxy;
+            oMxz = fabsf(oMxz) < EPS ? 0.f : oMxz;
+            oMyx = fabsf(oMyx) < EPS ? 0.f : oMyx;
+            oMyy = fabsf(oMyy) < EPS ? 0.f : oMyy;
+            oMyz = fabsf(oMyz) < EPS ? 0.f : oMyz;
+            oMzx = fabsf(oMzx) < EPS ? 0.f : oMzx;
+            oMzy = fabsf(oMzy) < EPS ? 0.f : oMzy;
+            oMzz = fabsf(oMzz) < EPS ? 0.f : oMzz;
 
-            if (fabsf(1.f - oMxx) < EPS ) oMxx = 1.f;
-            if (fabsf(1.f - oMxy) < EPS ) oMxy = 1.f;
-            if (fabsf(1.f - oMxz) < EPS ) oMxz = 1.f;
-            if (fabsf(1.f - oMyx) < EPS ) oMyx = 1.f;
-            if (fabsf(1.f - oMyy) < EPS ) oMyy = 1.f;
-            if (fabsf(1.f - oMyz) < EPS ) oMyz = 1.f;
-            if (fabsf(1.f - oMzx) < EPS ) oMzx = 1.f;
-            if (fabsf(1.f - oMzy) < EPS ) oMzy = 1.f;
-            if (fabsf(1.f - oMzz) < EPS ) oMzz = 1.f;
+            oMxx = fabsf(1.f - oMxx) < EPS ? 1.f : oMxx;
+            oMxy = fabsf(1.f - oMxy) < EPS ? 1.f : oMxy;
+            oMxz = fabsf(1.f - oMxz) < EPS ? 1.f : oMxz;
+            oMyx = fabsf(1.f - oMyx) < EPS ? 1.f : oMyx;
+            oMyy = fabsf(1.f - oMyy) < EPS ? 1.f : oMyy;
+            oMyz = fabsf(1.f - oMyz) < EPS ? 1.f : oMyz;
+            oMzx = fabsf(1.f - oMzx) < EPS ? 1.f : oMzx;
+            oMzy = fabsf(1.f - oMzy) < EPS ? 1.f : oMzy;
+            oMzz = fabsf(1.f - oMzz) < EPS ? 1.f : oMzz;
 
-            if (fabsf(1.f + oMxx) < EPS ) oMxx = -1.f;
-            if (fabsf(1.f + oMxy) < EPS ) oMxy = -1.f;
-            if (fabsf(1.f + oMxz) < EPS ) oMxz = -1.f;
-            if (fabsf(1.f + oMyx) < EPS ) oMyx = -1.f;
-            if (fabsf(1.f + oMyy) < EPS ) oMyy = -1.f;
-            if (fabsf(1.f + oMyz) < EPS ) oMyz = -1.f;
-            if (fabsf(1.f + oMzx) < EPS ) oMzx = -1.f;
-            if (fabsf(1.f + oMzy) < EPS ) oMzy = -1.f;
-            if (fabsf(1.f + oMzz) < EPS ) oMzz = -1.f;
+            oMxx = fabsf(1.f + oMxx) < EPS ? -1.f : oMxx;
+            oMxy = fabsf(1.f + oMxy) < EPS ? -1.f : oMxy;
+            oMxz = fabsf(1.f + oMxz) < EPS ? -1.f : oMxz;
+            oMyx = fabsf(1.f + oMyx) < EPS ? -1.f : oMyx;
+            oMyy = fabsf(1.f + oMyy) < EPS ? -1.f : oMyy;
+            oMyz = fabsf(1.f + oMyz) < EPS ? -1.f : oMyz;
+            oMzx = fabsf(1.f + oMzx) < EPS ? -1.f : oMzx;
+            oMzy = fabsf(1.f + oMzy) < EPS ? -1.f : oMzy;
+            oMzz = fabsf(1.f + oMzz) < EPS ? -1.f : oMzz;
 
         }
 
@@ -561,6 +561,11 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
                 m00, m10, m20,
                 m01, m11, m21,
                 m02, m12, m22);
+        }
+
+        DEVICE HOST quaternion3f conjugate() const
+        {
+            return quaternion3f(-x, -y, -z);
         }
     };
 

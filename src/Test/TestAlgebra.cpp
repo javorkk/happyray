@@ -57,9 +57,9 @@ bool TestQuaternions::checkRay(
     const float3& aRayOrg1, const float3& aRayDirRCP1,
     const float3& aRayOrg2, const float3& aRayDirRCP2) const
 {
-    if (fabsf(aRayOrg1.x - aRayOrg2.x) > EPS) cudastd::logger::out << "aRayOrg1 x and aRayOrg2 x differ: (" << aRayOrg1.x << " vs " << aRayOrg2.x << ")\n";
-    if (fabsf(aRayOrg1.y - aRayOrg2.y) > EPS) cudastd::logger::out << "aRayOrg1 y and aRayOrg2 y differ: (" << aRayOrg1.y << " vs " << aRayOrg2.y << ")\n";
-    if (fabsf(aRayOrg1.z - aRayOrg2.z) > EPS) cudastd::logger::out << "aRayOrg1 z and aRayOrg2 z differ: (" << aRayOrg1.z << " vs " << aRayOrg2.z << ")\n";
+    if (fabsf(aRayOrg1.x - aRayOrg2.x) > 10.f * EPS) cudastd::logger::out << "aRayOrg1 x and aRayOrg2 x differ: (" << aRayOrg1.x << " vs " << aRayOrg2.x << ")\n";
+    if (fabsf(aRayOrg1.y - aRayOrg2.y) > 10.f * EPS) cudastd::logger::out << "aRayOrg1 y and aRayOrg2 y differ: (" << aRayOrg1.y << " vs " << aRayOrg2.y << ")\n";
+    if (fabsf(aRayOrg1.z - aRayOrg2.z) > 10.f * EPS) cudastd::logger::out << "aRayOrg1 z and aRayOrg2 z differ: (" << aRayOrg1.z << " vs " << aRayOrg2.z << ")\n";
     if (fabsf(aRayDirRCP1.x - aRayDirRCP2.x) > 100.f * EPS) cudastd::logger::out << "aRayDirRCP1 x and aRayDirRCP2 x differ: (" << aRayDirRCP1.x << " vs " << aRayDirRCP2.x << ")\n";
     if (fabsf(aRayDirRCP1.y - aRayDirRCP2.y) > 100.f * EPS) cudastd::logger::out << "aRayDirRCP1 y and aRayDirRCP2 y differ: (" << aRayDirRCP1.y << " vs " << aRayDirRCP2.y << ")\n";
     if (fabsf(aRayDirRCP1.z - aRayDirRCP2.z) > 100.f * EPS) cudastd::logger::out << "aRayDirRCP1 z and aRayDirRCP2 z differ: (" << aRayDirRCP1.z << " vs " << aRayDirRCP2.z << ")\n";
@@ -76,7 +76,7 @@ bool TestQuaternions::checkRay(
     return
         fabsf(aRayOrg1.x - aRayOrg2.x) +
         fabsf(aRayOrg1.y - aRayOrg2.y) +
-        fabsf(aRayOrg1.z - aRayOrg2.z) < EPS &&
+        fabsf(aRayOrg1.z - aRayOrg2.z) < 10.f * EPS &&
         dot(aRayDir1, aRayDir2) >= ANGLE_THRESHOLD;
 }
 
@@ -175,6 +175,21 @@ bool TestQuaternions::run() const
             return 1;
         }
 
+        float3 point = RayOrg;
+        float3 normal = make_float3(1.f, 1.f, 1.f) / RayDirRCP;
+
+        float3 pointQ = instanceQ.transformPointToLocal(point);
+        float3 normalQ = instanceQ.transformNormalToGlobal(normal);
+
+        float3 pointM = instanceM.transformPointToLocal(point);
+        float3 normalM = instanceM.transformNormalToGlobal(normal);
+
+        if (!checkRay(pointQ, normalQ, pointM, normalM))
+        {
+            cudastd::logger::out << "Identity Transform: transformed point and normal do not match! \n";
+            return 1;
+        }
+
     }
     ///////////////////////////////////////////////////////
 
@@ -243,6 +258,20 @@ bool TestQuaternions::run() const
             return 1;
         }
 
+        float3 point = RayOrg;
+        float3 normal = make_float3(1.f, 1.f, 1.f) / RayDirRCP;
+
+        float3 pointQ = instanceQ.transformPointToLocal(point);
+        float3 normalQ = instanceQ.transformNormalToGlobal(normal);
+
+        float3 pointM = instanceM.transformPointToLocal(point);
+        float3 normalM = instanceM.transformNormalToGlobal(normal);
+
+        if (!checkRay(pointQ, normalQ, pointM, normalM))
+        {
+            cudastd::logger::out << "R 90 deg y, T 0.5: transformed point and normal do not match! \n";
+            return 1;
+        }
     }
     ///////////////////////////////////////////////////////
 
@@ -308,6 +337,21 @@ bool TestQuaternions::run() const
         if (!checkRay(RayOrgQ, RayDirRCPQ, RayOrgM, RayDirRCPM))
         {
             cudastd::logger::out << "R 180 deg y, T -0.5: transformed rays do not match! \n";
+            return 1;
+        }
+
+        float3 point = RayOrg;
+        float3 normal = make_float3(1.f, 1.f, 1.f) / RayDirRCP;
+
+        float3 pointQ = instanceQ.transformPointToLocal(point);
+        float3 normalQ = instanceQ.transformNormalToGlobal(normal);
+
+        float3 pointM = instanceM.transformPointToLocal(point);
+        float3 normalM = instanceM.transformNormalToGlobal(normal);
+
+        if (!checkRay(pointQ, normalQ, pointM, normalM))
+        {
+            cudastd::logger::out << "R 180 deg y, T -0.5: transformed point and normal do not match! \n";
             return 1;
         }
 
@@ -583,6 +627,21 @@ bool TestQuaternions::run() const
             return 1;
         }
 
+        float3 point = RayOrg;
+        float3 normal = make_float3(1.f, 1.f, 1.f) / RayDirRCP;
+
+        float3 pointQ = instanceQ.transformPointToLocal(point);
+        float3 normalQ = instanceQ.transformNormalToGlobal(normal);
+
+        float3 pointM = instanceM.transformPointToLocal(point);
+        float3 normalM = instanceM.transformNormalToGlobal(normal);
+
+        if (!checkRay(pointQ, normalQ, pointM, normalM))
+        {
+            cudastd::logger::out << "R -90 deg x, 90 deg y, T 0.2, mirror col 0: transformed point and normal do not match! \n";
+            return 1;
+        }
+
     }
     ///////////////////////////////////////////////////////
 
@@ -647,6 +706,21 @@ bool TestQuaternions::run() const
         if (!checkRay(RayOrgQ, RayDirRCPQ, RayOrgM, RayDirRCPM))
         {
             cudastd::logger::out << "R -90 deg x, 90 deg y, T 0.2, mirror col 1: transformed rays do not match! \n";
+            return 1;
+        }
+
+        float3 point = RayOrg;
+        float3 normal = make_float3(1.f, 1.f, 1.f) / RayDirRCP;
+
+        float3 pointQ = instanceQ.transformPointToLocal(point);
+        float3 normalQ = instanceQ.transformNormalToGlobal(normal);
+
+        float3 pointM = instanceM.transformPointToLocal(point);
+        float3 normalM = instanceM.transformNormalToGlobal(normal);
+
+        if (!checkRay(pointQ, normalQ, pointM, normalM))
+        {
+            cudastd::logger::out << "R -90 deg x, 90 deg y, T 0.2, mirror col 1: transformed point and normal do not match! \n";
             return 1;
         }
 
@@ -715,6 +789,21 @@ bool TestQuaternions::run() const
         if (!checkRay(RayOrgQ, RayDirRCPQ, RayOrgM, RayDirRCPM))
         {
             cudastd::logger::out << "R -90 deg x, 90 deg y, T 0.2, mirror col 2: transformed rays do not match! \n";
+            return 1;
+        }
+
+        float3 point = RayOrg;
+        float3 normal = make_float3(1.f, 1.f, 1.f) / RayDirRCP;
+
+        float3 pointQ = instanceQ.transformPointToLocal(point);
+        float3 normalQ = instanceQ.transformNormalToGlobal(normal);
+
+        float3 pointM = instanceM.transformPointToLocal(point);
+        float3 normalM = instanceM.transformNormalToGlobal(normal);
+
+        if (!checkRay(pointQ, normalQ, pointM, normalM))
+        {
+            cudastd::logger::out << "R -90 deg x, 90 deg y, T 0.2, mirror col 2: transformed point and normal do not match! \n";
             return 1;
         }
     }

@@ -21,7 +21,7 @@ class  GeometryInstance : public Primitive<2>
     //float3 vtx[2]; //inherited -> bounding box
 
     //Transformation    
-    uint indexAndSign;//last bit -> sign flag, 0:31 bit -> index
+    uint indexAndSign;//last bit -> reflection flag, 0:31 bit -> index
 
     quaternion3f irotation;
     float3 itranslation;
@@ -29,29 +29,19 @@ class  GeometryInstance : public Primitive<2>
 public:
 
 
-    DEVICE HOST float getSign() const
-    {
-        return indexAndSign & FLAG_MASK ? 1.f : -1.f;
-    }
-
-    DEVICE HOST bool isNoReflection() const
+    DEVICE HOST bool isReflection() const
     {
         return indexAndSign & FLAG_MASK;
     }
 
-    DEVICE HOST void setSign(float aSign)
-    {
-        indexAndSign = aSign < 0.f ? indexAndSign | FLAG_MASK : indexAndSign & FLAG_MASKNEG;
-    }
-
     DEVICE HOST void setNoReflection()
     {
-        indexAndSign = indexAndSign | FLAG_MASK;
+        indexAndSign = indexAndSign & FLAG_MASKNEG;
     }
 
     DEVICE HOST void setReflection()
     {
-        indexAndSign = indexAndSign & FLAG_MASKNEG;
+        indexAndSign = indexAndSign | FLAG_MASK;
     }
 
     DEVICE HOST uint getIndex() const
@@ -75,7 +65,7 @@ public:
     {
         return fabsf(itranslation.x) + fabsf(itranslation.y) + fabsf(itranslation.z) < EPS
                 && isIdentity(irotation, EPS)
-                && isNoReflection();
+                && !isReflection();
     }
 
 
@@ -117,14 +107,7 @@ public:
         //float m03, float m13, float m23, float m33 -> assumed last row: 0 0 0 1
         ) const
     {
-        if (isNoReflection())
-        {
-            irotation.toMatrix3f(
-                m00, m10, m20,
-                m01, m11, m21,
-                m02, m12, m22);
-        }
-        else
+        if (isReflection())
         {
             irotation.toMatrix3f(
                 m00, m10, m20,
@@ -133,6 +116,13 @@ public:
             m00 = -m00;
             m01 = -m01;
             m02 = -m02;
+        }
+        else
+        {
+            irotation.toMatrix3f(
+                m00, m10, m20,
+                m01, m11, m21,
+                m02, m12, m22);
         }
 
         m30 = itranslation.x;
@@ -143,20 +133,7 @@ public:
     DEVICE HOST float3 transformRay(const float3 aRayOrg, float3& oRayDirRCP) const
     {
 
-        if (isNoReflection())
-        {
-
-            oRayDirRCP = transformVecRCP(irotation, oRayDirRCP);
-
-            oRayDirRCP.x = 1.f / oRayDirRCP.x;
-            oRayDirRCP.y = 1.f / oRayDirRCP.y;
-            oRayDirRCP.z = 1.f / oRayDirRCP.z;
-
-            float3 rayOrgT = transformVec(irotation, aRayOrg) + itranslation;
-
-            return rayOrgT;
-        }
-        else
+        if (isReflection())
         {
             float3 col0, col1, col2;
             irotation.toMatrix3f(
@@ -176,6 +153,73 @@ public:
             float3 rayOrgT = col0 * aRayOrg.x + col1 * aRayOrg.y + col2 * aRayOrg.z + itranslation;
 
             return rayOrgT;
+            
+        }
+        else
+        {
+            oRayDirRCP = transformVecRCP(irotation, oRayDirRCP);
+
+            oRayDirRCP.x = 1.f / oRayDirRCP.x;
+            oRayDirRCP.y = 1.f / oRayDirRCP.y;
+            oRayDirRCP.z = 1.f / oRayDirRCP.z;
+
+            float3 rayOrgT = transformVec(irotation, aRayOrg) + itranslation;
+
+            return rayOrgT;
+        }
+    }
+
+    DEVICE HOST float3 transformPointToLocal(const float3 aPoint) const
+    {
+
+        if (isReflection())
+        {
+            float3 col0, col1, col2;
+            irotation.toMatrix3f(
+                col0.x, col1.x, col2.x,
+                col0.y, col1.y, col2.y,
+                col0.z, col1.z, col2.z
+                );
+            col0 = -col0;
+
+            float3 rayOrgT = col0 * aPoint.x + col1 * aPoint.y + col2 * aPoint.z + itranslation;
+
+            return rayOrgT;
+        }
+        else
+        {
+            float3 rayOrgT = transformVec(irotation, aPoint) + itranslation;
+
+            return rayOrgT;            
+        }
+    }
+
+    DEVICE HOST float3 transformNormalToGlobal(const float3 aNormal) const
+    {
+
+        if (isReflection())
+        {
+            float3 col0, col1, col2;
+            //Assume M inverse same as M transpose
+            irotation.toMatrix3f(
+                col0.x, col0.y, col0.z,
+                col1.x, col1.y, col1.z,
+                col2.x, col2.y, col2.z
+                );
+            //Apply reflection
+            col0.x = -col0.x;
+            col1.x = -col1.x;
+            col2.x = -col2.x;
+
+            float3 normalT = col0 * aNormal.x + col1 * aNormal.y + col2 * aNormal.z;
+
+            return normalT;
+        }
+        else
+        {
+            quaternion3f rotation = irotation.conjugate();
+            float3 normalT = transformVec(rotation, aNormal);
+            return normalT;
         }
     }
 };
@@ -269,6 +313,30 @@ public:
         oRayDirRCP.z = 1.f / rayDirT.z;
 
         return rayOrgT;
+    }
+
+    DEVICE HOST float3 transformPointToLocal(const float3 aPoint) const
+    {
+        return irotation0 * aPoint.x + irotation1 * aPoint.y + irotation2 * aPoint.z + itranslation;
+    }
+
+    DEVICE HOST float3 transformNormalToGlobal(const float3 aNormal) const
+    {
+        float m00; float m10; float m20; float m30;
+        float m01; float m11; float m21; float m31;
+        float m02; float m12; float m22; float m32;
+
+        getTransformation(
+            m00, m01, m02, m30,
+            m10, m11, m12, m31,
+            m20, m21, m22, m32);
+
+        float3 normalT =
+            make_float3(m00, m01, m02) * aNormal.x +
+            make_float3(m10, m11, m12) * aNormal.y +
+            make_float3(m20, m21, m22) * aNormal.z;
+
+        return normalT;
     }
 
 };

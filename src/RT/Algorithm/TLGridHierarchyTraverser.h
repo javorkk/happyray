@@ -232,7 +232,10 @@ public:
 template<class tPrimitive, class tIntersector, bool taIsShadowRay = false>
 class TLGridHierarchyTraverser
 {
+    uint mBestHitInstance;
 public:
+    DEVICE uint getBestHitInstance(){ return mBestHitInstance; }
+
     DEVICE void operator()(
         PrimitiveArray<tPrimitive>  aPrimitiveArray,
         TwoLevelGridHierarchy       dcGrid,
@@ -245,7 +248,6 @@ public:
         )
     {
         GeometryInstanceTraverser< tPrimitive, tIntersector, taIsShadowRay > traverser;
-        uint bestHitInstance = (uint)-1;
         //////////////////////////////////////////////////////////////////////////
         //Traversal State
         float tMax[3];
@@ -346,7 +348,7 @@ public:
                 cellRange = dcGrid.getCell(cellId[0], cellId[1], cellId[2]);
             }
 
-            traverser(rayOrg, rayT, bestHit, bestHitInstance, cellRange,
+            traverser(rayOrg, rayT, bestHit, mBestHitInstance, cellRange,
                 dcGrid.getInstanceIndices(), dcGrid.getInstances(), dcGrid.getGrids(), dcGrid.primitives,
                 aPrimitiveArray, sharedMemNew);
 
@@ -386,12 +388,12 @@ public:
         //////////////////////////////////////////////////////////////////////////
         
         //transform the ray into the local coordinates of the hit instance
-        if(bestHitInstance != (uint)-1)
-        {
-            const GeometryInstance instance = dcGrid.getInstances()[bestHitInstance];
-            float3 rayOrgT = instance.transformRay(rayOrg, rayDirRCP);
-            rayOrg = rayOrgT;
-        }
+        //if(mBestHitInstance != (uint)-1)
+        //{
+        //    const GeometryInstance instance = dcGrid.getInstances()[mBestHitInstance];
+        //    float3 rayOrgT = instance.transformRay(rayOrg, rayDirRCP);
+        //    rayOrg = rayOrgT;
+        //}
     }
 };
 
