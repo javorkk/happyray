@@ -190,7 +190,7 @@ public:
     HOST DEVICE void storeBestHitInstance(const uint aId, const uint aRayId,
         const uint aNumRays)
     {
-        *((float*)mMemoryPtr + aRayId + aNumRays * 8) = aId;
+        *((uint*)mMemoryPtr + aRayId + aNumRays * 8) = aId;
     }
 };
 

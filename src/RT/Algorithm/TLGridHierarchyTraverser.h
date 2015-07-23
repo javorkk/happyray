@@ -252,6 +252,8 @@ public:
         //Traversal State
         float tMax[3];
         int cellId[3];
+
+        mBestHitInstance = (uint)-1;
         //////////////////////////////////////////////////////////////////////////
 
         if(taIsShadowRay)
