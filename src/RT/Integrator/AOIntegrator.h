@@ -152,7 +152,7 @@ GLOBAL void computeAOIllumination(
         }
         else if (myRayIndex < dcNumRays)
         {
-            sharedVec[threadId1D()] = rep(0.f);
+            sharedVec[threadId1D()] = rep(1.f);
         }//endif hit point exists
 
         SYNCTHREADS;

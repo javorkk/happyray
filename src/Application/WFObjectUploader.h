@@ -107,7 +107,10 @@ public:
             oMaxBound.z = cudastd::max(verticesHost[it].z, oMaxBound.z);
         }
 
-        MY_CUDA_SAFE_CALL( cudaMemcpy( verticesDevice, verticesHost, verticesNewSize, cudaMemcpyHostToDevice) );
+        oMinBound -= rep(EPS);
+        oMaxBound += rep(EPS);
+
+        MY_CUDA_SAFE_CALL(cudaMemcpy(verticesDevice, verticesHost, verticesNewSize, cudaMemcpyHostToDevice));
 
 
         aArray.bindVerticesTexture(aArray.vertexBufferDevicePtr, aArray.vertexBufferSize);
