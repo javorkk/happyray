@@ -321,8 +321,9 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
 
         for (int i = 0; i < 16; ++i)
         {
-            hostInstances[i].vtx[0] = aMemoryManager.bounds.vtx[0] + aMemoryManager.bounds.diagonal() * 0.25f * floorf(i*0.25f);
-            hostInstances[i].vtx[1] = hostInstances[i].vtx[0] + aMemoryManager.bounds.diagonal() * 0.25f;
+            //hostInstances[i].vtx[0] = aMemoryManager.bounds.vtx[0] + aMemoryManager.bounds.diagonal() * 0.25f * floorf(i*0.25f);
+            //hostInstances[i].vtx[1] = hostInstances[i].vtx[0] + aMemoryManager.bounds.diagonal() * 0.25f;
+            hostInstances[i].setOriginalPointer(aMemoryManager.gridsDevice);
             hostInstances[i].setIndex(i % 4);
             //hostInstances[i].rotation0   = make_float3(1.f, 0.f, 0.f);
             //hostInstances[i].rotation1   = make_float3(0.f, 1.f, 0.f);

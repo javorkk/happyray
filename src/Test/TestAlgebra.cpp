@@ -101,8 +101,8 @@ bool TestQuaternions::run() const
     GeometryInstance instanceQ;
     GeometryInstanceMatrix instanceM;
 
-    instanceQ.vtx[0] = make_float3(-10.f, -10.f, -10.f);
-    instanceQ.vtx[1] = make_float3(10.f, 10.f, 10.f);
+    //instanceQ.vtx[0] = make_float3(-10.f, -10.f, -10.f);
+    //instanceQ.vtx[1] = make_float3(10.f, 10.f, 10.f);
     instanceM.vtx[0] = make_float3(-10.f, -10.f, -10.f);
     instanceM.vtx[1] = make_float3(10.f, 10.f, 10.f);
 

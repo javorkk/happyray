@@ -11,8 +11,274 @@
 #include "RT/Primitive/BBox.hpp"
 #include "RT/Structure/UniformGrid.h"
 
+class  UnboundedGeometryInstanceQuaternion
+{
+    static const uint FLAG_SHIFT = 0u;
+    static const uint FLAG_MASK = 0x1u;
+    static const uint FLAG_MASKNEG = 0xFFFFFFFEu;
 
-class  GeometryInstance : public Primitive<2>
+    UniformGrid* originalPtr;
+    //Transformation    
+    uint indexAndSign;//last bit -> reflection flag, 0:31 bit -> index
+
+    quaternion3f irotation;
+    float3 itranslation;
+
+public:
+
+    DEVICE HOST void setOriginalPointer(UniformGrid* aPtr)
+    {
+        originalPtr = aPtr;
+    }
+
+
+    DEVICE HOST bool isReflection() const
+    {
+        return indexAndSign & FLAG_MASK;
+    }
+
+    DEVICE HOST void setNoReflection()
+    {
+        indexAndSign = indexAndSign & FLAG_MASKNEG;
+    }
+
+    DEVICE HOST void setReflection()
+    {
+        indexAndSign = indexAndSign | FLAG_MASK;
+    }
+
+    DEVICE HOST uint getIndex() const
+    {
+        return indexAndSign >> 1;
+    }
+
+    DEVICE HOST void setIndex(uint aIndex)
+    {
+        indexAndSign = (indexAndSign & FLAG_MASK) | (aIndex << 1);
+    }
+
+    DEVICE HOST void setIdentityTransormation()
+    {
+        setNoReflection();
+        irotation = make_quaternion4f(0.f, 0.f, 0.f, 1.f);
+        itranslation = make_float3(0.f, 0.f, 0.f);
+    }
+
+    DEVICE HOST bool isIdentityTransformation() const
+    {
+        return fabsf(itranslation.x) + fabsf(itranslation.y) + fabsf(itranslation.z) < EPS
+            && isIdentity(irotation, EPS)
+            && !isReflection();
+    }
+
+
+    DEVICE HOST void setTransformation(
+        float m00, float m10, float m20, float m30,
+        float m01, float m11, float m21, float m31,
+        float m02, float m12, float m22, float m32
+        //float m03, float m13, float m23, float m33 -> assumed last row: 0 0 0 1
+        )
+    {
+        itranslation.x = m30;
+        itranslation.y = m31;
+        itranslation.z = m32;
+
+        const float det = m00 * m11 * m22 + m10 * m21 * m02 + m20 * m01 * m12 -
+            m20 * m11 * m02 - m10 * m01 * m22 - m00 * m21 * m12;
+        if (det > 0.f)
+        {
+            setNoReflection();
+            irotation = quaternion3f(
+                m00, m10, m20,
+                m01, m11, m21,
+                m02, m12, m22);
+        }
+        else
+        {
+            setReflection();
+            irotation = quaternion3f(
+                -m00, m10, m20,
+                -m01, m11, m21,
+                -m02, m12, m22);
+        }
+    }
+
+    DEVICE HOST void getTransformation(
+        float& m00, float& m10, float& m20, float& m30,
+        float& m01, float& m11, float& m21, float& m31,
+        float& m02, float& m12, float& m22, float& m32
+        //float m03, float m13, float m23, float m33 -> assumed last row: 0 0 0 1
+        ) const
+    {
+        if (isReflection())
+        {
+            irotation.toMatrix3f(
+                m00, m10, m20,
+                m01, m11, m21,
+                m02, m12, m22);
+            m00 = -m00;
+            m01 = -m01;
+            m02 = -m02;
+        }
+        else
+        {
+            irotation.toMatrix3f(
+                m00, m10, m20,
+                m01, m11, m21,
+                m02, m12, m22);
+        }
+
+        m30 = itranslation.x;
+        m31 = itranslation.y;
+        m32 = itranslation.z;
+    }
+
+    DEVICE HOST float3 transformRay(const float3 aRayOrg, float3& oRayDirRCP) const
+    {
+
+        if (isReflection())
+        {
+            float3 col0, col1, col2;
+            irotation.toMatrix3f(
+                col0.x, col1.x, col2.x,
+                col0.y, col1.y, col2.y,
+                col0.z, col1.z, col2.z
+                );
+            col0 = -col0;
+
+            float3 rayDirT = col0 / oRayDirRCP.x + col1 / oRayDirRCP.y +
+                col2 / oRayDirRCP.z;
+
+            oRayDirRCP.x = 1.f / rayDirT.x;
+            oRayDirRCP.y = 1.f / rayDirT.y;
+            oRayDirRCP.z = 1.f / rayDirT.z;
+
+            float3 rayOrgT = col0 * aRayOrg.x + col1 * aRayOrg.y + col2 * aRayOrg.z + itranslation;
+
+            return rayOrgT;
+
+        }
+        else
+        {
+            oRayDirRCP = transformVecRCP(irotation, oRayDirRCP);
+
+            oRayDirRCP.x = 1.f / oRayDirRCP.x;
+            oRayDirRCP.y = 1.f / oRayDirRCP.y;
+            oRayDirRCP.z = 1.f / oRayDirRCP.z;
+
+            float3 rayOrgT = transformVec(irotation, aRayOrg) + itranslation;
+
+            return rayOrgT;
+        }
+    }
+
+    DEVICE HOST float3 transformPointToLocal(const float3 aPoint) const
+    {
+
+        if (isReflection())
+        {
+            float3 col0, col1, col2;
+            irotation.toMatrix3f(
+                col0.x, col1.x, col2.x,
+                col0.y, col1.y, col2.y,
+                col0.z, col1.z, col2.z
+                );
+            col0 = -col0;
+
+            float3 rayOrgT = col0 * aPoint.x + col1 * aPoint.y + col2 * aPoint.z + itranslation;
+
+            return rayOrgT;
+        }
+        else
+        {
+            float3 rayOrgT = transformVec(irotation, aPoint) + itranslation;
+
+            return rayOrgT;
+        }
+    }
+
+    DEVICE HOST float3 transformNormalToGlobal(const float3 aNormal) const
+    {
+
+        if (isReflection())
+        {
+            float3 col0, col1, col2;
+            //Assume M inverse same as M transpose
+            irotation.toMatrix3f(
+                col0.x, col0.y, col0.z,
+                col1.x, col1.y, col1.z,
+                col2.x, col2.y, col2.z
+                );
+            //Apply reflection
+            col0.x = -col0.x;
+            col1.x = -col1.x;
+            col2.x = -col2.x;
+
+            float3 normalT = col0 * aNormal.x + col1 * aNormal.y + col2 * aNormal.z;
+
+            return normalT;
+        }
+        else
+        {
+            quaternion3f rotation = irotation.conjugate();
+            float3 normalT = transformVec(rotation, aNormal);
+            return normalT;
+        }
+    }
+
+    DEVICE HOST BBox transformedBBox() const
+    {
+        BBox result;
+        UniformGrid* myPtr = originalPtr + getIndex();
+
+        if (isIdentityTransformation())
+        {
+            result.vtx[0] = myPtr->vtx[0];
+            result.vtx[1] = myPtr->vtx[1];
+
+        }
+        else if (isReflection())
+        {
+            float3 col0, col1, col2;
+            //Assume M inverse same as M transpose
+            irotation.toMatrix3f(
+                col0.x, col0.y, col0.z,
+                col1.x, col1.y, col1.z,
+                col2.x, col2.y, col2.z
+                );
+            //Apply reflection
+            col0.x = -col0.x;
+            col1.x = -col1.x;
+            col2.x = -col2.x;
+
+            float3 minBound = myPtr->vtx[0];
+            minBound = minBound - itranslation;
+            minBound = col0 * minBound.x + col1 * minBound.y + col2 * minBound.z;
+
+            float3 maxBound = myPtr->vtx[1];
+            maxBound = maxBound - itranslation;
+            maxBound = col0 * maxBound.x + col1 * maxBound.y + col2 * maxBound.z;
+
+            result.vtx[0] = min(minBound, maxBound);
+            result.vtx[1] = max(minBound, maxBound);
+        }
+        else
+        {
+            quaternion3f rotation = irotation.conjugate();
+            float3 minBound = transformVec(rotation, myPtr->vtx[0] - itranslation);
+            float3 maxBound = transformVec(rotation, myPtr->vtx[1] - itranslation);
+
+            result.vtx[0] = min(minBound, maxBound);
+            result.vtx[1] = max(minBound, maxBound);
+           
+        }
+
+        return result;
+    }
+};
+
+
+class  GeometryInstanceQuaternion : public Primitive<2>
 {
     static const uint FLAG_SHIFT = 0u;
     static const uint FLAG_MASK = 0x1u;
@@ -342,10 +608,20 @@ public:
 };
 
 template<>
-class BBoxExtractor< GeometryInstance >
+class BBoxExtractor< UnboundedGeometryInstanceQuaternion >
 {
 public:
-    DEVICE HOST static BBox get(const GeometryInstance& aUGrid)
+    DEVICE HOST static BBox get(const UnboundedGeometryInstanceQuaternion& aInstance)
+    {
+        return aInstance.transformedBBox();
+    }
+};
+
+template<>
+class BBoxExtractor< GeometryInstanceQuaternion >
+{
+public:
+    DEVICE HOST static BBox get(const GeometryInstanceQuaternion& aUGrid)
     {
         BBox result;
         result.vtx[0] = aUGrid.vtx[0];
@@ -366,6 +642,9 @@ public:
         return result;
     }
 };
+
+
+typedef UnboundedGeometryInstanceQuaternion GeometryInstance;
 
 class TwoLevelGridHierarchy : public UniformGrid
 {
