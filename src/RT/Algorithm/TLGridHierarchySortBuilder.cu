@@ -1,4 +1,5 @@
 #include "CUDAStdAfx.h"
+#include "DeviceConstants.h"
 #include "RT/Algorithm/TLGridHierarchySortBuilder.h"
 
 #include "RT/Structure/TwoLevelGridHierarchy.h"
@@ -10,6 +11,10 @@
 
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
+
+#ifdef COMPACT_INSTANCES
+UniformGrid* hcUniformGridsBasePtr;
+#endif
 
 extern SHARED uint shMem[];
 
@@ -284,6 +289,10 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
         aMemoryManager.allocateDeviceCells();
         aMemoryManager.setDeviceCellsToZero();
         
+#ifdef COMPACT_INSTANCES
+        MY_CUDA_SAFE_CALL(cudaMemcpyToSymbol(dcUniformGridsBasePtr, &aMemoryManager.gridsDevice, sizeof(UniformGrid*)));
+        hcUniformGridsBasePtr = aMemoryManager.gridsHost;
+#endif
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mDataUpload, 0);
         cudaEventSynchronize(mDataUpload);
@@ -321,9 +330,11 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
 
         for (int i = 0; i < 16; ++i)
         {
-            //hostInstances[i].vtx[0] = aMemoryManager.bounds.vtx[0] + aMemoryManager.bounds.diagonal() * 0.25f * floorf(i*0.25f);
-            //hostInstances[i].vtx[1] = hostInstances[i].vtx[0] + aMemoryManager.bounds.diagonal() * 0.25f;
-            hostInstances[i].setOriginalPointer(aMemoryManager.gridsDevice);
+#ifndef COMPACT_INSTANCES
+            hostInstances[i].vtx[0] = aMemoryManager.bounds.vtx[0] + aMemoryManager.bounds.diagonal() * 0.25f * floorf(i*0.25f);
+            hostInstances[i].vtx[1] = hostInstances[i].vtx[0] + aMemoryManager.bounds.diagonal() * 0.25f;
+#endif
+            //hostInstances[i].setOriginalPointer(aMemoryManager.gridsDevice);
             hostInstances[i].setIndex(i % 4);
             //hostInstances[i].rotation0   = make_float3(1.f, 0.f, 0.f);
             //hostInstances[i].rotation1   = make_float3(0.f, 1.f, 0.f);

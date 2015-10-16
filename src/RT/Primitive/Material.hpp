@@ -135,42 +135,42 @@ public:
             (char*)aPtr.ptr +
             cellId.y * aPtr.pitch +
             cellId.z * aPtr.pitch * aPtr.ysize) +
-            min(cellId.x + 1, res[0] - 1));
+            cudastd::min(cellId.x + 1, res[0] - 1));
         float3 val00 = val000 * (1.f - weights.x) + val001 * weights.x;
         float3 val010 = *((float3*)(
             (char*)aPtr.ptr +
-            min(cellId.y, res[1] - 1) * aPtr.pitch +
+            cudastd::min(cellId.y, res[1] - 1) * aPtr.pitch +
             cellId.z * aPtr.pitch * aPtr.ysize) +
             cellId.x);
         float3 val011 = *((float3*)(
             (char*)aPtr.ptr +
-            min(cellId.y, res[1] - 1) * aPtr.pitch +
+            cudastd::min(cellId.y, res[1] - 1) * aPtr.pitch +
             cellId.z * aPtr.pitch * aPtr.ysize) +
-            min(cellId.x + 1, res[0] - 1));
+            cudastd::min(cellId.x + 1, res[0] - 1));
         float3 val01 = val010 * (1.f - weights.x) + val011 * weights.x;
         float3 val0 = val00 * (1.f - weights.y) + val01 * weights.y;
         //upper 4 voxels
         float3 val100 = *((float3*)(
             (char*)aPtr.ptr +
             cellId.y * aPtr.pitch +
-            min(cellId.z + 1, res[2] - 1) * aPtr.pitch * aPtr.ysize) +
+            cudastd::min(cellId.z + 1, res[2] - 1) * aPtr.pitch * aPtr.ysize) +
             cellId.x);
         float3 val101 = *((float3*)(
             (char*)aPtr.ptr +
             cellId.y * aPtr.pitch +
-            min(cellId.z + 1, res[2] - 1) * aPtr.pitch * aPtr.ysize) +
-            min(cellId.x + 1, res[0] - 1));
+            cudastd::min(cellId.z + 1, res[2] - 1) * aPtr.pitch * aPtr.ysize) +
+            cudastd::min(cellId.x + 1, res[0] - 1));
         float3 val10 = val100 * (1.f - weights.x) + val101 * weights.x;
         float3 val110 = *((float3*)(
             (char*)aPtr.ptr +
-            min(cellId.y, res[1] - 1) * aPtr.pitch +
-            min(cellId.z + 1, res[2]) * aPtr.pitch * aPtr.ysize) +
+            cudastd::min(cellId.y, res[1] - 1) * aPtr.pitch +
+            cudastd::min(cellId.z + 1, res[2]) * aPtr.pitch * aPtr.ysize) +
             cellId.x);
         float3 val111 = *((float3*)(
             (char*)aPtr.ptr +
-            min(cellId.y, res[1] - 1) * aPtr.pitch +
-            min(cellId.z + 1, res[2] - 1) * aPtr.pitch * aPtr.ysize) +
-            min(cellId.x + 1, res[0] - 1));
+            cudastd::min(cellId.y, res[1] - 1) * aPtr.pitch +
+            cudastd::min(cellId.z + 1, res[2] - 1) * aPtr.pitch * aPtr.ysize) +
+            cudastd::min(cellId.x + 1, res[0] - 1));
         float3 val11 = val110 * (1.f - weights.x) + val111 * weights.x;
         float3 val1 = val10 * (1.f - weights.y) + val11 * weights.y;
 
@@ -180,11 +180,11 @@ public:
     DEVICE HOST float3 nearestNeighbor(int3 &cellId, float3 &weights, const cudaPitchedPtr& aPtr) const
     {
         if(weights.x > 0.5f)
-            cellId.x = min(cellId.x + 1, res[0] - 1);
+            cellId.x = cudastd::min(cellId.x + 1, res[0] - 1);
         if(weights.y > 0.5f)
-            cellId.y = min(cellId.y + 1, res[1] - 1);
+            cellId.y = cudastd::min(cellId.y + 1, res[1] - 1);
         if(weights.z > 0.5f)
-            cellId.z = min(cellId.z + 1, res[2] - 1);
+            cellId.z = cudastd::min(cellId.z + 1, res[2] - 1);
         return *((float3*)(
             (char*)aPtr.ptr +
             cellId.y * aPtr.pitch +

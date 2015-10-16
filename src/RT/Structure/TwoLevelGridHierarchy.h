@@ -11,13 +11,16 @@
 #include "RT/Primitive/BBox.hpp"
 #include "RT/Structure/UniformGrid.h"
 
+#define COMPACT_INSTANCES
+#ifdef COMPACT_INSTANCES
+#include "DeviceConstants.h"
 class  UnboundedGeometryInstanceQuaternion
 {
+    //28 byte instance class
     static const uint FLAG_SHIFT = 0u;
     static const uint FLAG_MASK = 0x1u;
     static const uint FLAG_MASKNEG = 0xFFFFFFFEu;
 
-    UniformGrid* originalPtr;
     //Transformation    
     uint indexAndSign;//last bit -> reflection flag, 0:31 bit -> index
 
@@ -25,12 +28,6 @@ class  UnboundedGeometryInstanceQuaternion
     float3 itranslation;
 
 public:
-
-    DEVICE HOST void setOriginalPointer(UniformGrid* aPtr)
-    {
-        originalPtr = aPtr;
-    }
-
 
     DEVICE HOST bool isReflection() const
     {
@@ -229,7 +226,11 @@ public:
     DEVICE HOST BBox transformedBBox() const
     {
         BBox result;
-        UniformGrid* myPtr = originalPtr + getIndex();
+#ifdef __CUDA_ARCH__
+        UniformGrid* myPtr = dcUniformGridsBasePtr + getIndex();
+#else
+        UniformGrid* myPtr = hcUniformGridsBasePtr + getIndex();
+#endif
 
         if (isIdentityTransformation())
         {
@@ -276,10 +277,11 @@ public:
         return result;
     }
 };
-
+#endif
 
 class  GeometryInstanceQuaternion : public Primitive<2>
 {
+    //52 byte instance class
     static const uint FLAG_SHIFT = 0u;
     static const uint FLAG_MASK = 0x1u;
     static const uint FLAG_MASKNEG = 0xFFFFFFFEu;
@@ -492,6 +494,7 @@ public:
 
 class  GeometryInstanceMatrix : public Primitive<2>
 {
+    //76 byte instance class
 public:
     //float3 vtx[2]; //inherited -> bounding box
     uint index;
@@ -643,8 +646,11 @@ public:
     }
 };
 
-
+#ifdef COMPACT_INSTANCES
 typedef UnboundedGeometryInstanceQuaternion GeometryInstance;
+#else
+typedef GeometryInstanceQuaternion GeometryInstance;
+#endif
 
 class TwoLevelGridHierarchy : public UniformGrid
 {

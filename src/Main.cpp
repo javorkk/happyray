@@ -27,8 +27,8 @@
 #include "StdAfx.hpp"
 #include "Application/SDLGLApplication.hpp"
 
-//#include "Test/TestAlgebra.h"
-
+#include "Test/TestAlgebra.h"
+#include "RT/Structure/TwoLevelGridHierarchy.h"
 #ifdef _WIN32
 int wmain (int argc, char* argv[])
 #else
@@ -38,6 +38,14 @@ int main(int argc, char* argv[])
     //TestQuaternions test;
     //if (test.run() != 0)
     //    return 1;
+    std::cerr << "Instance size: " << sizeof(GeometryInstance) << "\n";
+    std::cerr << "Instance matrix size: " << sizeof(GeometryInstanceQuaternion) << "\n";
+    std::cerr << "Instance matrix size: " << sizeof(GeometryInstanceMatrix) << "\n";
+    std::cerr << "quaternion3f size: " << sizeof(quaternion3f) << "\n";
+    std::cerr << "foat3 size: " << sizeof(float3) << "\n";
+    std::cerr << "uint size: " << sizeof(uint) << "\n";
+    std::cerr << "UGridPtr size: " << sizeof(UniformGrid*) << "\n";
+
 
     SDLGLApplication app;
     app.init(argc, argv);

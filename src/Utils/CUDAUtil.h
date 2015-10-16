@@ -325,16 +325,24 @@ namespace cudastd
 
 namespace cudastd 
 {	
-    template<class tType> inline
+    template<class tType>  __device__ __host__ inline
         const tType& max(const tType& aLeft, const tType& aRight)
     {
+#ifdef __CUDA_ARCH__
+        return max(aLeft, aRight);
+#else
         return ((aLeft < aRight) ? aRight : aLeft);
+#endif
     }
 
-    template<class tType> inline
+    template<class tType> __device__ __host__ inline
         const tType& min(const tType& aLeft, const tType& aRight)
     {
+#ifdef __CUDA_ARCH__
+        return min(aLeft, aRight);
+#else
         return ((aRight < aLeft) ? aRight : aLeft);
+#endif
     }
 
 };//namespace cudastd
