@@ -11,6 +11,7 @@
 #include "RT/Primitive/Material.hpp"
 #include "RT/Structure/UniformGrid.h"
 
+#ifdef __CUDACC__
 DEVICE_NO_INLINE CONSTANT PrimitiveAttributeArray<PhongMaterial>                    dcMaterialStorage;
 //DEVICE_NO_INLINE CONSTANT AreaLightSourceCollection                                 dcLightSources;
 DEVICE_NO_INLINE CONSTANT uint                                                      dcNumPixels;
@@ -20,7 +21,8 @@ DEVICE_NO_INLINE CONSTANT float dcPrimesRCP[] = {0.5f, 0.333333f, 0.2f, 0.142857
     0.034482758f, 0.032258064f};
 
 DEVICE_NO_INLINE CONSTANT UniformGrid* dcUniformGridsBasePtr;
-extern UniformGrid* hcUniformGridsBasePtr;
+#endif
 
+extern UniformGrid* hcUniformGridsBasePtr;
 
 #endif // DEVICECONSTANTS_H_INCLUDED_7E64F0AA_290C_43CC_B00F_296B9DF4FB5F

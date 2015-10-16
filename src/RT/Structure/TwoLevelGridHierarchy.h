@@ -223,19 +223,13 @@ public:
         }
     }
 
-    DEVICE HOST BBox transformedBBox() const
+    DEVICE HOST BBox transformedBBox(const BBox& aBounds) const
     {
         BBox result;
-#ifdef __CUDA_ARCH__
-        UniformGrid* myPtr = dcUniformGridsBasePtr + getIndex();
-#else
-        UniformGrid* myPtr = hcUniformGridsBasePtr + getIndex();
-#endif
-
         if (isIdentityTransformation())
         {
-            result.vtx[0] = myPtr->vtx[0];
-            result.vtx[1] = myPtr->vtx[1];
+            result.vtx[0] = aBounds.vtx[0];
+            result.vtx[1] = aBounds.vtx[1];
 
         }
         else if (isReflection())
@@ -252,26 +246,74 @@ public:
             col1.x = -col1.x;
             col2.x = -col2.x;
 
-            float3 minBound = myPtr->vtx[0];
+            float3 minBound = aBounds.vtx[0];
             minBound = minBound - itranslation;
             minBound = col0 * minBound.x + col1 * minBound.y + col2 * minBound.z;
 
-            float3 maxBound = myPtr->vtx[1];
+            float3 maxBound = aBounds.vtx[1];
             maxBound = maxBound - itranslation;
             maxBound = col0 * maxBound.x + col1 * maxBound.y + col2 * maxBound.z;
 
             result.vtx[0] = min(minBound, maxBound);
             result.vtx[1] = max(minBound, maxBound);
+
+            float3 pt1 = make_float3(aBounds.vtx[0].x, aBounds.vtx[0].y, aBounds.vtx[1].z);
+            pt1 = pt1 -itranslation;
+            pt1 = col0 * pt1.x + col1 * pt1.y + col2 * pt1.z;
+            result.extend(pt1);
+
+            float3 pt2 = make_float3(aBounds.vtx[0].x, aBounds.vtx[1].y, aBounds.vtx[0].z);
+            pt2 = pt2 -itranslation;
+            pt2 = col0 * pt2.x + col1 * pt2.y + col2 * pt2.z;
+            result.extend(pt2);
+
+            float3 pt3 = make_float3(aBounds.vtx[0].x, aBounds.vtx[1].y, aBounds.vtx[1].z);
+            pt3 = pt3 -itranslation;
+            pt3 = col0 * pt3.x + col1 * pt3.y + col2 * pt3.z;
+            result.extend(pt3);
+
+            float3 pt4 = make_float3(aBounds.vtx[1].x, aBounds.vtx[0].y, aBounds.vtx[0].z);
+            pt4 = pt4 -itranslation;
+            pt4 = col0 * pt4.x + col1 * pt4.y + col2 * pt4.z;
+            result.extend(pt4);
+
+            float3 pt5 = make_float3(aBounds.vtx[1].x, aBounds.vtx[0].y, aBounds.vtx[1].z);
+            pt5 = pt5 -itranslation;
+            pt5 = col0 * pt5.x + col1 * pt5.y + col2 * pt5.z;
+            result.extend(pt5);
+
+            float3 pt6 = make_float3(aBounds.vtx[1].x, aBounds.vtx[1].y, aBounds.vtx[0].z);
+            pt6 = pt6 -itranslation;
+            pt6 = col0 * pt6.x + col1 * pt6.y + col2 * pt6.z;
+            result.extend(pt6);
         }
         else
         {
             quaternion3f rotation = irotation.conjugate();
-            float3 minBound = transformVec(rotation, myPtr->vtx[0] - itranslation);
-            float3 maxBound = transformVec(rotation, myPtr->vtx[1] - itranslation);
+            float3 minBound = transformVec(rotation, aBounds.vtx[0] - itranslation);
+            float3 maxBound = transformVec(rotation, aBounds.vtx[1] - itranslation);
 
             result.vtx[0] = min(minBound, maxBound);
             result.vtx[1] = max(minBound, maxBound);
-           
+
+            float3 pt1 = make_float3(aBounds.vtx[0].x, aBounds.vtx[0].y, aBounds.vtx[1].z);
+            result.extend( transformVec(rotation, pt1 - itranslation) );
+
+            float3 pt2 = make_float3(aBounds.vtx[0].x, aBounds.vtx[1].y, aBounds.vtx[0].z);
+            result.extend( transformVec(rotation, pt2 - itranslation) );
+
+            float3 pt3 = make_float3(aBounds.vtx[0].x, aBounds.vtx[1].y, aBounds.vtx[1].z);
+            result.extend( transformVec(rotation, pt3 - itranslation) );
+
+            float3 pt4 = make_float3(aBounds.vtx[1].x, aBounds.vtx[0].y, aBounds.vtx[0].z);
+            result.extend( transformVec(rotation, pt4 - itranslation) );
+
+            float3 pt5 = make_float3(aBounds.vtx[1].x, aBounds.vtx[0].y, aBounds.vtx[1].z);
+            result.extend( transformVec(rotation, pt5 - itranslation) );
+
+            float3 pt6 = make_float3(aBounds.vtx[1].x, aBounds.vtx[1].y, aBounds.vtx[0].z);
+            result.extend( transformVec(rotation, pt6 - itranslation) );
+
         }
 
         return result;
@@ -611,16 +653,6 @@ public:
 };
 
 template<>
-class BBoxExtractor< UnboundedGeometryInstanceQuaternion >
-{
-public:
-    DEVICE HOST static BBox get(const UnboundedGeometryInstanceQuaternion& aInstance)
-    {
-        return aInstance.transformedBBox();
-    }
-};
-
-template<>
 class BBoxExtractor< GeometryInstanceQuaternion >
 {
 public:
@@ -647,6 +679,26 @@ public:
 };
 
 #ifdef COMPACT_INSTANCES
+
+template<>
+class BBoxExtractor< UnboundedGeometryInstanceQuaternion >
+{
+public:
+    DEVICE HOST static BBox BBoxExtractor< UnboundedGeometryInstanceQuaternion >::get(const UnboundedGeometryInstanceQuaternion& aInstance)
+    {
+
+#ifdef __CUDA_ARCH__
+        UniformGrid* myPtr = dcUniformGridsBasePtr + aInstance.getIndex();
+#else
+        UniformGrid* myPtr = hcUniformGridsBasePtr + aInstance.getIndex();
+#endif
+        BBox originalBBox;
+        originalBBox.vtx[0] = myPtr->vtx[0];
+        originalBBox.vtx[1] = myPtr->vtx[1];
+        return aInstance.transformedBBox(originalBBox);
+    }
+};
+
 typedef UnboundedGeometryInstanceQuaternion GeometryInstance;
 #else
 typedef GeometryInstanceQuaternion GeometryInstance;

@@ -79,6 +79,7 @@ public:
         for (uint it = aIdRange.x; it < aIdRange.y; ++ it)
         {
             const GeometryInstance instance = aInstances[aInstanceIndirection[it]];
+#ifndef COMPACT_INSTANCES
             BBox boundsLvl1 = BBoxExtractor<GeometryInstance>::get(instance);
             //if(bounds.vtx[0].x > bounds.vtx[1].x || bounds.vtx[0].y > bounds.vtx[1].y || bounds.vtx[0].z > bounds.vtx[1].z)
             //    continue;
@@ -90,7 +91,7 @@ public:
 
             if(!(tExitLvl1 > tEntryLvl1 && tExitLvl1 >= 0.f && tEntryLvl1 < oRayT))
                 continue;
-
+#endif
             
             float3 rayOrgT = instance.transformRay(aRayOrg, aRayDirRCP);
 
@@ -214,7 +215,11 @@ public:
             //end traversal loop
             //////////////////////////////////////////////////////////////////////////
 
-            if (bestHitNew != (uint)-1 && rayT < oRayT && rayT >= tEntryLvl1 && rayT < tExitLvl1)
+            if (bestHitNew != (uint)-1 && rayT < oRayT 
+#ifndef COMPACT_INSTANCES
+                && rayT >= tEntryLvl1 && rayT < tExitLvl1
+#endif
+                )
             {
                 oRayT = rayT;
                 oBestHitInstance = aInstanceIndirection[it];

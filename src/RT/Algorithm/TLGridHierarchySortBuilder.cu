@@ -1,5 +1,5 @@
 #include "CUDAStdAfx.h"
-#include "DeviceConstants.h"
+
 #include "RT/Algorithm/TLGridHierarchySortBuilder.h"
 
 #include "RT/Structure/TwoLevelGridHierarchy.h"
@@ -12,11 +12,18 @@
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
 
-#ifdef COMPACT_INSTANCES
-UniformGrid* hcUniformGridsBasePtr;
-#endif
 
 extern SHARED uint shMem[];
+
+#ifdef COMPACT_INSTANCES
+
+UniformGrid* hcUniformGridsBasePtr;
+
+
+
+
+#endif
+
 
 //Computes the resolution and number cells for each input item
 GLOBAL void countGridCellsMultiUniformGrid(
