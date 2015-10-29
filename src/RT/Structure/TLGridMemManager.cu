@@ -197,6 +197,22 @@ HOST void TLGridMemoryManager::allocateLeafLevelPairsBufferPair(const size_t aNu
         (void**)&leafLevelPairsBuffer, (void**)&leafLevelPairsPingBufferKeys, leafLevelPairsBufferSize);
 }
 
+HOST void TLGridMemoryManager::allocateTopLevelKeyValueBuffers(const size_t aNumKeys)
+{
+    MemoryManager::allocateDeviceArrayPair(
+        (void**)&topLevelPairsPingBufferKeys, (void**)&topLevelPairsPingBufferValues, aNumKeys * sizeof(uint),
+        (void**)&topLevelPairsPingBufferKeys, (void**)&topLevelPairsPingBufferValues, topLevelPairsPingBufferKeysSize);
+    topLevelPairsPingBufferValuesSize = topLevelPairsPingBufferKeysSize;
+}
+
+HOST void TLGridMemoryManager::allocateLeafLevelKeyValueBuffers(const size_t aNumKeys)
+{
+    MemoryManager::allocateDeviceArrayPair(
+        (void**)&leafLevelPairsPingBufferKeys, (void**)&leafLevelPairsPingBufferValues, aNumKeys * sizeof(uint),
+        (void**)&leafLevelPairsPingBufferKeys, (void**)&leafLevelPairsPingBufferValues, leafLevelPairsPingBufferKeysSize);
+    leafLevelPairsPingBufferValuesSize = leafLevelPairsPingBufferKeysSize;
+
+}
 
 //////////////////////////////////////////////////////////////////////////
 //memory deallocation
@@ -283,6 +299,35 @@ HOST void TLGridMemoryManager::freeLeafLevelPairsBufferPair()
     }
 }
 
+
+HOST void TLGridMemoryManager::freeTopLevelKeyValueBuffers()
+{
+    if (topLevelPairsPingBufferKeysSize != 0u)
+    {
+        topLevelPairsPingBufferKeysSize = 0u;
+        topLevelPairsPingBufferValuesSize = 0u;
+        MY_CUDA_SAFE_CALL(cudaFree(topLevelPairsPingBufferKeys));
+        MY_CUDA_SAFE_CALL(cudaFree(topLevelPairsPingBufferValues));
+        topLevelPairsPingBufferKeys = NULL;
+        topLevelPairsPingBufferValues = NULL;
+    }
+
+}
+
+HOST void TLGridMemoryManager::freeeafLevelKeyValueBuffers()
+{
+    if (leafLevelPairsPingBufferKeysSize != 0u)
+    {
+        leafLevelPairsPingBufferKeysSize = 0u;
+        leafLevelPairsPingBufferValuesSize = 0u;
+        MY_CUDA_SAFE_CALL(cudaFree(leafLevelPairsPingBufferKeys));
+        MY_CUDA_SAFE_CALL(cudaFree(leafLevelPairsPingBufferValues));
+        leafLevelPairsPingBufferKeys = NULL;
+        leafLevelPairsPingBufferValues = NULL;
+    }
+
+}
+
 HOST void TLGridMemoryManager::cleanup()
 {
     oldResX = 0;
@@ -296,7 +341,9 @@ HOST void TLGridMemoryManager::cleanup()
     freeRefCountsBuffer();
     freeCellCountsBuffer();
     freeTopLevelPairsBufferPair();
+    freeTopLevelKeyValueBuffers();
     freeLeafLevelPairsBufferPair();
+    freeeafLevelKeyValueBuffers();
 
 }
 //////////////////////////////////////////////////////////////////////////

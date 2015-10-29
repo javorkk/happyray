@@ -21,7 +21,7 @@
 */
 /****************************************************************************/
 
-// Main.cpp : Defines the entry point for the console application.
+// Main.cpp : Defines the entry point for the console application. 
 //
 
 #include "StdAfx.hpp"
@@ -29,6 +29,13 @@
 
 #include "Test/TestAlgebra.h"
 #include "RT/Structure/TwoLevelGridHierarchy.h"
+
+struct CompactUGrid : public Primitive<2>
+{
+    int res[3];
+    uint cells;
+};
+
 #ifdef _WIN32
 int wmain (int argc, char* argv[])
 #else
@@ -45,6 +52,8 @@ int main(int argc, char* argv[])
     std::cerr << "foat3 size: " << sizeof(float3) << "\n";
     std::cerr << "uint size: " << sizeof(uint) << "\n";
     std::cerr << "UGridPtr size: " << sizeof(UniformGrid*) << "\n";
+    std::cerr << "UGrid size: " << sizeof(UniformGrid) << "\n";
+    std::cerr << "CompactUGrid size: " << sizeof(CompactUGrid) << "\n";
 
 
     SDLGLApplication app;

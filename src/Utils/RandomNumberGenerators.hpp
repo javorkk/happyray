@@ -212,7 +212,7 @@ public:
 #ifdef __CUDA_ARCH___
                 seed = truncf(tmp);
 #else
-                seed = static_cast<int>(tmp);
+                seed = static_cast<float>(static_cast<int>(tmp));
 #endif
                 res += basisRCP * (tmp - seed);
                 basisRCP *= aPrimesRCP[aDimension];

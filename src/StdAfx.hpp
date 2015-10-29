@@ -38,6 +38,10 @@
 #   include <windows.h>
 #endif
 
+#define _USE_MATH_DEFINES
+#include <math.h>
+#include <float.h>
+
 #include <algorithm>
 #include <stdlib.h>
 #include <fstream>
@@ -47,10 +51,6 @@
 #include <vector>
 #include <map>
 #include <stdexcept>
-
-#define _USE_MATH_DEFINES
-#include <float.h>
-#include <math.h>
 
 //////////////////////////////////////////////////////////////////////////
 //some windows specific macros

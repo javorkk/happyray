@@ -219,6 +219,14 @@ HOST void UGridMemoryManager::allocatePairsBufferPair(const size_t aNumPairs)
 //#endif
 }
 
+HOST void UGridMemoryManager::allocateKeyValueBuffers(const size_t aNumKeys)
+{
+    MemoryManager::allocateDeviceArrayPair(
+        (void**)&pairsPingBufferKeys, (void**)&pairsPingBufferValues, aNumKeys * sizeof(uint),
+        (void**)&pairsPingBufferKeys, (void**)&pairsPingBufferValues, pairsPingBufferKeysSize);
+    pairsPingBufferValuesSize = pairsPingBufferKeysSize;
+}
+
 //////////////////////////////////////////////////////////////////////////
 //memory deallocation
 //////////////////////////////////////////////////////////////////////////
@@ -273,6 +281,18 @@ HOST void UGridMemoryManager::freePairsBufferPair()
     }
 }
 
+HOST void UGridMemoryManager::freeKeyValueBuffers()
+{
+    if (pairsPingBufferKeysSize != 0u)
+    {
+        pairsPingBufferKeysSize = 0u;
+        pairsPingBufferValuesSize = 0u;
+        MY_CUDA_SAFE_CALL(cudaFree(pairsPingBufferKeys));
+        MY_CUDA_SAFE_CALL(cudaFree(pairsPingBufferValues));
+        pairsPingBufferKeys = NULL;
+        pairsPingBufferValues = NULL;
+    }
+}
 
 HOST void UGridMemoryManager::cleanup()
 {
@@ -304,25 +324,8 @@ HOST void UGridMemoryManager::checkResolution()
     }
 }
 
-HOST void UGridMemoryManager::allocateKeyValueBuffers( const size_t aNumKeys )
-{
-    MemoryManager::allocateDeviceArrayPair(
-        (void**)&pairsPingBufferKeys, (void**)&pairsPingBufferValues, aNumKeys * sizeof(uint),
-        (void**)&pairsPingBufferKeys, (void**)&pairsPingBufferValues, pairsPingBufferKeysSize);
-    pairsPingBufferValuesSize = pairsPingBufferKeysSize;
-}
 
-HOST void UGridMemoryManager::freeKeyValueBuffers()
-{
-    if(pairsPingBufferKeysSize != 0u)
-    {
-        pairsPingBufferKeysSize = 0u;
-        pairsPingBufferValuesSize =  0u;
-        MY_CUDA_SAFE_CALL( cudaFree(pairsPingBufferKeys) );
-        MY_CUDA_SAFE_CALL( cudaFree(pairsPingBufferValues) );
-        pairsPingBufferKeys = NULL;
-        pairsPingBufferValues = NULL;
-    }
-}
+
+
 
 

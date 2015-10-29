@@ -39,7 +39,13 @@
 #include "RT/Algorithm/TLGridBuildKernels.h"
 
 #include "Utils/Scan.h"
+//#define CHAG_SORT
+#ifdef CHAG_SORT
 #include "Utils/Sort.h"
+#else
+#include <thrust/device_ptr.h>
+#include <thrust/sort.h>
+#endif
 
 template<class tPrimitive>
 class TLGridSortBuilder
@@ -196,11 +202,11 @@ public:
 
 
         const uint numTopLevelPairs = aMemoryManager.refCountsBufferHost[numCounters];
-        aMemoryManager.allocateTopLevelPairsBufferPair(numTopLevelPairs);
-
-
         dim3 blockUnsortedGrid(sNUM_WRITE_THREADS);
         dim3 gridUnsortedGrid (sNUM_WRITE_BLOCKS);
+
+#ifdef CHAG_SORT  
+        aMemoryManager.allocateTopLevelPairsBufferPair(numTopLevelPairs);
 
         writePairs<tPrimitive, PrimitiveArray<tPrimitive>, false>
             <<< gridUnsortedGrid, blockUnsortedGrid,
@@ -216,16 +222,40 @@ public:
 
         MY_CUT_CHECK_ERROR("Writing primitive-cell pairs failed.\n");
 
-
         const uint numCellsPlus1 = aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ;
         uint numBits = 9u;
-        while (numCellsPlus1 >> numBits != 0u){numBits += 1u;}
+        while (numCellsPlus1 >> numBits != 0u){ numBits += 1u; }
         numBits = cudastd::min(32u, numBits + 1u);
 
         Sort radixSort;
         radixSort(aMemoryManager.topLevelPairsBuffer, aMemoryManager.topLevelPairsPingBufferKeys, numTopLevelPairs, numBits);
 
         MY_CUT_CHECK_ERROR("Sorting primitive-cell pairs failed.\n");
+
+#else
+        aMemoryManager.allocateTopLevelKeyValueBuffers(numTopLevelPairs);
+        writeKeysAndValues<tPrimitive, PrimitiveArray<tPrimitive>, false>
+            <<< gridUnsortedGrid, blockUnsortedGrid,
+            sizeof(uint)/* + sizeof(float3) * blockUnsortedGrid.x*/ >>>(
+            aPrimitiveArray,
+            aMemoryManager.topLevelPairsPingBufferKeys,
+            aMemoryManager.topLevelPairsPingBufferValues,
+            (uint)aPrimitiveArray.numPrimitives,
+            aMemoryManager.refCountsBuffer,
+            aMemoryManager.getResolution(),
+            aMemoryManager.bounds.vtx[0],
+            aMemoryManager.getCellSize(),
+            aMemoryManager.getCellSizeRCP());
+
+        MY_CUT_CHECK_ERROR("Writing primitive-cell pairs failed.\n");
+
+        thrust::device_ptr<unsigned int> dev_keys(aMemoryManager.topLevelPairsPingBufferKeys);
+        thrust::device_ptr<unsigned int> dev_values(aMemoryManager.topLevelPairsPingBufferValues);
+        thrust::sort_by_key(dev_keys, (dev_keys + numTopLevelPairs), dev_values);
+
+        MY_CUT_CHECK_ERROR("Sorting primitive-cell pairs failed.\n");
+#endif //CHAG_SORT
+
 
         aMemoryManager.allocatePrimitiveIndicesBuffer(numTopLevelPairs);
 
@@ -235,7 +265,12 @@ public:
         prepareCellRanges< sNUM_CELL_SETUP_THREADS >
             <<< gridPrepRng, blockPrepRng, (2 + blockPrepRng.x) * sizeof(uint)>>>(
             aMemoryManager.primitiveIndices,
+#ifdef CHAG_SORT
             (uint2*)aMemoryManager.topLevelPairsBuffer,
+#else
+            aMemoryManager.topLevelPairsPingBufferKeys,
+            aMemoryManager.topLevelPairsPingBufferValues,
+#endif
             numTopLevelPairs,
             aMemoryManager.cellsPtrDevice,
             static_cast<uint>(aMemoryManager.resX),
@@ -264,8 +299,7 @@ public:
             aMemoryManager.cellCountsBuffer
             );
 
-        ExclusiveScan escan;
-        escan(aMemoryManager.cellCountsBuffer, aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ + 1);
+        scan(aMemoryManager.cellCountsBuffer, aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ + 1);
 
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mLeafCellCount, 0);
@@ -293,7 +327,12 @@ public:
             <<< gridRefCount, blockRefCount,  blockRefCount.x * (sizeof(uint) /*+ sizeof(float3)*/) >>>(
             aPrimitiveArray,
             numTopLevelPairs,
+#ifdef CHAG_SORT
             (uint2*)aMemoryManager.topLevelPairsBuffer,
+#else
+            aMemoryManager.topLevelPairsPingBufferKeys,
+            aMemoryManager.topLevelPairsPingBufferValues,
+#endif
             aMemoryManager.cellsPtrDevice,
             static_cast<uint>(aMemoryManager.resX),
             static_cast<uint>(aMemoryManager.resY),
@@ -333,11 +372,12 @@ public:
 
 
         const uint numLeafLevelPairs = aMemoryManager.refCountsBufferHost[numCounters];
-
-        aMemoryManager.allocateLeafLevelPairsBufferPair(numLeafLevelPairs);
-
         dim3 blockRefWrite = sNUM_WRITE_THREADS;
         dim3 gridRefWrite  = sNUM_WRITE_BLOCKS;
+
+
+#ifdef CHAG_SORT
+        aMemoryManager.allocateLeafLevelPairsBufferPair(numLeafLevelPairs);
 
         writeLeafLevelPairs<tPrimitive, PrimitiveArray>
             <<< gridRefWrite, blockRefWrite,  sizeof(uint)>>>(
@@ -373,7 +413,7 @@ public:
         cudaEventSynchronize(mSortLeafPairs);
         MY_CUT_CHECK_ERROR("Sorting the leaf level pairs failed.\n");
         //////////////////////////////////////////////////////////////////////////
-        
+
         //////////////////////////////////////////////////////////////////////////
         //DEBUG
         //uint2* hostPairs;
@@ -393,6 +433,45 @@ public:
         //    }
         //}
         //////////////////////////////////////////////////////////////////////////
+
+#else
+        aMemoryManager.allocateLeafLevelKeyValueBuffers(numLeafLevelPairs);
+
+        writeLeafLevelKeysAndValues<tPrimitive, PrimitiveArray>
+            << < gridRefWrite, blockRefWrite, sizeof(uint) >> >(
+            aPrimitiveArray,
+            numTopLevelPairs,
+            aMemoryManager.topLevelPairsPingBufferKeys,
+            aMemoryManager.topLevelPairsPingBufferValues,
+            aMemoryManager.cellsPtrDevice,
+            numLeafCells,
+            aMemoryManager.refCountsBuffer,
+            static_cast<uint>(aMemoryManager.resX),
+            static_cast<uint>(aMemoryManager.resY),
+            static_cast<uint>(aMemoryManager.resZ),
+            aMemoryManager.bounds.vtx[0],
+            aMemoryManager.getCellSize(),
+            aMemoryManager.leafLevelPairsPingBufferKeys,
+            aMemoryManager.leafLevelPairsPingBufferValues
+            );
+
+        //////////////////////////////////////////////////////////////////////////
+        cudaEventRecord(mLeafRefsWrite, 0);
+        cudaEventSynchronize(mLeafRefsWrite);
+        MY_CUT_CHECK_ERROR("Writing the leaf level pairs failed.\n");
+        //////////////////////////////////////////////////////////////////////////
+
+        thrust::device_ptr<unsigned int> dev_keys_leaf(aMemoryManager.leafLevelPairsPingBufferKeys);
+        thrust::device_ptr<unsigned int> dev_values_leaf(aMemoryManager.leafLevelPairsPingBufferValues);
+        thrust::sort_by_key(dev_keys_leaf, (dev_keys_leaf + numLeafLevelPairs), dev_values_leaf);
+
+        //////////////////////////////////////////////////////////////////////////
+        cudaEventRecord(mSortLeafPairs, 0);
+        cudaEventSynchronize(mSortLeafPairs);
+        MY_CUT_CHECK_ERROR("Sorting the leaf level pairs failed.\n");
+        //////////////////////////////////////////////////////////////////////////
+
+#endif //CHAG_SORT
         
         aMemoryManager.allocatePrimitiveIndicesBuffer(numLeafLevelPairs);
         aMemoryManager.allocateDeviceLeaves(numLeafCells);
@@ -405,7 +484,12 @@ public:
             <<< gridPrepLeafRng, blockPrepLeafRng,
             (2 + blockPrepLeafRng.x) * sizeof(uint) >>>(
             aMemoryManager.primitiveIndices,
+#ifdef CHAG_SORT
             (uint2*)aMemoryManager.leafLevelPairsBuffer,
+#else
+            aMemoryManager.leafLevelPairsPingBufferKeys,
+            aMemoryManager.leafLevelPairsPingBufferValues,
+#endif
             numLeafLevelPairs,
             (uint2*)aMemoryManager.leavesDevice
             );

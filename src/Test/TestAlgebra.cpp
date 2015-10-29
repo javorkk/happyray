@@ -10,7 +10,7 @@
 
 SimpleRandomNumberGenerator genRand(1231415u);
 
-const float ANGLE_THRESHOLD = 1.f - cosf(1.396263401595464); // 1.f - cos(80 deg) = 1.f - 0.0003f
+const float ANGLE_THRESHOLD = 1.f - cosf(1.396263401595464f); // 1.f - cos(80 deg) = 1.f - 0.0003f
 
 void TestQuaternions::initRay(float3& aOrg, float3& aDirRCP) const
 {

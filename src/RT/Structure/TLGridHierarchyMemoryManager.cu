@@ -301,6 +301,22 @@ HOST void TLGridHierarchyMemoryManager::allocateLeafLevelPairsBufferPair(const s
         (void**)&leafLevelPairsBuffer, (void**)&leafLevelPairsPingBufferKeys, leafLevelPairsBufferSize);
 }
 
+HOST void TLGridHierarchyMemoryManager::allocateTopLevelKeyValueBuffers(const size_t aNumKeys)
+{
+    MemoryManager::allocateDeviceArrayPair(
+        (void**)&topLevelPairsPingBufferKeys, (void**)&topLevelPairsPingBufferValues, aNumKeys * sizeof(uint),
+        (void**)&topLevelPairsPingBufferKeys, (void**)&topLevelPairsPingBufferValues, topLevelPairsPingBufferKeysSize);
+    topLevelPairsPingBufferValuesSize = topLevelPairsPingBufferKeysSize;
+}
+
+HOST void TLGridHierarchyMemoryManager::allocateLeafLevelKeyValueBuffers(const size_t aNumKeys)
+{
+    MemoryManager::allocateDeviceArrayPair(
+        (void**)&leafLevelPairsPingBufferKeys, (void**)&leafLevelPairsPingBufferValues, aNumKeys * sizeof(uint),
+        (void**)&leafLevelPairsPingBufferKeys, (void**)&leafLevelPairsPingBufferValues, leafLevelPairsPingBufferKeysSize);
+    leafLevelPairsPingBufferValuesSize = leafLevelPairsPingBufferKeysSize;
+
+}
 
 //////////////////////////////////////////////////////////////////////////
 //memory deallocation
@@ -415,6 +431,34 @@ HOST void TLGridHierarchyMemoryManager::freeLeafLevelPairsBufferPair()
     }
 }
 
+HOST void TLGridHierarchyMemoryManager::freeTopLevelKeyValueBuffers()
+{
+    if (topLevelPairsPingBufferKeysSize != 0u)
+    {
+        topLevelPairsPingBufferKeysSize = 0u;
+        topLevelPairsPingBufferValuesSize = 0u;
+        MY_CUDA_SAFE_CALL(cudaFree(topLevelPairsPingBufferKeys));
+        MY_CUDA_SAFE_CALL(cudaFree(topLevelPairsPingBufferValues));
+        topLevelPairsPingBufferKeys = NULL;
+        topLevelPairsPingBufferValues = NULL;
+    }
+
+}
+
+HOST void TLGridHierarchyMemoryManager::freeeafLevelKeyValueBuffers()
+{
+    if (leafLevelPairsPingBufferKeysSize != 0u)
+    {
+        leafLevelPairsPingBufferKeysSize = 0u;
+        leafLevelPairsPingBufferValuesSize = 0u;
+        MY_CUDA_SAFE_CALL(cudaFree(leafLevelPairsPingBufferKeys));
+        MY_CUDA_SAFE_CALL(cudaFree(leafLevelPairsPingBufferValues));
+        leafLevelPairsPingBufferKeys = NULL;
+        leafLevelPairsPingBufferValues = NULL;
+    }
+
+}
+
 HOST void TLGridHierarchyMemoryManager::cleanup()
 {
     oldResX = 0;
@@ -457,48 +501,4 @@ HOST void TLGridHierarchyMemoryManager::checkResolution()
     }
 }
 
-HOST void TLGridHierarchyMemoryManager::allocateTopLevelKeyValueBuffers( const size_t aNumKeys )
-{
-    MemoryManager::allocateDeviceArrayPair(
-        (void**)&topLevelPairsPingBufferKeys, (void**)&topLevelPairsPingBufferValues, aNumKeys * sizeof(uint),
-        (void**)&topLevelPairsPingBufferKeys, (void**)&topLevelPairsPingBufferValues, topLevelPairsPingBufferKeysSize);
-    topLevelPairsPingBufferValuesSize = topLevelPairsPingBufferKeysSize;
-}
-
-HOST void TLGridHierarchyMemoryManager::allocateLeafLevelKeyValueBuffers( const size_t aNumKeys )
-{
-    MemoryManager::allocateDeviceArrayPair(
-        (void**)&leafLevelPairsPingBufferKeys, (void**)&leafLevelPairsPingBufferValues, aNumKeys * sizeof(uint),
-        (void**)&leafLevelPairsPingBufferKeys, (void**)&leafLevelPairsPingBufferValues, leafLevelPairsPingBufferKeysSize);
-    leafLevelPairsPingBufferValuesSize = leafLevelPairsPingBufferKeysSize;
-
-}
-
-HOST void TLGridHierarchyMemoryManager::freeTopLevelKeyValueBuffers()
-{
-    if(topLevelPairsPingBufferKeysSize != 0u)
-    {
-        topLevelPairsPingBufferKeysSize = 0u;
-        topLevelPairsPingBufferValuesSize =  0u;
-        MY_CUDA_SAFE_CALL( cudaFree(topLevelPairsPingBufferKeys) );
-        MY_CUDA_SAFE_CALL( cudaFree(topLevelPairsPingBufferValues) );
-        topLevelPairsPingBufferKeys = NULL;
-        topLevelPairsPingBufferValues = NULL;
-    }
-
-}
-
-HOST void TLGridHierarchyMemoryManager::freeeafLevelKeyValueBuffers()
-{
-    if(leafLevelPairsPingBufferKeysSize != 0u)
-    {
-        leafLevelPairsPingBufferKeysSize = 0u;
-        leafLevelPairsPingBufferValuesSize =  0u;
-        MY_CUDA_SAFE_CALL( cudaFree(leafLevelPairsPingBufferKeys) );
-        MY_CUDA_SAFE_CALL( cudaFree(leafLevelPairsPingBufferValues) );
-        leafLevelPairsPingBufferKeys = NULL;
-        leafLevelPairsPingBufferValues = NULL;
-    }
-
-}
 

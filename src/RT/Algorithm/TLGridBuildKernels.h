@@ -301,6 +301,114 @@ GLOBAL void countLeafLevelPairs(
 #endif
 }
 
+
+template<class tPrimitive, template<class> class tPrimitiveArray, int taBlockSize>
+GLOBAL void countLeafLevelPairs(
+    tPrimitiveArray<tPrimitive>   aPrimitiveArray,
+    const uint        aNumTopLevelRefs,
+    const uint*      aTopLevelSortedKeys,
+    const uint*      aTopLevelSortedValues,
+    cudaPitchedPtr    aTopLevelCells,
+    //const float3       aGridRes,
+    const uint        aGridResX,
+    const uint        aGridResY,
+    const uint        aGridResZ,
+    const float3       aBoundsMin,
+    const float3       aCellSize,
+    uint*             oRefCounts
+    //////////////////////////////////////////////////////////////////////////
+    //DEBUG
+    //, uint*             debugInfo
+    //////////////////////////////////////////////////////////////////////////
+    )
+{
+    shMem[threadId1D()] = 0u;
+
+    //uint* numTopLevelCells = shMem + blockSize() + threadId1D();
+    uint numTopLevelCells = aGridResX * aGridResY * aGridResZ;
+
+    for (uint refId = globalThreadId1D(); refId < aNumTopLevelRefs; refId += numThreads())
+    {
+        const uint key = aTopLevelSortedKeys[refId];
+        const uint value = aTopLevelSortedValues[refId];
+        const uint2 indexPair = make_uint2(key, value);
+
+        if (indexPair.x >= /***/numTopLevelCells)
+        {
+            break;
+        }
+
+        const tPrimitive prim = aPrimitiveArray[indexPair.y];
+        BBox bounds = BBoxExtractor<tPrimitive>::get(prim);
+
+        const uint topLvlCellX = indexPair.x % aGridResX;
+        const uint topLvlCellY = (indexPair.x % (aGridResX * aGridResY)) / aGridResX;
+        const uint topLvlCellZ = indexPair.x / (aGridResX * aGridResY);
+
+        const TwoLevelGridCell topLvlCell = *((TwoLevelGridCell*)
+            ((char*)aTopLevelCells.ptr
+            + topLvlCellY * aTopLevelCells.pitch
+            + topLvlCellZ * aTopLevelCells.pitch * aTopLevelCells.ysize)
+            + topLvlCellX);
+
+        float3 topLvlCellRes;
+        topLvlCellRes.x = static_cast<float>(topLvlCell[0]);
+        topLvlCellRes.y = static_cast<float>(topLvlCell[1]);
+        topLvlCellRes.z = static_cast<float>(topLvlCell[2]);
+
+        float3 topLvlCellOrigin;
+        topLvlCellOrigin.x = static_cast<float>(topLvlCellX)* aCellSize.x + aBoundsMin.x;
+        topLvlCellOrigin.y = static_cast<float>(topLvlCellY)* aCellSize.y + aBoundsMin.y;
+        topLvlCellOrigin.z = static_cast<float>(topLvlCellZ)* aCellSize.z + aBoundsMin.z;
+
+        const float3 subCellSizeRCP = topLvlCellRes / aCellSize;
+
+        const float3 minCellIdf =
+            (bounds.vtx[0] - topLvlCellOrigin) * subCellSizeRCP;
+        const float3 maxCellIdPlus1f =
+            (bounds.vtx[1] - topLvlCellOrigin) * subCellSizeRCP + rep(1.f);
+
+        const int minCellIdX = max(0, (int)(minCellIdf.x));
+        const int minCellIdY = max(0, (int)(minCellIdf.y));
+        const int minCellIdZ = max(0, (int)(minCellIdf.z));
+
+        const int maxCellIdP1X = min((int)topLvlCell[0], (int)(maxCellIdPlus1f.x));
+        const int maxCellIdP1Y = min((int)topLvlCell[1], (int)(maxCellIdPlus1f.y));
+        const int maxCellIdP1Z = min((int)topLvlCell[2], (int)(maxCellIdPlus1f.z));
+
+        const int numCells =
+            (maxCellIdP1X - minCellIdX) *
+            (maxCellIdP1Y - minCellIdY) *
+            (maxCellIdP1Z - minCellIdZ);
+
+        shMem[threadId1D()] += numCells;
+    }
+
+    SYNCTHREADS;
+
+#if HAPPYRAY__CUDA_ARCH__ >= 120
+
+    //reduction
+    if (taBlockSize >= 512) { if (threadId1D() < 256) { shMem[threadId1D()] += shMem[threadId1D() + 256]; } SYNCTHREADS; }
+    if (taBlockSize >= 256) { if (threadId1D() < 128) { shMem[threadId1D()] += shMem[threadId1D() + 128]; } SYNCTHREADS; }
+    if (taBlockSize >= 128) { if (threadId1D() <  64) { shMem[threadId1D()] += shMem[threadId1D() + 64]; } SYNCTHREADS; }
+    if (taBlockSize >= 64) { if (threadId1D() <  32) { shMem[threadId1D()] += shMem[threadId1D() + 32]; } EMUSYNCTHREADS; }
+    if (taBlockSize >= 32) { if (threadId1D() <  16) { shMem[threadId1D()] += shMem[threadId1D() + 16]; } EMUSYNCTHREADS; }
+    if (taBlockSize >= 16) { if (threadId1D() <   8) { shMem[threadId1D()] += shMem[threadId1D() + 8]; } EMUSYNCTHREADS; }
+    if (taBlockSize >= 8) { if (threadId1D() <   4) { shMem[threadId1D()] += shMem[threadId1D() + 4]; } EMUSYNCTHREADS; }
+    if (taBlockSize >= 4) { if (threadId1D() <   2) { shMem[threadId1D()] += shMem[threadId1D() + 2]; } EMUSYNCTHREADS; }
+    if (taBlockSize >= 2) { if (threadId1D() <   1) { shMem[threadId1D()] += shMem[threadId1D() + 1]; } EMUSYNCTHREADS; }
+
+    // write out block sum 
+    if (threadId1D() == 0) oRefCounts[blockId1D()] = shMem[0];
+
+#else
+
+    oRefCounts[globalThreadId1D()] = shMem[threadId1D()];
+
+#endif
+}
+
 template<class tPrimitive, template<class> class tPrimitiveArray>
 GLOBAL void writeLeafLevelPairs(
     tPrimitiveArray<tPrimitive> aPrimitiveArray,
@@ -417,6 +525,135 @@ GLOBAL void writeLeafLevelPairs(
                         z * topLvlCell[0] * topLvlCell[1] +
                         topLvlCell.getLeafRangeBegin();
                     oPairs[2 * nextSlot + 1] = indexPair.y;
+                }//end for z
+            }//end for y
+        }//end for x
+
+
+    }//end  for(uint refId = globalThreadId1D(); ...
+
+}
+
+template<class tPrimitive, template<class> class tPrimitiveArray>
+GLOBAL void writeLeafLevelKeysAndValues(
+    tPrimitiveArray<tPrimitive> aPrimitiveArray,
+    const uint          aNumTopLevelRefs,
+    const uint*         aTopLevelSortedKeys,
+    const uint*         aTopLevelSortedValues,
+    cudaPitchedPtr      aTopLevelCells,
+    const uint          aNumLeafLevelCells,
+    uint*               aStartId,
+    const uint          aGridResX,
+    const uint          aGridResY,
+    const uint          aGridResZ,
+    const float3        aBoundsMin,
+    const float3        aCellSize,
+    uint*               oKeys,
+    uint*               oValues
+    )
+{
+    extern SHARED uint shMem[];
+
+
+#if HAPPYRAY__CUDA_ARCH__ >= 120
+
+    if (threadId1D() == 0)
+    {
+        shMem[0] = aStartId[blockId1D()];
+    }
+
+    SYNCTHREADS;
+
+#else
+
+    uint startPosition = aStartId[globalThreadId1D()];
+
+#endif
+
+    uint numTopLevelCells = aGridResX * aGridResY * aGridResZ;
+
+    for (uint refId = globalThreadId1D(); refId < aNumTopLevelRefs; refId += numThreads())
+    {
+        const uint key = aTopLevelSortedKeys[refId];
+        const uint value = aTopLevelSortedValues[refId];
+        const uint2 indexPair = make_uint2(key, value);
+
+        if (indexPair.x >= numTopLevelCells)
+        {
+            break;
+        }
+
+        const tPrimitive prim = aPrimitiveArray[indexPair.y];
+        BBox bounds = BBoxExtractor<tPrimitive>::get(prim);
+
+
+        //////////////////////////////////////////////////////////////////////////
+        //correct, but serious precision issues
+        //float tmp;
+        //tmp = static_cast<float>( indexPair.x ) / aGridRes.x;
+        //const int topLvlCellX = static_cast<uint>( (tmp - truncf(tmp)) * aGridRes.x );
+        //tmp = static_cast<float>( indexPair.x ) / (aGridRes.x * aGridRes.y);
+        //const int topLvlCellY = static_cast<uint>( (tmp - truncf(tmp)) * aGridRes.y );
+        //const int topLvlCellZ = static_cast<uint>( truncf(tmp) );
+        //////////////////////////////////////////////////////////////////////////
+
+        const uint topLvlCellX = indexPair.x % aGridResX;
+        const uint topLvlCellY = (indexPair.x % (aGridResX * aGridResY)) / aGridResX;
+        const uint topLvlCellZ = indexPair.x / (aGridResX * aGridResY);
+
+        const TwoLevelGridCell topLvlCell = *((TwoLevelGridCell*)
+            ((char*)aTopLevelCells.ptr
+            + topLvlCellY * aTopLevelCells.pitch
+            + topLvlCellZ * aTopLevelCells.pitch * aTopLevelCells.ysize)
+            + topLvlCellX);
+
+        float3 topLvlCellRes;
+        topLvlCellRes.x = static_cast<float>(topLvlCell[0]);
+        topLvlCellRes.y = static_cast<float>(topLvlCell[1]);
+        topLvlCellRes.z = static_cast<float>(topLvlCell[2]);
+
+        float3 topLvlCellOrigin;
+        topLvlCellOrigin.x = static_cast<float>(topLvlCellX)* aCellSize.x + aBoundsMin.x;
+        topLvlCellOrigin.y = static_cast<float>(topLvlCellY)* aCellSize.y + aBoundsMin.y;
+        topLvlCellOrigin.z = static_cast<float>(topLvlCellZ)* aCellSize.z + aBoundsMin.z;
+
+        const float3 subCellSizeRCP = topLvlCellRes / aCellSize;
+
+        const float3 minCellIdf =
+            (bounds.vtx[0] - topLvlCellOrigin) * subCellSizeRCP;
+        const float3 maxCellIdPlus1f =
+            (bounds.vtx[1] - topLvlCellOrigin) * subCellSizeRCP + rep(1.f);
+
+        const int minCellIdX = max(0, (int)(minCellIdf.x));
+        const int minCellIdY = max(0, (int)(minCellIdf.y));
+        const int minCellIdZ = max(0, (int)(minCellIdf.z));
+
+        const int maxCellIdP1X = min((int)topLvlCell[0], (int)(maxCellIdPlus1f.x));
+        const int maxCellIdP1Y = min((int)topLvlCell[1], (int)(maxCellIdPlus1f.y));
+        const int maxCellIdP1Z = min((int)topLvlCell[2], (int)(maxCellIdPlus1f.z));
+
+        const int numCells =
+            (maxCellIdP1X - minCellIdX) *
+            (maxCellIdP1Y - minCellIdY) *
+            (maxCellIdP1Z - minCellIdZ);
+
+#if HAPPYRAY__CUDA_ARCH__ >= 120
+        uint nextSlot = atomicAdd(&shMem[0], numCells);
+#else
+        uint nextSlot = startPosition;
+        startPosition += numCells;
+#endif
+
+        for (uint z = minCellIdZ; z < maxCellIdP1Z; ++z)
+        {
+            for (uint y = minCellIdY; y < maxCellIdP1Y; ++y)
+            {
+                for (uint x = minCellIdX; x < maxCellIdP1X; ++x, ++nextSlot)
+                {
+                    oKeys[nextSlot] = x + y * topLvlCell[0] +
+                        z * topLvlCell[0] * topLvlCell[1] +
+                        topLvlCell.getLeafRangeBegin();
+                    oValues[nextSlot] = indexPair.y;
                 }//end for z
             }//end for y
         }//end for x
