@@ -64,7 +64,7 @@ else ifeq ($(sm_12), 1)
 else ifeq ($(sm_11), 1)
 	NVCCFLAGS   += -arch sm_11 -D HAPPYRAY__CUDA_ARCH__=110
 else
-	NVCCFLAGS   += -arch sm_10 -D HAPPYRAY__CUDA_ARCH__=100
+	NVCCFLAGS   += -arch sm_50 -D HAPPYRAY__CUDA_ARCH__=500
 endif
 
 ifeq ($(dbg),1)

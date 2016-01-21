@@ -684,7 +684,7 @@ template<>
 class BBoxExtractor< UnboundedGeometryInstanceQuaternion >
 {
 public:
-    DEVICE HOST static BBox BBoxExtractor< UnboundedGeometryInstanceQuaternion >::get(const UnboundedGeometryInstanceQuaternion& aInstance)
+    DEVICE HOST static BBox get(const UnboundedGeometryInstanceQuaternion& aInstance)
     {
 
 #ifdef __CUDA_ARCH__

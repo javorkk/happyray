@@ -30,6 +30,7 @@
 
 #include "CUDAStdAfx.h"
 #include "Core/Algebra.hpp"
+#include "DeviceConstants.h"
 #include "Utils/RandomNumberGenerators.hpp"
 #include "Utils/HemisphereSamplers.hpp"
 #include "RT/Primitive/Camera.h"
@@ -375,7 +376,7 @@ public:
     {}
 
     DEVICE float operator()(float3& oRayOrg, float3& oRayDir, const uint aRayId,
-        const uint aNumRays)
+        const uint dcNumRays)
     {
         float rayT = mBuffer.loadDistance(aRayId, dcNumRays);
         

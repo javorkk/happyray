@@ -51,6 +51,7 @@
 #include <vector>
 #include <map>
 #include <stdexcept>
+#include <cstring>
 
 //////////////////////////////////////////////////////////////////////////
 //some windows specific macros

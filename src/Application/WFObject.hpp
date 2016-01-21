@@ -230,126 +230,13 @@ public:
         return mTexCoords[aCoordId];
     }
 
-    size_t insertVertex(const float3& aVertex)
-    {
-        if (mNumVertices == mVerticesBufferSize)
-        {
-            if (mVertices != NULL)
-            {
-                mVerticesBufferSize += cudastd::max((size_t)1,mVerticesBufferSize / 4);
-                float3* tmp = new float3[mVerticesBufferSize];
-                memcpy((void*)tmp, (void*)mVertices, mNumVertices * sizeof(float3));
-                delete[] mVertices;
-                mVertices = tmp;
-            }
-            else
-            {
-                allocateVertices(128u);
-                mNumVertices = 0u;
-            }
-        }
-        
-        mVertices[mNumVertices].x = aVertex.x;
-        mVertices[mNumVertices].y = aVertex.y;
-        mVertices[mNumVertices].z = aVertex.z;
+    size_t insertVertex(const float3& aVertex);
 
-        return mNumVertices++;
-    }
+    size_t insertNormal(const float3& aNormal);
 
-    size_t insertNormal(const float3& aNormal)
-    {
-        if (mNumNormals == mNormalsBufferSize)
-        {
-            if (mNormals != NULL)
-            {
-                mNormalsBufferSize += cudastd::max((size_t)1,mNormalsBufferSize / 4);
-                float3* tmp = new float3[mNormalsBufferSize];
-                memcpy((void*)tmp, (void*)mNormals, mNumNormals * sizeof(float3));
-                delete[] mNormals;
-                mNormals = tmp;
-            }
-            else
-            {
-                allocateNormals(128u);
-                mNumNormals = 0u;
-            }
-        }
+    size_t insertFace(const Face& aFace);
 
-        mNormals[mNumNormals].x = aNormal.x;
-        mNormals[mNumNormals].y = aNormal.y;
-        mNormals[mNumNormals].z = aNormal.z;
-
-        return mNumNormals++;
-    }
-
-    size_t insertFace(const Face& aFace)
-    {
-        if (mNumFaces == mFacesBufferSize)
-        {
-            if (mFaces != NULL)
-            {
-                mFacesBufferSize += cudastd::max((size_t)1,mFacesBufferSize / 4);
-                Face* tmp = new Face[mFacesBufferSize];
-                memcpy((void*)mFaces, (void*)tmp, mNumFaces * sizeof(Face));
-                delete[] mFaces;
-                mFaces = tmp;
-
-                uint* tmpV = new uint[mFacesBufferSize * 3];
-                memcpy((void*)mVertexIndices, (void*)tmpV, mNumFaces * sizeof(uint) * 3);
-                delete mVertexIndices;
-                mVertexIndices = tmpV;
-
-                uint* tmpN = new uint[mFacesBufferSize * 3];
-                memcpy((void*)mNormalIndices, (void*)tmpN, mNumFaces * sizeof(uint) * 3);
-                delete mNormalIndices;
-                mVertexIndices = tmpN;
-
-
-            }
-            else
-            {
-                allocateFaces(128u);
-                mNumFaces = 0u;
-            }
-        }
-
-        memcpy((mFaces + mNumFaces), &aFace, sizeof(Face));
-       
-        mVertexIndices[mNumFaces * 3    ] = (uint)aFace.vert1;
-        mVertexIndices[mNumFaces * 3 + 1] = (uint)aFace.vert2;
-        mVertexIndices[mNumFaces * 3 + 2] = (uint)aFace.vert3;
-
-        mNormalIndices[mNumFaces * 3    ] = (uint)aFace.norm1;
-        mNormalIndices[mNumFaces * 3 + 1] = (uint)aFace.norm2;
-        mNormalIndices[mNumFaces * 3 + 2] = (uint)aFace.norm3;
-
-
-        return mNumFaces++; 
-    }
-
-    size_t insertMaterial(const Material& aMaterial)
-    {
-        if (mNumMaterials == mMaterialsBufferSize)
-        {
-            if (mMaterials != NULL)
-            {
-                mMaterialsBufferSize += cudastd::max((size_t)1, mMaterialsBufferSize / 4);
-                Material* tmp = new Material[mMaterialsBufferSize];
-                memcpy((void*)mMaterials, (void*)tmp, mNumMaterials * sizeof(Material));
-                delete[] mMaterials;
-                mMaterials = tmp;
-            }
-            else
-            {
-                allocateMaterials(128u);
-                mNumMaterials = 0u;
-            }
-        }
-
-        memcpy(mMaterials + mNumMaterials, &aMaterial, sizeof(Material));
-
-        return mNumMaterials++;
-    }
+    size_t insertMaterial(const Material& aMaterial);
 
 
     void allocateVertices(const size_t aSize)

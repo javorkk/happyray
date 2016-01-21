@@ -45,7 +45,7 @@ public:
     //    const WFObject& aKeyFrame2,
     //    PrimitiveAttributeArray<Primitive<3>, float3 >& aArray
     //    );
-    HOST void ObjUploader::uploadObjFrameVertexData(
+    HOST void uploadObjFrameVertexData(
         const WFObject& aKeyFrame1,
         const WFObject& aKeyFrame2,
         const float     aCoeff,
@@ -116,7 +116,7 @@ public:
         aArray.bindVerticesTexture(aArray.vertexBufferDevicePtr, aArray.vertexBufferSize);
     }
 
-    HOST void ObjUploader::uploadObjFrameNormalData(
+    HOST void uploadObjFrameNormalData(
         const WFObject& aKeyFrame1,
         const WFObject& aKeyFrame2,
         const float     aCoeff,
@@ -163,7 +163,7 @@ public:
 
     }
 
-    HOST void ObjUploader::uploadObjFrameVertexIndexData(
+    HOST void uploadObjFrameVertexIndexData(
         const WFObject& aKeyFrame1,
         const WFObject& aKeyFrame2,
         TexturedPrimitiveArray<Primitive<3> >& aArray)
@@ -208,7 +208,7 @@ public:
         aArray.bindIndicesTexture(aArray.indicesBufferDevicePtr, aArray.indicesBufferSize);
     }
 
-    HOST void ObjUploader::uploadObjFrameNormalIndexData(
+    HOST void uploadObjFrameNormalIndexData(
         const WFObject& aKeyFrame1,
         const WFObject& aKeyFrame2,
         VtxAttributeArray<Primitive<3>, float3 >& aArray)
@@ -249,7 +249,7 @@ public:
         MY_CUDA_SAFE_CALL( cudaMemcpy( normalIndicesDevice, normalIndicesHost, indicesNewSize, cudaMemcpyHostToDevice) );
     }
 
-    HOST void ObjUploader::uploadObjFrameMaterialData(
+    HOST void uploadObjFrameMaterialData(
         const WFObject& aKeyFrame2,
         PrimitiveAttributeArray< PhongMaterial >& aArray)
     {
@@ -327,7 +327,7 @@ public:
 
     }
 
-    HOST void ObjUploader::uploadObjFrameTextureData(
+    HOST void uploadObjFrameTextureData(
         const WFObject& aKeyFrame2,
         PrimitiveAttributeArray< TexturedPhongMaterial >& aArray,
         TextureMemoryManager& aTexMemoryManager)

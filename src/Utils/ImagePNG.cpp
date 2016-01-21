@@ -30,7 +30,6 @@
 #include <stdarg.h>
 #endif
 
-
 using namespace cudastd;
 
 //////////////////////////////////////////////////////////////////////////
@@ -206,7 +205,7 @@ void Image::writePNG(const char* aFileName)
 	GdiplusShutdown(gdiplusToken);
 
 #else
-
+#if 0
 	std::vector<png_byte> byteData (m_bits.size() * 3);
 	std::vector<png_byte>::iterator ptr = byteData.begin();
 	for(std::vector<float3>::const_iterator it = m_bits.begin(); it != m_bits.end(); it++)
@@ -270,6 +269,7 @@ void Image::writePNG(const char* aFileName)
 	png_write_end(png_ptr, NULL);
 
 	fclose(fp);
+#endif
 #endif //_WIN32
 }
 
@@ -313,6 +313,7 @@ void Image::readPNG(const char* aFileName)
 
 	GdiplusShutdown(gdiplusToken);
 #else
+#if 0
 	png_byte header[8];	// 8 is the maximum size that can be checked
 
 	/* open file and test for it being a png */
@@ -378,6 +379,7 @@ void Image::readPNG(const char* aFileName)
 				b++;
 		}
 	}
+#endif
 #endif //_WIN32
 
 }

@@ -76,9 +76,6 @@
     <ClInclude Include="src\targetver.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="src\stdafx.hpp">
-      <Filter>Headers</Filter>
-    </ClInclude>
     <ClInclude Include="src\CUDAStdAfx.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -249,6 +246,9 @@
     </ClInclude>
     <ClInclude Include="src\Test\TestAlgebra.h">
       <Filter>Test</Filter>
+    </ClInclude>
+    <ClInclude Include="src\stdafx.hpp">
+      <Filter>Headers</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
