@@ -74,8 +74,8 @@ typedef TLGridMemoryManager             t_MemoryManager;
 typedef TLGridSortBuilder<t_Primitive>  t_AccStructBuilder;
 typedef TwoLevelGrid                    t_AccStruct;
 #define Traverser_t                     TLGridTraverser
-float                                   sTopLevelDensity = 0.0625f;
-float                                   sLeafLevelDensity = 1.2f;
+float                                   sTopLevelDensity  =  0.0625f;//1.2f;// 0.0625f;
+float                                   sLeafLevelDensity =  2.2f;   //5.f;// 2.2f;
 #else
 const bool exact  = true; //true = exact triangle insertion, false = fast construction
 typedef UGridMemoryManager              t_MemoryManager;
@@ -304,4 +304,5 @@ void RTEngine::cleanup()
     sSimpleIntegratorReg.cleanup();
     sSimpleIntegratorRnd.cleanup();
     sPathTracer.cleanup();
+    
 }

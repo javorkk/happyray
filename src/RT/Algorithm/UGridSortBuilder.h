@@ -38,13 +38,13 @@
 #include "RT/Algorithm/UniformGridBuildKernels.h"
 
 #include "Utils/Scan.h"
-//#define CHAG_SORT
-#ifdef CHAG_SORT
+//#define CUB_SORT
+#ifdef CUB_SORT
 #include "Utils/Sort.h"
 #else
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
-#endif
+#endif 
 
 template<class tPrimitive, bool taExactTriangleInsertion = false>
 class UGridSortBuilder
@@ -183,21 +183,7 @@ public:
 
         dim3 blockUnsortedGrid(sNUM_WRITE_THREADS);
         dim3 gridUnsortedGrid (sNUM_WRITE_BLOCKS);
-#ifdef CHAG_SORT       
-        aMemoryManager.allocatePairsBufferPair(numPairs);
 
-        writePairs<tPrimitive, PrimitiveArray<tPrimitive>, taExactTriangleInsertion>
-            <<< gridUnsortedGrid, blockUnsortedGrid,
-            sizeof(uint)/* + sizeof(float3) * blockUnsortedGrid.x*/ >>>(
-            aPrimitiveArray,
-            aMemoryManager.pairsBuffer,
-            (uint)aPrimitiveArray.numPrimitives,
-            aMemoryManager.refCountsBuffer,
-            aMemoryManager.getResolution(),
-            aMemoryManager.bounds.vtx[0],
-            aMemoryManager.getCellSize(),
-            aMemoryManager.getCellSizeRCP());
-#else
         aMemoryManager.allocateKeyValueBuffers(numPairs);
         writeKeysAndValues<tPrimitive, PrimitiveArray<tPrimitive>, taExactTriangleInsertion>
             <<< gridUnsortedGrid, blockUnsortedGrid,
@@ -211,19 +197,17 @@ public:
             aMemoryManager.bounds.vtx[0],
             aMemoryManager.getCellSize(),
             aMemoryManager.getCellSizeRCP());
-#endif
+
         cudaEventRecord(mWritePairs, 0);
         cudaEventSynchronize(mWritePairs);
         MY_CUT_CHECK_ERROR("Writing primitive-cell pairs failed.\n");
 
-#ifdef CHAG_SORT 
-        const uint numCellsPlus1 = aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ;
-        uint numBits = 9u;
-        while (numCellsPlus1 >> numBits != 0u){numBits += 1u;}
-        numBits = cudastd::min(32u, numBits + 1u);
-
-        Sort radixSort;
-        radixSort(aMemoryManager.pairsBuffer, aMemoryManager.pairsPingBufferKeys, numPairs, numBits);
+#ifdef CUB_SORT 
+        aMemoryManager.allocateKeyValuePongBuffers(numPairs);
+        RadixSort radixSort;
+        radixSort(aMemoryManager.pairsPingBufferKeys, aMemoryManager.pairsPongBufferKeys,
+            aMemoryManager.pairsPingBufferValues, aMemoryManager.pairsPongBufferValues,
+            numPairs);
 #else
         thrust::device_ptr<unsigned int> dev_keys(aMemoryManager.pairsPingBufferKeys);
         thrust::device_ptr<unsigned int> dev_values(aMemoryManager.pairsPingBufferValues);
@@ -294,18 +278,7 @@ public:
 
         dim3 blockPrepRng(sNUM_CELL_SETUP_THREADS);
         dim3 gridPrepRng (sNUM_CELL_SETUP_BLOCKS);
-#ifdef CHAG_SORT
-        prepareCellRanges< sNUM_CELL_SETUP_THREADS >
-            <<< gridPrepRng, blockPrepRng, (2 + blockPrepRng.x) * sizeof(uint)>>>(
-            aMemoryManager.primitiveIndices,
-            (uint2*)aMemoryManager.pairsBuffer,
-            numPairs,
-            aMemoryManager.cellsPtrDevice,
-            static_cast<uint>(aMemoryManager.resX),
-            static_cast<uint>(aMemoryManager.resY),
-            static_cast<uint>(aMemoryManager.resZ)
-            );
-#else
+
         prepareCellRanges< sNUM_CELL_SETUP_THREADS >
             <<< gridPrepRng, blockPrepRng, (2 + blockPrepRng.x) * sizeof(uint)>>>(
             aMemoryManager.primitiveIndices,
@@ -317,7 +290,7 @@ public:
             static_cast<uint>(aMemoryManager.resY),
             static_cast<uint>(aMemoryManager.resZ)
             );
-#endif
+
         //////////////////////////////////////////////////////////////////////////
         cudaEventRecord(mEnd, 0);
         cudaEventSynchronize(mEnd);

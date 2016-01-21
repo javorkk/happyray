@@ -227,6 +227,14 @@ HOST void UGridMemoryManager::allocateKeyValueBuffers(const size_t aNumKeys)
     pairsPingBufferValuesSize = pairsPingBufferKeysSize;
 }
 
+HOST void UGridMemoryManager::allocateKeyValuePongBuffers(const size_t aNumKeys)
+{
+    MemoryManager::allocateDeviceArrayPair(
+        (void**)&pairsPongBufferKeys, (void**)&pairsPongBufferValues, aNumKeys * sizeof(uint),
+        (void**)&pairsPongBufferKeys, (void**)&pairsPongBufferValues, pairsPongBufferKeysSize);
+    pairsPongBufferValuesSize = pairsPongBufferKeysSize;
+}
+
 //////////////////////////////////////////////////////////////////////////
 //memory deallocation
 //////////////////////////////////////////////////////////////////////////
@@ -254,6 +262,7 @@ HOST void UGridMemoryManager::freePrimitiveIndicesBuffer()
         MY_CUDA_SAFE_CALL( cudaFreeHost(primitiveIndicesHost) );
         primitiveIndices = NULL;
         primitiveIndicesHost = NULL;
+
     }
 }
 
@@ -292,6 +301,16 @@ HOST void UGridMemoryManager::freeKeyValueBuffers()
         pairsPingBufferKeys = NULL;
         pairsPingBufferValues = NULL;
     }
+
+    if (pairsPongBufferKeysSize != 0u)
+    {
+        pairsPongBufferKeysSize = 0u;
+        pairsPongBufferValuesSize = 0u;
+        MY_CUDA_SAFE_CALL(cudaFree(pairsPongBufferKeys));
+        MY_CUDA_SAFE_CALL(cudaFree(pairsPongBufferValues));
+        pairsPongBufferKeys = NULL;
+        pairsPongBufferValues = NULL;
+    }
 }
 
 HOST void UGridMemoryManager::cleanup()
@@ -301,8 +320,10 @@ HOST void UGridMemoryManager::cleanup()
     oldResZ = 0;
     freeCellMemoryDevice();
 
-    if(cellArray != NULL)
-        MY_CUDA_SAFE_CALL( cudaFreeArray(cellArray) );
+    if (cellArray != NULL)
+    {
+        MY_CUDA_SAFE_CALL(cudaFreeArray(cellArray));
+    }
 
     freeCellMemoryDevice();
     freeCellMemoryHost();

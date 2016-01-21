@@ -62,9 +62,15 @@ public:
     uint* pairsBuffer;
     uint* pairsPingBufferKeys;
     uint* pairsPingBufferValues;
+    uint* pairsPongBufferKeys;
+    uint* pairsPongBufferValues;
+
     size_t pairsBufferSize;
     size_t pairsPingBufferKeysSize;
     size_t pairsPingBufferValuesSize;
+    size_t pairsPongBufferKeysSize;
+    size_t pairsPongBufferValuesSize;
+
 
 
     UGridMemoryManager()
@@ -72,10 +78,10 @@ public:
         cpuCells(NULL), gpuCells(NULL),
         cellArray(NULL), primitiveIndices(NULL),
         primitiveIndicesHost(NULL),primitiveIndicesSize(0u), refCountsBuffer(NULL), refCountsBufferHost(NULL),
-        refCountsBufferSize(0u),pairsBuffer(NULL), pairsPingBufferKeys(NULL),
-        pairsPingBufferValues(NULL), pairsBufferSize(0u), pairsPingBufferKeysSize(0u),
-        pairsPingBufferValuesSize(0u)
-
+        refCountsBufferSize(0u), pairsBuffer(NULL), pairsPingBufferKeys(NULL), pairsPongBufferKeys(NULL),
+        pairsPingBufferValues(NULL), pairsPongBufferValues(NULL), pairsBufferSize(0u),
+        pairsPingBufferKeysSize(0u), pairsPingBufferValuesSize(0u),
+        pairsPongBufferKeysSize(0u), pairsPongBufferValuesSize(0u)
     {
          cellsPtrDevice.ptr = NULL;
          cellsPtrHost.ptr = NULL;
@@ -175,6 +181,8 @@ public:
     HOST void allocatePairsBufferPair(const size_t aNumPairs);
 
     HOST void allocateKeyValueBuffers(const size_t aNumKeys);
+
+    HOST void allocateKeyValuePongBuffers(const size_t aNumKeys);
 
 
     //////////////////////////////////////////////////////////////////////////

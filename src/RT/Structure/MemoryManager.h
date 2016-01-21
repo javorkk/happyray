@@ -29,11 +29,11 @@
 #define MEMORYMANAGER_H_INCLUDED_2F89BBF8_5464_4327_8C50_C4D69372B62B
 
 #include "CUDAStdAfx.h"
-
+#include "Utils/CUDAUtil.h"
 
 class MemoryManager
 {
-    static const size_t PADDING_FOR_ALIGNMENT = 32*sizeof(size_t);
+
 public:
     HOST static void allocateMappedDeviceArray(void** aDevicePtr, void** aHostPtr, size_t aSize,
         void** aOldDevicePtr, void** aOldHostPtr, size_t& aOldSize)
@@ -41,20 +41,21 @@ public:
 #if HAPPYRAY__CUDA_ARCH__ >= 120
         if (aOldSize < aSize)
         {
+            //cudastd::logger::out << "Allocating mapped device array, old size: " << aOldSize 
+            //    << " new size: " << aSize << "\n";
+
             MY_CUDA_SAFE_CALL( cudaFreeHost(*aOldHostPtr) );
             aOldSize = aSize;
             MY_CUDA_SAFE_CALL( cudaHostAlloc(aOldHostPtr,aSize, cudaHostAllocMapped) );
+            MY_CUDA_SAFE_CALL(cudaHostGetDevicePointer(aOldDevicePtr, *aOldHostPtr, 0));
         }
 
-        MY_CUDA_SAFE_CALL(cudaHostGetDevicePointer(aOldDevicePtr, *aOldHostPtr, 0));
 
         *aDevicePtr = *aOldDevicePtr;
         *aHostPtr = *aOldHostPtr;
 #else
         allocateHostDeviceArrayPair(aDevicePtr, aHostPtr, aSize,
         aOldDevicePtr, aOldHostPtr, aOldSize);
-
-
 #endif
 
     }
@@ -66,6 +67,7 @@ public:
 #else
        freeHostDeviceArrayPair(aHostPtr, aDevicePtr);
 #endif
+       //cudastd::logger::out << "Freed mapped device array\n";
     }
 
     HOST static void allocateHostDeviceArrayPair(void** aDevicePtr, void** aHostPtr, size_t aSize,
@@ -73,11 +75,15 @@ public:
     {
         if (aOldSize < aSize)
         {
+            //cudastd::logger::out << "Allocating host/device array pair, old size: " << aOldSize
+            //    << " new size: " << aSize << "\n";
+
             MY_CUDA_SAFE_CALL( cudaFreeHost(*aOldHostPtr) );
             MY_CUDA_SAFE_CALL( cudaFree(*aOldDevicePtr) );
             aOldSize = aSize;
             MY_CUDA_SAFE_CALL( cudaHostAlloc(aOldHostPtr,aSize, cudaHostAllocDefault) );
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldDevicePtr,aSize) );
+
         }
 
         *aDevicePtr = *aOldDevicePtr;
@@ -91,6 +97,8 @@ public:
         aHostPtr = NULL;
         MY_CUDA_SAFE_CALL( cudaFree(aDevicePtr) );
         aDevicePtr = NULL;
+
+        //cudastd::logger::out << "Freed host/device array pair\n";
     }
 
     HOST static void allocateDeviceArray(void** aPtr, size_t aSize,
@@ -98,9 +106,13 @@ public:
     {
         if (aOldSize < aSize)
         {
-            //MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr) );
+            //cudastd::logger::out << "Allocating device array, old size: " << aOldSize
+            //    << " new size: " << aSize << "\n";
+
+            MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr) );
             aOldSize = aSize;
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr, aSize));
+
         }
 
         *aPtr = *aOldPtr;
@@ -109,13 +121,17 @@ public:
     HOST static void allocateDeviceArrayPair(void** aPtr1, void** aPtr2,
         size_t aSize, void** aOldPtr1, void** aOldPtr2, size_t& aOldSize)
     {
-        if (aOldSize < aSize + PADDING_FOR_ALIGNMENT)
+        if (aOldSize < aSize)
         {
+            //cudastd::logger::out << "Allocating device array pair, old size: " << aOldSize
+            //    << " new size: " << aSize << "\n";
+
             MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr1) );
             MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr2) );
-            aOldSize = aSize + PADDING_FOR_ALIGNMENT;
+            aOldSize = aSize;
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr1, aOldSize));
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr2, aOldSize));
+
         }
 
         *aPtr1 = *aOldPtr1;
@@ -128,22 +144,22 @@ public:
         void** aOldPtr1, void** aOldPtr2, void** aOldPtr3,
         size_t& aOldSize1,size_t& aOldSize2,size_t& aOldSize3)
     {
-        if (aOldSize1 < aSize1 + PADDING_FOR_ALIGNMENT)
+        if (aOldSize1 < aSize1 )
         {
             MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr1) );
-            aOldSize1 = aSize1 + PADDING_FOR_ALIGNMENT;
+            aOldSize1 = aSize1;
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr1, aOldSize1));
         }
-        if (aOldSize2 < aSize2 + PADDING_FOR_ALIGNMENT)
+        if (aOldSize2 < aSize2)
         {
             MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr2) );
-            aOldSize2 = aSize2 + PADDING_FOR_ALIGNMENT;
+            aOldSize2 = aSize2;
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr2, aOldSize2));
         }
-        if (aOldSize3 < aSize3 + PADDING_FOR_ALIGNMENT)
+        if (aOldSize3 < aSize3)
         {
             MY_CUDA_SAFE_CALL( cudaFree(*aOldPtr3) );
-            aOldSize3 = aSize3 + PADDING_FOR_ALIGNMENT;
+            aOldSize3 = aSize3;
             MY_CUDA_SAFE_CALL( cudaMalloc(aOldPtr3, aOldSize3));
         }
 

@@ -204,6 +204,13 @@ HOST void TLGridMemoryManager::allocateTopLevelKeyValueBuffers(const size_t aNum
         (void**)&topLevelPairsPingBufferKeys, (void**)&topLevelPairsPingBufferValues, topLevelPairsPingBufferKeysSize);
     topLevelPairsPingBufferValuesSize = topLevelPairsPingBufferKeysSize;
 }
+HOST void TLGridMemoryManager::allocateTopLevelKeyValuePongBuffers(const size_t aNumKeys)
+{
+    MemoryManager::allocateDeviceArrayPair(
+        (void**)&topLevelPairsPongBufferKeys, (void**)&topLevelPairsPongBufferValues, aNumKeys * sizeof(uint),
+        (void**)&topLevelPairsPongBufferKeys, (void**)&topLevelPairsPongBufferValues, topLevelPairsPongBufferKeysSize);
+    topLevelPairsPongBufferValuesSize = topLevelPairsPongBufferKeysSize;
+}
 
 HOST void TLGridMemoryManager::allocateLeafLevelKeyValueBuffers(const size_t aNumKeys)
 {
@@ -211,6 +218,15 @@ HOST void TLGridMemoryManager::allocateLeafLevelKeyValueBuffers(const size_t aNu
         (void**)&leafLevelPairsPingBufferKeys, (void**)&leafLevelPairsPingBufferValues, aNumKeys * sizeof(uint),
         (void**)&leafLevelPairsPingBufferKeys, (void**)&leafLevelPairsPingBufferValues, leafLevelPairsPingBufferKeysSize);
     leafLevelPairsPingBufferValuesSize = leafLevelPairsPingBufferKeysSize;
+
+}
+
+HOST void TLGridMemoryManager::allocateLeafLevelKeyValuePongBuffers(const size_t aNumKeys)
+{
+    MemoryManager::allocateDeviceArrayPair(
+        (void**)&leafLevelPairsPongBufferKeys, (void**)&leafLevelPairsPongBufferValues, aNumKeys * sizeof(uint),
+        (void**)&leafLevelPairsPongBufferKeys, (void**)&leafLevelPairsPongBufferValues, leafLevelPairsPongBufferKeysSize);
+    leafLevelPairsPongBufferValuesSize = leafLevelPairsPongBufferKeysSize;
 
 }
 
@@ -311,7 +327,15 @@ HOST void TLGridMemoryManager::freeTopLevelKeyValueBuffers()
         topLevelPairsPingBufferKeys = NULL;
         topLevelPairsPingBufferValues = NULL;
     }
-
+    if (topLevelPairsPongBufferKeysSize != 0u)
+    {
+        topLevelPairsPongBufferKeysSize = 0u;
+        topLevelPairsPongBufferValuesSize = 0u;
+        MY_CUDA_SAFE_CALL(cudaFree(topLevelPairsPongBufferKeys));
+        MY_CUDA_SAFE_CALL(cudaFree(topLevelPairsPongBufferValues));
+        topLevelPairsPongBufferKeys = NULL;
+        topLevelPairsPongBufferValues = NULL;
+    }
 }
 
 HOST void TLGridMemoryManager::freeeafLevelKeyValueBuffers()
@@ -324,6 +348,15 @@ HOST void TLGridMemoryManager::freeeafLevelKeyValueBuffers()
         MY_CUDA_SAFE_CALL(cudaFree(leafLevelPairsPingBufferValues));
         leafLevelPairsPingBufferKeys = NULL;
         leafLevelPairsPingBufferValues = NULL;
+    }
+    if (leafLevelPairsPongBufferKeysSize != 0u)
+    {
+        leafLevelPairsPongBufferKeysSize = 0u;
+        leafLevelPairsPongBufferValuesSize = 0u;
+        MY_CUDA_SAFE_CALL(cudaFree(leafLevelPairsPongBufferKeys));
+        MY_CUDA_SAFE_CALL(cudaFree(leafLevelPairsPongBufferValues));
+        leafLevelPairsPongBufferKeys = NULL;
+        leafLevelPairsPongBufferValues = NULL;
     }
 
 }

@@ -23,19 +23,9 @@
 
 #include "Scan.h"
 
-//#if HAPPYRAY__CUDA_ARCH__ < 200
-//#   define USE_CHAG_PP_SCAN
-//#endif
-
-#ifdef USE_CHAG_PP_SCAN
-#   include "chag/pp/prefix.cuh"
-#else
-#   include <thrust/device_ptr.h>
-#   include <thrust/scan.h>
-//#   include <thrust/system/cuda/detail/scan.h>
-#endif
-
-
+#include <thrust/device_ptr.h>
+#include <thrust/scan.h>
+//# include <thrust/system/cuda/detail/scan.h>
 
 
 void ExclusiveScan::operator()(
@@ -43,12 +33,8 @@ void ExclusiveScan::operator()(
         const uint aNumElements
         ) const
 {
-#ifdef USE_CHAG_PP_SCAN
-    chag::pp::prefix(aIn, (aIn + aNumElements), aIn, (uint*)0);
-#else
-    thrust::device_ptr<unsigned int> dev_ptr(aIn);
+    thrust::device_ptr<unsigned int> dev_ptr = thrust::device_pointer_cast(aIn);
     thrust::exclusive_scan(dev_ptr, (dev_ptr + aNumElements), dev_ptr);
-#endif
 }
 
 void InclusiveScan::operator()(
@@ -56,13 +42,9 @@ void InclusiveScan::operator()(
                        const uint aNumElements
                        ) const
 {
-#ifdef USE_CHAG_PP_SCAN
-    chag::pp::prefix_inclusive(aIn, (aIn + aNumElements), aIn, (uint*)0);
-#else
-    thrust::device_ptr<unsigned int> dev_ptr(aIn);
-    thrust::inclusive_scan(dev_ptr, (dev_ptr + aNumElements), dev_ptr);
-#endif
 
+    thrust::device_ptr<unsigned int> dev_ptr = thrust::device_pointer_cast(aIn);
+    thrust::inclusive_scan(dev_ptr, (dev_ptr + aNumElements), dev_ptr);
 }
 
 void InclusiveFloatScan::operator()(
@@ -70,13 +52,8 @@ void InclusiveFloatScan::operator()(
                        const uint aNumElements
                        ) const
 {
-#ifdef USE_CHAG_PP_SCAN
-    chag::pp::prefix_inclusive(aIn, (aIn + aNumElements), aIn, (float*)0);
-#else
-    thrust::device_ptr<float> dev_ptr(aIn);
+    thrust::device_ptr<float> dev_ptr = thrust::device_pointer_cast(aIn);
     thrust::inclusive_scan(dev_ptr, (dev_ptr + aNumElements), dev_ptr);
-#endif
-
 }
 
 #undef USE_CHAG_PP_SCAN

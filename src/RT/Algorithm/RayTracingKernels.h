@@ -33,7 +33,7 @@
 
 #define RENDERTHREADSX  32
 #define RENDERTHREADSY  4
-#define RENDERBLOCKSX   60
+#define RENDERBLOCKSX   240
 #define RENDERBLOCKSY   1
 #define BATCHSIZE       96
 

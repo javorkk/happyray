@@ -66,15 +66,24 @@ public:
     uint* topLevelPairsBuffer;
     uint* topLevelPairsPingBufferKeys;
     uint* topLevelPairsPingBufferValues;
+    uint* topLevelPairsPongBufferKeys;
+    uint* topLevelPairsPongBufferValues;
     size_t topLevelPairsBufferSize;
     size_t topLevelPairsPingBufferKeysSize;
     size_t topLevelPairsPingBufferValuesSize;
+    size_t topLevelPairsPongBufferKeysSize;
+    size_t topLevelPairsPongBufferValuesSize;
     uint* leafLevelPairsBuffer;
     uint* leafLevelPairsPingBufferKeys;
     uint* leafLevelPairsPingBufferValues;
+    uint* leafLevelPairsPongBufferKeys;
+    uint* leafLevelPairsPongBufferValues;
     size_t leafLevelPairsBufferSize;
     size_t leafLevelPairsPingBufferKeysSize;
     size_t leafLevelPairsPingBufferValuesSize;
+    size_t leafLevelPairsPongBufferKeysSize;
+    size_t leafLevelPairsPongBufferValuesSize;
+
 
 
     TLGridMemoryManager()
@@ -84,9 +93,13 @@ public:
         refCountsBufferSize(0u),cellCountsBuffer(NULL),cellCountsBufferHost(NULL),
         cellCountsBufferSize(0u),
         topLevelPairsBuffer(NULL), topLevelPairsPingBufferKeys(NULL), topLevelPairsPingBufferValues(NULL),
+        topLevelPairsPongBufferKeys(NULL), topLevelPairsPongBufferValues(NULL),
         topLevelPairsBufferSize(0u), topLevelPairsPingBufferKeysSize(0u), topLevelPairsPingBufferValuesSize(0u),
+        topLevelPairsPongBufferKeysSize(0u), topLevelPairsPongBufferValuesSize(0u),
         leafLevelPairsBuffer(NULL), leafLevelPairsPingBufferKeys(NULL), leafLevelPairsPingBufferValues(NULL),
-        leafLevelPairsBufferSize(0u), leafLevelPairsPingBufferKeysSize(0u), leafLevelPairsPingBufferValuesSize(0u)
+        leafLevelPairsPongBufferKeys(NULL), leafLevelPairsPongBufferValues(NULL),
+        leafLevelPairsBufferSize(0u), leafLevelPairsPingBufferKeysSize(0u), leafLevelPairsPingBufferValuesSize(0u),
+        leafLevelPairsPongBufferKeysSize(0u), leafLevelPairsPongBufferValuesSize(0u)
     {
         cellsPtrDevice.ptr = NULL;
         cellsPtrHost.ptr = NULL;
@@ -172,9 +185,13 @@ public:
 
     HOST void allocateTopLevelPairsBufferPair(const size_t aNumPairs);
     HOST void allocateTopLevelKeyValueBuffers(const size_t aNumKeys);
+    HOST void allocateTopLevelKeyValuePongBuffers(const size_t aNumKeys);
+
 
     HOST void allocateLeafLevelPairsBufferPair(const size_t aNumPairs);
     HOST void allocateLeafLevelKeyValueBuffers(const size_t aNumKeys);
+    HOST void allocateLeafLevelKeyValuePongBuffers(const size_t aNumKeys);
+
 
     //////////////////////////////////////////////////////////////////////////
     //memory deallocation
@@ -193,6 +210,8 @@ public:
     HOST void freeCellCountsBuffer();
     HOST void freeTopLevelPairsBufferPair();
     HOST void freeTopLevelKeyValueBuffers();
+    HOST void freeTopLevelKeyValuePongBuffers();
+
     HOST void freeLeafLevelPairsBufferPair();
     HOST void freeeafLevelKeyValueBuffers();
 

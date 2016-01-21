@@ -30,38 +30,24 @@
 
 #include "../CUDAStdAfx.h"
 
-class Sort
+#include <cub/util_allocator.cuh>
+
+class RadixSort
 {
+    cub::CachingDeviceAllocator  mAllocator;  // Caching allocator for device memory
 public:
-    template< unsigned taBit, typename T >
-    struct BitUnsetForPairs
-    {
-        HOST DEVICE bool operator () ( T aPair ) const
-        {
-            return !(aPair.x & (1u << taBit));
-        }
-    };
 
-    struct PairsCompare
-    {
-        HOST DEVICE bool operator () (uint2 aPair1, uint2 aPair2) const
-        {
-            return aPair1.x < aPair2.x;
-        }
+    void operator()(
+        uint *&aKeysPing,
+        uint *&aKeysPong,
+        uint *&aValuesPing,
+        uint *&aValuesPong,
+        uint aNumElements
+        );
 
-    };
-
-    void operator()(uint *&pData0, uint *&pData1, uint aNumElements,
-        uint aNumBits
-        ) const;
-
-	Sort();
-	~Sort();
-
-private:
-	void* counts;
-	void* offsets;
+    RadixSort() : mAllocator(false){}
 };
+
 
 
 #endif // SORT_H_INCLUDED_F2BF97B8_CD57_47F1_BFAD_26D1687E3917
