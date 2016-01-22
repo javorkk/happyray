@@ -23,9 +23,16 @@
 
 #include "Scan.h"
 
-#include <thrust/device_ptr.h>
-#include <thrust/scan.h>
-//# include <thrust/system/cuda/detail/scan.h>
+#define CUB_SCAN
+#ifndef CUB_SCAN
+#   include <thrust/device_ptr.h>
+#   include <thrust/scan.h>
+#else
+#   include <cub/util_allocator.cuh>
+#   include <cub/device/device_scan.cuh>
+
+cub::CachingDeviceAllocator  gScanAllocator(true);
+#endif
 
 
 void ExclusiveScan::operator()(
@@ -33,8 +40,20 @@ void ExclusiveScan::operator()(
         const uint aNumElements
         ) const
 {
+#ifndef CUB_SCAN
     thrust::device_ptr<unsigned int> dev_ptr = thrust::device_pointer_cast(aIn);
     thrust::exclusive_scan(dev_ptr, (dev_ptr + aNumElements), dev_ptr);
+#else
+    void            *d_temp_storage = NULL;
+    size_t          temp_storage_bytes = 0;
+    //Initialize
+    CubDebugExit(cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, aIn, aIn, aNumElements));
+    CubDebugExit(gScanAllocator.DeviceAllocate(&d_temp_storage, temp_storage_bytes));
+    //Scan
+    CubDebugExit(cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, aIn, aIn, aNumElements));
+    //Cleanup
+    if (d_temp_storage) CubDebugExit(gScanAllocator.DeviceFree(d_temp_storage));
+#endif
 }
 
 void InclusiveScan::operator()(
@@ -42,9 +61,20 @@ void InclusiveScan::operator()(
                        const uint aNumElements
                        ) const
 {
-
+#ifndef CUB_SCAN
     thrust::device_ptr<unsigned int> dev_ptr = thrust::device_pointer_cast(aIn);
     thrust::inclusive_scan(dev_ptr, (dev_ptr + aNumElements), dev_ptr);
+#else
+    void            *d_temp_storage = NULL;
+    size_t          temp_storage_bytes = 0;
+    //Initialize
+    CubDebugExit(cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, aIn, aIn, aNumElements));
+    CubDebugExit(gScanAllocator.DeviceAllocate(&d_temp_storage, temp_storage_bytes));
+    //Scan
+    CubDebugExit(cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, aIn, aIn, aNumElements));
+    //Cleanup
+    if (d_temp_storage) CubDebugExit(gScanAllocator.DeviceFree(d_temp_storage));
+#endif
 }
 
 void InclusiveFloatScan::operator()(
@@ -52,8 +82,22 @@ void InclusiveFloatScan::operator()(
                        const uint aNumElements
                        ) const
 {
+#ifndef CUB_SCAN
     thrust::device_ptr<float> dev_ptr = thrust::device_pointer_cast(aIn);
     thrust::inclusive_scan(dev_ptr, (dev_ptr + aNumElements), dev_ptr);
+#else
+    void            *d_temp_storage = NULL;
+    size_t          temp_storage_bytes = 0;
+    //Initialize
+    CubDebugExit(cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, aIn, aIn, aNumElements));
+    CubDebugExit(gScanAllocator.DeviceAllocate(&d_temp_storage, temp_storage_bytes));
+    //Scan
+    CubDebugExit(cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, aIn, aIn, aNumElements));
+    //Cleanup
+    if (d_temp_storage) CubDebugExit(gScanAllocator.DeviceFree(d_temp_storage));
+#endif
 }
 
-#undef USE_CHAG_PP_SCAN
+#ifdef CUB_SCAN
+#undef CUB_SCAN
+#endif

@@ -22,7 +22,11 @@
 /****************************************************************************/
 
 #include "Sort.h"
+
+#include <cub/util_allocator.cuh>
 #include <cub/device/device_radix_sort.cuh>
+
+cub::CachingDeviceAllocator  gSortAllocator(true);  // Caching allocator for device memory
 
 void RadixSort::operator()(
     uint *&aKeysPing,
@@ -40,11 +44,11 @@ void RadixSort::operator()(
 
     //Initialize
     CubDebugExit(cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys, d_values, aNumElements));
-    CubDebugExit(mAllocator.DeviceAllocate(&d_temp_storage, temp_storage_bytes));
+    CubDebugExit(gSortAllocator.DeviceAllocate(&d_temp_storage, temp_storage_bytes));
     //Sort
     CubDebugExit(cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys, d_values, aNumElements));
     //Cleanup
-    if (d_temp_storage) CubDebugExit(mAllocator.DeviceFree(d_temp_storage));
+    if (d_temp_storage) CubDebugExit(gSortAllocator.DeviceFree(d_temp_storage));
 
 }
 

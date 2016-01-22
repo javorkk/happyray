@@ -30,11 +30,9 @@
 
 #include "../CUDAStdAfx.h"
 
-#include <cub/util_allocator.cuh>
-
 class RadixSort
 {
-    cub::CachingDeviceAllocator  mAllocator;  // Caching allocator for device memory
+    
 public:
 
     void operator()(
@@ -44,8 +42,6 @@ public:
         uint *&aValuesPong,
         uint aNumElements
         );
-
-    RadixSort() : mAllocator(false){}
 };
 
 

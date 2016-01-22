@@ -390,4 +390,8 @@ public:
     }
 };
 
+#ifdef CUB_SORT
+#undef CUB_SORT
+#endif
+
 #endif // UGRIDSORTBUILDER_H_INCLUDED_BAE12F51_83A9_47AC_9A00_C1EBFC7062BC

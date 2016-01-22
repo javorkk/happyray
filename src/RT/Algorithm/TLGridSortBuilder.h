@@ -433,19 +433,19 @@ public:
         MY_CUT_CHECK_ERROR("Setting up leaf cells and primitive array failed.\n");
         //////////////////////////////////////////////////////////////////////////
 
-        //cudastd::logger::out << "Top  level cells:     " << aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ << "\n";
-        //cudastd::logger::out << "Top  level refs:      " << numTopLevelPairs << "\n";
-        //cudastd::logger::out << "Leaf level cells:     " << numLeafCells << "\n";
-        //cudastd::logger::out << "Leaf level refs:      " << numLeafLevelPairs << "\n";
-        //cudastd::logger::out << "Allocated memory:     " << (float)aMemoryManager.getMemorySize() / 1048576.f << " MB\n";
-        //const float memCells = (float)(aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ + aMemoryManager.leavesSize) / 1048576.f;
-        //cudastd::logger::out << "Memory for cells:     " << memCells << " MB\n";
-        //const float memRefs = (float)(numLeafLevelPairs * sizeof(uint)) / 1048576.f;
-        //cudastd::logger::out << "Memory for refs:      " << memRefs << " MB\n";
-        //cudastd::logger::out << "Memory total:         " << memCells + memRefs << " MB\n";
+        cudastd::logger::out << "Top  level cells:     " << aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ << "\n";
+        cudastd::logger::out << "Top  level refs:      " << numTopLevelPairs << "\n";
+        cudastd::logger::out << "Leaf level cells:     " << numLeafCells << "\n";
+        cudastd::logger::out << "Leaf level refs:      " << numLeafLevelPairs << "\n";
+        cudastd::logger::out << "Allocated memory:     " << (float)aMemoryManager.getMemorySize() / 1048576.f << " MB\n";
+        const float memCells = (float)(aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ + aMemoryManager.leavesSize) / 1048576.f;
+        cudastd::logger::out << "Memory for cells:     " << memCells << " MB\n";
+        const float memRefs = (float)(numLeafLevelPairs * sizeof(uint)) / 1048576.f;
+        cudastd::logger::out << "Memory for refs:      " << memRefs << " MB\n";
+        cudastd::logger::out << "Memory total:         " << memCells + memRefs << " MB\n";
 
 
-        //outputStats();
+        outputStats();
         cleanup();
 
 
@@ -489,5 +489,9 @@ public:
         //////////////////////////////////////////////////////////////////////////
     }
 };
+
+#ifdef CUB_SORT
+#undef CUB_SORT
+#endif
 
 #endif // TLGRIDSORTBUILDER_H_085A14AE_437D_424C_BBA8_417665305A48
