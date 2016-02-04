@@ -138,7 +138,7 @@ class SimpleIntegrator
 {
     int* mGlobalMemoryPtr;
     size_t mGlobalMemorySize;
-    cudaEvent_t mTrace, mShade;
+    cudaEvent_t mStart, mTrace, mShade;
 public:
     typedef tPrimaryRayGenerator            t_PrimaryRayGenerator;
     typedef SimpleRayBuffer                 t_RayBuffer;
@@ -184,7 +184,11 @@ public:
         rayBuffer.setMemPtr(mGlobalMemoryPtr + 1);
         //MY_CUDA_SAFE_CALL( cudaMemcpyToSymbol("dcGrid", &aAccStruct, sizeof(UniformGrid)) );
 
+        cudaEventCreate(&mStart);
         cudaEventCreate(&mTrace);
+
+        cudaEventRecord(mStart, 0);
+        cudaEventSynchronize(mStart);
 
         trace<tPrimitive, tAccelerationStructure, t_PrimaryRayGenerator, t_RayBuffer, tTraverser, tPrimaryIntersector, false >
             <<< blockGridTrace, threadBlockTrace, sharedMemoryTrace>>>(
@@ -198,6 +202,14 @@ public:
         cudaEventRecord(mTrace, 0);
         cudaEventSynchronize(mTrace);
         MY_CUT_CHECK_ERROR("Tracing primary rays failed!\n");
+
+        //float elapsedTime;
+        //cudastd::logger::floatPrecision(4);
+        //cudaEventElapsedTime(&elapsedTime, mStart, mTrace);
+        //cudastd::logger::out << "Trace time:      " << elapsedTime << "ms\n";
+        //cudastd::logger::out << "Mrays/s:      " << (float)numRays / (1000.f * elapsedTime) << "ms\n";
+
+        cudaEventDestroy(mStart);
         cudaEventDestroy(mTrace);
 
     }
@@ -261,7 +273,6 @@ public:
             mGlobalMemorySize = 0u;
             mGlobalMemoryPtr = NULL;
         }
-
     }
 
 };

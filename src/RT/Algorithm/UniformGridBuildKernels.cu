@@ -147,6 +147,31 @@ GLOBAL void writePairs<Triangle, PrimitiveArray<Triangle>, true>(
                     const float3 e2 = v0 - v2;
 
                     bool passedAllTests = true;
+
+                    //////////////////////////////////////////////////////////////////////////
+                    //Plane/box overlap test
+                    float3 vmin, vmax;
+                    vmin.x = (normal.x > 0.f) ? -gridCellSizeHALF.x : gridCellSizeHALF.x;
+                    vmin.y = (normal.y > 0.f) ? -gridCellSizeHALF.y : gridCellSizeHALF.y;
+                    vmin.z = (normal.z > 0.f) ? -gridCellSizeHALF.z : gridCellSizeHALF.z;
+
+                    vmax = -vmin;
+                    vmax = vmax - v0;
+                    vmin = vmin - v0;
+
+                    passedAllTests = passedAllTests && dot(normal, vmin) <= 0.f && dot(normal, vmax) > 0.f;
+
+                    if (!passedAllTests)
+                    {
+                        oPairs[2 * nextSlot] =
+                            (uint)(aGridRes.x * aGridRes.y * aGridRes.z);
+
+                        oPairs[2 * nextSlot + 1] =
+                            triangleId;
+
+                        continue;
+                    }
+                    //////////////////////////////////////////////////////////////////////////
                     //9 tests for separating axis
                     float3 fe;
                     fe.x = fabsf(e0.x);
@@ -173,37 +198,23 @@ GLOBAL void writePairs<Triangle, PrimitiveArray<Triangle>, true>(
                     passedAllTests = passedAllTests && AXISTEST_Y1(e2, fe, v0, v1, v2, gridCellSizeHALF);
                     passedAllTests = passedAllTests && AXISTEST_Z12(e2, fe, v0, v1, v2, gridCellSizeHALF);
 
-                    //////////////////////////////////////////////////////////////////////////
-                    //Plane/box overlap test
-                    float3 vmin, vmax;
-                    vmin.x = (normal.x > 0.f) ? -gridCellSizeHALF.x : gridCellSizeHALF.x;
-                    vmin.y = (normal.y > 0.f) ? -gridCellSizeHALF.y : gridCellSizeHALF.y;
-                    vmin.z = (normal.z > 0.f) ? -gridCellSizeHALF.z : gridCellSizeHALF.z;
-
-                    vmax = -vmin;
-                    vmax = vmax - v0;
-                    vmin = vmin - v0;
-
-                    passedAllTests = passedAllTests && dot(normal, vmin) <= 0.f && dot(normal, vmax) > 0.f;
-                    //////////////////////////////////////////////////////////////////////////
-
-                    if (passedAllTests)
+                    if (!passedAllTests)
                     {
-                        oPairs[2 * nextSlot] = x +
-                            y * (uint)aGridRes.x +
-                            z * (uint)(aGridRes.x * aGridRes.y);
+                        oPairs[2 * nextSlot] =
+                            (uint)(aGridRes.x * aGridRes.y * aGridRes.z);
 
                         oPairs[2 * nextSlot + 1] =
                             triangleId;
-                    }
-                    else
-                    {
-                        oPairs[2 * nextSlot] = 
-                            (uint)(aGridRes.x * aGridRes.y * aGridRes.z);
 
-                        oPairs[2 * nextSlot + 1] = 
-                            triangleId;
+                        continue;
                     }
+
+                    oPairs[2 * nextSlot] = x +
+                        y * (uint)aGridRes.x +
+                        z * (uint)(aGridRes.x * aGridRes.y);
+
+                    oPairs[2 * nextSlot + 1] = triangleId;
+
                 }//end for z
             }//end for y
         }//end for x
@@ -309,6 +320,20 @@ GLOBAL void writeKeysAndValues<Triangle, PrimitiveArray<Triangle>, true>(
                     const float3 e2 = v0 - v2;
 
                     bool passedAllTests = true;
+                    //////////////////////////////////////////////////////////////////////////
+                    //Plane/box overlap test
+                    float3 vmin, vmax;
+                    vmin.x = (normal.x > 0.f) ? -gridCellSizeHALF.x : gridCellSizeHALF.x;
+                    vmin.y = (normal.y > 0.f) ? -gridCellSizeHALF.y : gridCellSizeHALF.y;
+                    vmin.z = (normal.z > 0.f) ? -gridCellSizeHALF.z : gridCellSizeHALF.z;
+
+                    vmax = -vmin;
+                    vmax = vmax - v0;
+                    vmin = vmin - v0;
+
+                    passedAllTests = passedAllTests && dot(normal, vmin) <= 0.f && dot(normal, vmax) > 0.f;
+                    //Note: early exit here makes the code slower (CUDA 7.5, GTX 970)
+                    //////////////////////////////////////////////////////////////////////////
                     //9 tests for separating axis
                     float3 fe;
                     fe.x = fabsf(e0.x);
@@ -334,38 +359,23 @@ GLOBAL void writeKeysAndValues<Triangle, PrimitiveArray<Triangle>, true>(
                     passedAllTests = passedAllTests && AXISTEST_X2(e2, fe, v0, v1, v2, gridCellSizeHALF);
                     passedAllTests = passedAllTests && AXISTEST_Y1(e2, fe, v0, v1, v2, gridCellSizeHALF);
                     passedAllTests = passedAllTests && AXISTEST_Z12(e2, fe, v0, v1, v2, gridCellSizeHALF);
-
-                    //////////////////////////////////////////////////////////////////////////
-                    //Plane/box overlap test
-                    float3 vmin, vmax;
-                    vmin.x = (normal.x > 0.f) ? -gridCellSizeHALF.x : gridCellSizeHALF.x;
-                    vmin.y = (normal.y > 0.f) ? -gridCellSizeHALF.y : gridCellSizeHALF.y;
-                    vmin.z = (normal.z > 0.f) ? -gridCellSizeHALF.z : gridCellSizeHALF.z;
-
-                    vmax = -vmin;
-                    vmax = vmax - v0;
-                    vmin = vmin - v0;
-
-                    passedAllTests = passedAllTests && dot(normal, vmin) <= 0.f && dot(normal, vmax) > 0.f;
-                    //////////////////////////////////////////////////////////////////////////
-
-                    if (passedAllTests)
+                     
+                    if (!passedAllTests)
                     {
-                        oKeys[nextSlot] = x +
-                            y * (uint)aGridRes.x +
-                            z * (uint)(aGridRes.x * aGridRes.y);
+                        oKeys[nextSlot] =
+                            (uint)(aGridRes.x * aGridRes.y * aGridRes.z);
 
                         oValues[nextSlot] =
                             triangleId;
+                        continue;
                     }
-                    else
-                    {
-                        oKeys[nextSlot] = 
-                            (uint)(aGridRes.x * aGridRes.y * aGridRes.z);
 
-                        oValues[nextSlot] = 
-                            triangleId;
-                    }
+                    oKeys[nextSlot] = x +
+                        y * (uint)aGridRes.x +
+                        z * (uint)(aGridRes.x * aGridRes.y);
+
+                    oValues[nextSlot] = triangleId;
+
                 }//end for z
             }//end for y
         }//end for x

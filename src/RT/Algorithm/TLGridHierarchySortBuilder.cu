@@ -800,13 +800,11 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
         //leaf level test
         //////////////////////////////////////////////////////////////////////////
         uint* scannedPrimitiveCounts = (uint*)malloc((aNumUniqueInstances + 1)* sizeof(uint));
-        memcpy_s(scannedPrimitiveCounts, (aNumUniqueInstances + 1)* sizeof(uint), aPrimitiveCounts, aNumUniqueInstances * sizeof(uint));
         uint sum = 0;
         for (uint i = 0; i < aNumUniqueInstances; ++i)
         {
-            uint oldsum = sum;
-            sum += scannedPrimitiveCounts[i];
-            scannedPrimitiveCounts[i] = oldsum;
+            scannedPrimitiveCounts[i] = sum;
+            sum += aPrimitiveCounts[i];
         }
 
         scannedPrimitiveCounts[aNumUniqueInstances] = sum;

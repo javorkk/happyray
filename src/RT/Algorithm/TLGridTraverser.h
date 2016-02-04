@@ -213,32 +213,78 @@ public:
 
                 if (secondLvlFlag)
                 {
-                    /////////////////////////////////////////////////////////////////////////
-                    //Traverse to next leaf
-                    const int tMinDimension =
-                        MIN_DIMENSION(tMaxLvl2[0], tMaxLvl2[1], tMaxLvl2[2]);
-
-                    if(taIsShadowRay)
+                    if (taIsShadowRay)
                     {
-                        if(rayT < 0.9999f)
+                        if (rayT < 0.9999f)
                         {
                             secondLvlFlag = false;
                             traversalFlag = false;
                         }
                     }
-
-                    if(rayT < tMaxLvl2[tMinDimension])
+                    /////////////////////////////////////////////////////////////////////////
+                    //Traverse to next leaf
+                    const int tMinDimension =
+                        MIN_DIMENSION(tMaxLvl2[0], tMaxLvl2[1], tMaxLvl2[2]);
+                    
+                    if (tMinDimension == 0)
                     {
-                        secondLvlFlag = false;
-                        traversalFlag = false;
+                        if(rayT < tMaxLvl2[0])
+                        {
+                            secondLvlFlag = false;
+                            traversalFlag = false;
+                        }
+
+                        cellIdLvl2[0] += (toPtr(rayDirRCP)[0] > 0.f) ? 1 : -1;
+                        tMaxLvl2[0] += subCellSize[0] * fabsf(toPtr(rayDirRCP)[0]);
+
+                        secondLvlFlag = secondLvlFlag &&
+                            cellIdLvl2[0] != cell[0]
+                        && cellIdLvl2[0] != -1;
+
+                    }
+                    else if (tMinDimension == 1)
+                    {
+                        if (rayT < tMaxLvl2[1])
+                        {
+                            secondLvlFlag = false;
+                            traversalFlag = false;
+                        }
+
+                        cellIdLvl2[1] += (toPtr(rayDirRCP)[1] > 0.f) ? 1 : -1;
+                        tMaxLvl2[1] += subCellSize[1] * fabsf(toPtr(rayDirRCP)[1]);
+
+                        secondLvlFlag = secondLvlFlag &&
+                            cellIdLvl2[1] != cell[1]
+                            && cellIdLvl2[1] != -1;
+                    }
+                    else //tMinDimension == 2
+                    {
+                        if (rayT < tMaxLvl2[2])
+                        {
+                            secondLvlFlag = false;
+                            traversalFlag = false;
+                        }
+
+                        cellIdLvl2[2] += (toPtr(rayDirRCP)[2] > 0.f) ? 1 : -1;
+                        tMaxLvl2[2] += subCellSize[2] * fabsf(toPtr(rayDirRCP)[2]);
+
+                        secondLvlFlag = secondLvlFlag &&
+                            cellIdLvl2[2] != cell[2]
+                            && cellIdLvl2[2] != -1;
                     }
 
-                    cellIdLvl2[tMinDimension] += (toPtr(rayDirRCP)[tMinDimension] > 0.f) ? 1 : -1;
-                    tMaxLvl2[tMinDimension] += subCellSize[tMinDimension] * fabsf(toPtr(rayDirRCP)[tMinDimension]);
+                    //if(rayT < tMaxLvl2[tMinDimension])
+                    //{
+                    //    secondLvlFlag = false;
+                    //    traversalFlag = false;
+                    //}
 
-                    secondLvlFlag = secondLvlFlag &&
-                        cellIdLvl2[tMinDimension] != cell[tMinDimension]
-                    && cellIdLvl2[tMinDimension] != -1;
+                    //cellIdLvl2[tMinDimension] += (toPtr(rayDirRCP)[tMinDimension] > 0.f) ? 1 : -1;
+                    //tMaxLvl2[tMinDimension] += subCellSize[tMinDimension] * fabsf(toPtr(rayDirRCP)[tMinDimension]);
+
+                    //secondLvlFlag = secondLvlFlag &&
+                    //    cellIdLvl2[tMinDimension] != cell[tMinDimension]
+                    //&& cellIdLvl2[tMinDimension] != -1;
                     //////////////////////////////////////////////////////////////////////////
                 }
             }//end traversal inner loop
@@ -250,16 +296,56 @@ public:
                 const int tMinDimension =
                     MIN_DIMENSION(tMax[0], tMax[1], tMax[2]);
 
-                traversalFlag = traversalFlag && rayT > tMax[tMinDimension];
+                if (tMinDimension == 0)
+                {
+                    traversalFlag = traversalFlag && rayT > tMax[0];
 
-                tEntry = tMax[tMinDimension];
-                cellId[tMinDimension] += (toPtr(rayDirRCP)[tMinDimension] > 0.f) ? 1 : -1;
-                tMax[tMinDimension] += toPtr(dcGrid.getCellSize())[tMinDimension] * 
-                    fabsf(toPtr(rayDirRCP)[tMinDimension]);
+                    tEntry = tMax[0];
+                    cellId[0] += (toPtr(rayDirRCP)[0] > 0.f) ? 1 : -1;
+                    tMax[0] += toPtr(dcGrid.getCellSize())[0] *
+                        fabsf(toPtr(rayDirRCP)[0]);
 
-                traversalFlag = traversalFlag &&
-                    cellId[tMinDimension] != dcGrid.res[tMinDimension]
-                && cellId[tMinDimension] != -1;
+                    traversalFlag = traversalFlag &&
+                        cellId[0] != dcGrid.res[0]
+                        && cellId[0] != -1;
+                }
+                else if (tMinDimension == 1)
+                {
+                    traversalFlag = traversalFlag && rayT > tMax[1];
+
+                    tEntry = tMax[1];
+                    cellId[1] += (toPtr(rayDirRCP)[1] > 0.f) ? 1 : -1;
+                    tMax[1] += toPtr(dcGrid.getCellSize())[1] *
+                        fabsf(toPtr(rayDirRCP)[1]);
+
+                    traversalFlag = traversalFlag &&
+                        cellId[1] != dcGrid.res[1]
+                        && cellId[1] != -1;
+                }
+                else //tMinDimension == 2
+                {
+                    traversalFlag = traversalFlag && rayT > tMax[2];
+
+                    tEntry = tMax[2];
+                    cellId[2] += (toPtr(rayDirRCP)[2] > 0.f) ? 1 : -1;
+                    tMax[2] += toPtr(dcGrid.getCellSize())[2] *
+                        fabsf(toPtr(rayDirRCP)[2]);
+
+                    traversalFlag = traversalFlag &&
+                        cellId[2] != dcGrid.res[2]
+                        && cellId[2] != -1;
+                }
+
+                //traversalFlag = traversalFlag && rayT > tMax[tMinDimension];
+
+                //tEntry = tMax[tMinDimension];
+                //cellId[tMinDimension] += (toPtr(rayDirRCP)[tMinDimension] > 0.f) ? 1 : -1;
+                //tMax[tMinDimension] += toPtr(dcGrid.getCellSize())[tMinDimension] * 
+                //    fabsf(toPtr(rayDirRCP)[tMinDimension]);
+
+                //traversalFlag = traversalFlag &&
+                //    cellId[tMinDimension] != dcGrid.res[tMinDimension]
+                //&& cellId[tMinDimension] != -1;
             }
         }
         //end traversal outer loop

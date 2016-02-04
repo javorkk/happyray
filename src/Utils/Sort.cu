@@ -51,5 +51,3 @@ void RadixSort::operator()(
     if (d_temp_storage) CubDebugExit(gSortAllocator.DeviceFree(d_temp_storage));
 
 }
-
-#undef USE_CHAG_PP_SORT

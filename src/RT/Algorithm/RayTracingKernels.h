@@ -35,7 +35,7 @@
 #define RENDERTHREADSY  4
 #define RENDERBLOCKSX   240
 #define RENDERBLOCKSY   1
-#define BATCHSIZE       96
+#define BATCHSIZE       128
 
 #define SHARED_MEMORY_TRACE                                                    \
     RENDERTHREADSX * RENDERTHREADSY * sizeof(float3) +                          \
@@ -62,7 +62,7 @@ template<
     int*                        aGlobalMemoryPtr
     )
 {
-#if __CUDA_ARCH__ >= 110
+#if __CUDA_ARCH__ >= 110 && __CUDA_ARCH__ <= 500
     volatile uint*  nextRayArray = sharedMem;
     volatile uint*  rayCountArray = nextRayArray + RENDERTHREADSY;
 
@@ -99,7 +99,8 @@ template<
             localPoolRayCount -= WARPSIZE;
         }
 #else
-    for(uint myRayIndex = globalThreadId1D(); myRayIndex < aNumRays;
+
+    for (uint myRayIndex = globalThreadId1D(); myRayIndex < aNumRays;
         myRayIndex += numThreads())
     {
 #endif

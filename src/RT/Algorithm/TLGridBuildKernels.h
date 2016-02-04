@@ -63,9 +63,8 @@ GLOBAL void countLeafLevelCells(
     const float magicConstant  = 
         powf(lambda * static_cast<float>(numCellRefs) / cellVolume, 0.3333333f);
 
-    //const float3 res = float3::min(float3::rep(255.f), 
-    //    float3::max(float3::rep(1.f), aCellSize * magicConstant));
-    const float3 res = aCellSize * magicConstant;
+    const float3 res = min(rep(255.f), max(rep(1.f), aCellSize * magicConstant));
+    //const float3 res = aCellSize * magicConstant;
 
     bool isLeaf;
     if (taExternLeafFlag)

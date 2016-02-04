@@ -38,7 +38,7 @@
 #include "RT/Algorithm/UniformGridBuildKernels.h"
 
 #include "Utils/Scan.h"
-//#define CUB_SORT
+#define CUB_SORT
 #ifdef CUB_SORT
 #include "Utils/Sort.h"
 #else
@@ -130,7 +130,7 @@ public:
         dim3 blockTotalSize(sNUM_COUNTER_THREADS);
         dim3 gridTotalSize (sNUM_COUNTER_BLOCKS);
 
-#if HAPPYRAY__CUDA_ARCH__ >= 120
+#if HAPPYRAY__CUDA_ARCH__ >= 120  && !defined STABLE_PRIMITIVE_ORDERING
         const int numCounters = gridTotalSize.x;
 #else
         const int numCounters = gridTotalSize.x * blockTotalSize.x;
@@ -164,7 +164,7 @@ public:
         ExclusiveScan scan;
         scan(aMemoryManager.refCountsBuffer, numCounters + 1);
 
-#if HAPPYRAY__CUDA_ARCH__ < 120
+#if HAPPYRAY__CUDA_ARCH__ < 120 || defined STABLE_PRIMITIVE_ORDERING
         MY_CUDA_SAFE_CALL( cudaMemcpy(aMemoryManager.refCountsBufferHost + numCounters, (aMemoryManager.refCountsBuffer + numCounters), sizeof(uint), cudaMemcpyDeviceToHost) );
 #endif
         cudaEventRecord(mScan, 0);
@@ -202,9 +202,41 @@ public:
         cudaEventSynchronize(mWritePairs);
         MY_CUT_CHECK_ERROR("Writing primitive-cell pairs failed.\n");
 
+        ////////////////////////////////////////////////////////////////////////////
+        //DEBUG
+        //uint* keysBufferHost0;
+        //MY_CUDA_SAFE_CALL(cudaMallocHost((void**)&keysBufferHost0, numPairs * sizeof(uint)));
+
+        //MY_CUDA_SAFE_CALL(cudaMemcpy(keysBufferHost0, aMemoryManager.pairsPingBufferKeys, numPairs * sizeof(uint), cudaMemcpyDeviceToHost));
+
+        //uint* valuesBufferHost0;
+        //MY_CUDA_SAFE_CALL(cudaMallocHost((void**)&valuesBufferHost0, numPairs * sizeof(uint)));
+
+        //MY_CUDA_SAFE_CALL(cudaMemcpy(valuesBufferHost0, aMemoryManager.pairsPingBufferValues, numPairs * sizeof(uint), cudaMemcpyDeviceToHost));
+
+        //for (uint i = 0; i < numPairs - 1; ++i)
+        //{
+        //    //Check if primitives inside a cell are ordered correctly
+        //    if (valuesBufferHost0[i] > valuesBufferHost0[i + 1])
+        //    {
+        //        cudastd::logger::out << "Unsorted primitive ids (before sort) ( " << keysBufferHost0[i] << "," <<
+        //            valuesBufferHost0[i] << " ) ";
+        //        cudastd::logger::out << " and ( " << keysBufferHost0[i + 1] << "," <<
+        //            valuesBufferHost0[i + 1] << " ) ";
+        //        cudastd::logger::out << " at postion " << i << " and " << i + 1 << " out of " << numPairs;
+        //        cudastd::logger::out << "\n";
+        //        break;
+        //    }
+        //}
+        ////////////////////////////////////////////////////////////////////////////
+
 #ifdef CUB_SORT 
         aMemoryManager.allocateKeyValuePongBuffers(numPairs);
         RadixSort radixSort;
+        //radixSort(aMemoryManager.pairsPingBufferValues, aMemoryManager.pairsPongBufferValues, 
+        //    aMemoryManager.pairsPingBufferKeys, aMemoryManager.pairsPongBufferKeys,            
+        //    numPairs);
+
         radixSort(aMemoryManager.pairsPingBufferKeys, aMemoryManager.pairsPongBufferKeys,
             aMemoryManager.pairsPingBufferValues, aMemoryManager.pairsPongBufferValues,
             numPairs);
@@ -213,38 +245,56 @@ public:
         thrust::device_ptr<unsigned int> dev_values(aMemoryManager.pairsPingBufferValues);
         thrust::sort_by_key(dev_keys, (dev_keys + numPairs), dev_values);
 #endif
-        //cudaEventRecord(mSort, 0);
-        //cudaEventSynchronize(mSort);
-        //MY_CUT_CHECK_ERROR("Sorting primitive-cell pairs failed.\n");
+        cudaEventRecord(mSort, 0);
+        cudaEventSynchronize(mSort);
+        MY_CUT_CHECK_ERROR("Sorting primitive-cell pairs failed.\n");
 
 
         ////////////////////////////////////////////////////////////////////////////
         //DEBUG
-        //uint* pairsBufferHost;
-        //MY_CUDA_SAFE_CALL( cudaMallocHost((void**)&pairsBufferHost, numPairs * sizeof(uint2)));
+        //uint* keysBufferHost;
+        //MY_CUDA_SAFE_CALL(cudaMallocHost((void**)&keysBufferHost, numPairs * sizeof(uint)));
 
-        //MY_CUDA_SAFE_CALL( cudaMemcpy( pairsBufferHost, aMemoryManager.pairsBuffer, numPairs * sizeof(uint2),  cudaMemcpyDeviceToHost));
+        //MY_CUDA_SAFE_CALL(cudaMemcpy(keysBufferHost, aMemoryManager.pairsPingBufferKeys, numPairs * sizeof(uint), cudaMemcpyDeviceToHost));
+
+        //uint* valuesBufferHost;
+        //MY_CUDA_SAFE_CALL(cudaMallocHost((void**)&valuesBufferHost, numPairs * sizeof(uint)));
+
+        //MY_CUDA_SAFE_CALL(cudaMemcpy(valuesBufferHost, aMemoryManager.pairsPingBufferValues, numPairs * sizeof(uint), cudaMemcpyDeviceToHost));
 
         //for(uint i = 0; i < numPairs - 1; ++i)
         //{
         //    //Check if properly sorted
-        //    if(pairsBufferHost[2 * i] > pairsBufferHost[2 * i + 2])
+        //    if (keysBufferHost[i] > keysBufferHost[i + 1])
         //    {
-        //        cudastd::logger::out << "Unsorted pairs ( " << pairsBufferHost[2 * i] << "," << 
-        //            pairsBufferHost[2 * i + 1]<< " ) ";
-        //        cudastd::logger::out << " and ( " << pairsBufferHost[2 * i + 2] << "," << 
-        //            pairsBufferHost[2 * i + 3]<< " ) ";
+        //        cudastd::logger::out << "Unsorted pairs ( " << keysBufferHost[i] << "," <<
+        //            valuesBufferHost[i] << " ) ";
+        //        cudastd::logger::out << " and ( " << keysBufferHost[i + 1] << "," <<
+        //            valuesBufferHost[i + 1] << " ) ";
         //        cudastd::logger::out << " at postion " << i << " and " << i + 1 << " out of " << numPairs;
         //        cudastd::logger::out << "\n";
 
         //    }
         //    //Check for cell and primitive indices that make sense
-        //    if (pairsBufferHost[2 * i] > (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ ||
-        //        pairsBufferHost[2 * i + 1] > aPrimitiveArray.numPrimitives)
+        //    if (keysBufferHost[i] > (uint)aMemoryManager.resX * aMemoryManager.resY * aMemoryManager.resZ ||
+        //        valuesBufferHost[i] > aPrimitiveArray.numPrimitives)
         //    {
-        //        cudastd::logger::out << "( " << pairsBufferHost[2 * i] << "," << 
-        //            pairsBufferHost[2 * i + 1]<< " ) ";
+        //        cudastd::logger::out << "( " << keysBufferHost[i] << "," <<
+        //            valuesBufferHost[i] << " ) ";
         //        cudastd::logger::out << "\n";
+        //    }
+
+        //    //Check if primitives inside a cell are ordered correctly
+        //    if (keysBufferHost[i] == keysBufferHost[i + 1] &&
+        //        valuesBufferHost[i] > valuesBufferHost[i + 1])
+        //    {
+        //        cudastd::logger::out << "Unsorted primitive ids ( " << keysBufferHost[i] << "," <<
+        //            valuesBufferHost[i] << " ) ";
+        //        cudastd::logger::out << " and ( " << keysBufferHost[i + 1] << "," <<
+        //            valuesBufferHost[i + 1] << " ) ";
+        //        cudastd::logger::out << " at postion " << i << " and " << i + 1 << " out of " << numPairs;
+        //        cudastd::logger::out << "\n";
+        //        break;
         //    }
 
         //}
@@ -350,8 +400,8 @@ public:
         //aMemoryManager.bindDeviceDataToTexture();
         ////////////////////////////////////////////////////////////////////////////
 
-        //cudastd::logger::out << "Number of pairs:" << numPairs << "\n";
-        //outputStats();
+        cudastd::logger::out << "Number of pairs:" << numPairs << "\n";
+        outputStats();
 
         cleanup();
     }

@@ -132,7 +132,7 @@ GLOBAL void writePairs(
 
 #endif
 
-    for(int primitiveId = globalThreadId1D(); primitiveId < aNumPrimitives; primitiveId += numThreads())
+    for (int primitiveId = globalThreadId1D(); primitiveId < aNumPrimitives; primitiveId += numThreads())
     {
         const tPrimitive prim = aPrimitiveArray[primitiveId];
         BBox bounds = BBoxExtractor<tPrimitive>::get(prim);
@@ -206,7 +206,7 @@ GLOBAL void writeKeysAndValues(
 
 #endif
 
-    for(int primitiveId = globalThreadId1D(); primitiveId < aNumPrimitives; primitiveId += numThreads())
+    for (int primitiveId = globalThreadId1D(); primitiveId < aNumPrimitives; primitiveId += numThreads())
     {
         const tPrimitive prim = aPrimitiveArray[primitiveId];
         BBox bounds = BBoxExtractor<tPrimitive>::get(prim);

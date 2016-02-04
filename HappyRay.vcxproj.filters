@@ -121,23 +121,11 @@
     <ClInclude Include="src\Application\SceneLoader.hpp">
       <Filter>Application</Filter>
     </ClInclude>
-    <ClInclude Include="src\RT\Primitive\LightSource.hpp">
-      <Filter>RT\Primitive</Filter>
-    </ClInclude>
     <ClInclude Include="src\RT\Structure\PrimitiveArray.h">
       <Filter>RT\Structure</Filter>
     </ClInclude>
-    <ClInclude Include="src\RT\Primitive\Primitive.hpp">
-      <Filter>RT\Primitive</Filter>
-    </ClInclude>
-    <ClInclude Include="src\RT\Primitive\Triangle.hpp">
-      <Filter>RT\Primitive</Filter>
-    </ClInclude>
     <ClInclude Include="contrib\include\chag\pp\detail\nta.hpp">
       <Filter>Utils\pp</Filter>
-    </ClInclude>
-    <ClInclude Include="src\RT\Primitive\BBox.hpp">
-      <Filter>RT\Primitive</Filter>
     </ClInclude>
     <ClInclude Include="src\RT\RTEngine.h">
       <Filter>RT</Filter>
@@ -165,9 +153,6 @@
     </ClInclude>
     <ClInclude Include="src\RT\Structure\UGridMemoryManager.h">
       <Filter>RT\Structure</Filter>
-    </ClInclude>
-    <ClInclude Include="src\RT\Primitive\Camera.h">
-      <Filter>RT\Primitive</Filter>
     </ClInclude>
     <ClInclude Include="src\RT\Algorithm\RayGenerators.h">
       <Filter>RT\Algorithm</Filter>
@@ -208,9 +193,6 @@
     <ClInclude Include="src\application\wfobjectuploader.h">
       <Filter>Application</Filter>
     </ClInclude>
-    <ClInclude Include="src\RT\Primitive\Material.hpp">
-      <Filter>RT\Primitive</Filter>
-    </ClInclude>
     <ClInclude Include="src\Core\Flags.hpp">
       <Filter>Core</Filter>
     </ClInclude>
@@ -229,9 +211,6 @@
     <ClInclude Include="src\RT\Structure\TexturedPrimitiveArray.h">
       <Filter>RT\Structure</Filter>
     </ClInclude>
-    <ClInclude Include="src\RT\Primitive\Plane.hpp">
-      <Filter>RT\Primitive</Filter>
-    </ClInclude>
     <ClInclude Include="src\RT\Structure\TLGridHierarchyMemoryManager.h">
       <Filter>RT\Structure</Filter>
     </ClInclude>
@@ -249,6 +228,27 @@
     </ClInclude>
     <ClInclude Include="src\stdafx.hpp">
       <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Primitive\BBox.hpp">
+      <Filter>RT\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Primitive\Camera.h">
+      <Filter>RT\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Primitive\LightSource.hpp">
+      <Filter>RT\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Primitive\Material.hpp">
+      <Filter>RT\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Primitive\Plane.hpp">
+      <Filter>RT\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Primitive\Primitive.hpp">
+      <Filter>RT\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RT\Primitive\Triangle.hpp">
+      <Filter>RT\Primitive</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -285,11 +285,11 @@
     <ClCompile Include="src\Application\SceneLoader.cpp">
       <Filter>Application</Filter>
     </ClCompile>
-    <ClCompile Include="src\RT\Primitive\Triangle.cpp">
-      <Filter>RT\Primitive</Filter>
-    </ClCompile>
     <ClCompile Include="src\Test\TestAlgebra.cpp">
       <Filter>Test</Filter>
+    </ClCompile>
+    <ClCompile Include="src\RT\Primitive\Triangle.cpp">
+      <Filter>RT\Primitive</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -314,9 +314,6 @@
     <CudaCompile Include="src\RT\Structure\TLGridMemManager.cu">
       <Filter>RT\Structure</Filter>
     </CudaCompile>
-    <CudaCompile Include="src\RT\Primitive\LightSource.cu">
-      <Filter>RT\Primitive</Filter>
-    </CudaCompile>
     <CudaCompile Include="src\RT\Structure\3DTextureMemoryManager.cu">
       <Filter>RT\Structure</Filter>
     </CudaCompile>
@@ -328,6 +325,9 @@
     </CudaCompile>
     <CudaCompile Include="src\RT\Algorithm\TLGridHierarchySortBuilder.cu">
       <Filter>RT\Algorithm</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\RT\Primitive\LightSource.cu">
+      <Filter>RT\Primitive</Filter>
     </CudaCompile>
   </ItemGroup>
 </Project>

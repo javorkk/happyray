@@ -1,2 +1,2 @@
-#define SDL_REVISION "hg-6302:b0ae93a5b8d6"
-#define SDL_REVISION_NUMBER 6302
+#define SDL_REVISION "hg-0:aaaaaaaaaaah"
+#define SDL_REVISION_NUMBER 0
