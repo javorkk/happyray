@@ -37,6 +37,8 @@ struct ConfigurationData
     int   numFrames;
     float frameStepSize;
 
+    std::string instancesFileName;
+
 };
 
 ConfigurationData gConfigurationData;
@@ -63,6 +65,8 @@ ConfigurationData gConfigurationData;
         gConfigurationData.frameFileNamePrefix = "";
         gConfigurationData.frameFileNameSuffix = "";
         gConfigurationData.numFrames = 0;
+
+        gConfigurationData.instancesFileName = "";
 
 
         while ( !input.eof() )
@@ -154,6 +158,13 @@ ConfigurationData gConfigurationData;
                     line.size());
                 gConfigurationData.lightsFileName = line;
             }
+            else if (buff == "instances")
+            {
+                const size_t valueStart = line.find_first_of("=", 0) + 1;
+                line = line.substr(line.find_first_not_of(" \t", valueStart),
+                    line.size());
+                gConfigurationData.instancesFileName = line;
+            }
             else
             {
                 //unrecognized token
@@ -182,6 +193,9 @@ ConfigurationData gConfigurationData;
         retval.hasLightsFileName        = gConfigurationData.lightsFileName != "";
         retval.hasFrameFileNamePrefix   = gConfigurationData.frameFileNamePrefix != "";
         retval.hasFrameFileNameSuffix   = gConfigurationData.frameFileNameSuffix != "";
+
+        retval.instancesFileName = gConfigurationData.instancesFileName.c_str();
+        retval.hasInstancesFileName = gConfigurationData.instancesFileName != "";
 
         return retval;
     }

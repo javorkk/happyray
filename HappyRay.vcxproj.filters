@@ -250,6 +250,9 @@
     <ClInclude Include="src\RT\Primitive\Triangle.hpp">
       <Filter>RT\Primitive</Filter>
     </ClInclude>
+    <ClInclude Include="src\RT\Integrator\TLGridHierarchyAOIntegrator.h">
+      <Filter>RT\Integrator</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\stdafx.cpp">

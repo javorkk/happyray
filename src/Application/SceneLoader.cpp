@@ -221,6 +221,13 @@ bool SceneLoader::loadScene(
 
         cudastd::logger::out << "Number of primitives: " << oAnimation.getFrame(0).getNumFaces() << "\n";
 
+        if (sceneConfig.hasInstancesFileName)
+        {
+            oAnimation.getFrame(0).loadInstances(sceneConfig.instancesFileName);
+            cudastd::logger::out << "Number of objects: " << oAnimation.getFrame(0).getNumObjects() << "\n";
+            cudastd::logger::out << "Number of instances: " << oAnimation.getFrame(0).getNumInstances() << "\n";
+        }
+
     }
     else
     {

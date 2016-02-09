@@ -46,6 +46,8 @@ public:
 
     uint* paramPtrHost;
     uint* paramPtrDevice;
+
+    uint* primitiveCounts;
     //////////////////////////////////////////////////////////////////////////
     //construction buffers
     //////////////////////////////////////////////////////////////////////////
@@ -76,6 +78,7 @@ public:
         instancesDevice(NULL), instancesHost(NULL), instancesSize(0),
         gridsDevice(NULL), gridsHost(NULL), gridsSize(0),
         paramPtrHost(NULL),paramPtrDevice(NULL),
+        primitiveCounts(NULL),
         refCountsBuffer(NULL), refCountsBufferHost(NULL),
         refCountsBufferSize(0u),cellCountsBuffer(NULL),cellCountsBufferHost(NULL),
         cellCountsBufferSize(0u),

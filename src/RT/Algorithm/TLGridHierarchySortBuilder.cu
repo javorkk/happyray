@@ -44,6 +44,8 @@ GLOBAL void countGridCellsMultiUniformGrid(
             const float magicConstant =
                 powf(lambda * static_cast<float>(oCellCounts[gridId]) / volume, 0.3333333f);
 
+            //printf("num primitives %d: %d \n", gridId, oCellCounts[gridId]);
+
             float3 resolution = diagonal * magicConstant;
             int resX = static_cast<int>(resolution.x);
             int resY = static_cast<int>(resolution.y);
@@ -55,7 +57,10 @@ GLOBAL void countGridCellsMultiUniformGrid(
             oGirds[gridId].setCellSize(diagonal / resolution);
             oGirds[gridId].setCellSizeRCP(resolution / diagonal);
 
-            oCellCounts[gridId] = resX * resY * resZ;
+            oCellCounts[gridId] = oGirds[gridId].res[0] * oGirds[gridId].res[1] * oGirds[gridId].res[2];
+
+            //printf("grid resolution %d: %d %d %d \n", gridId, oGirds[gridId].res[0], oGirds[gridId].res[1], oGirds[gridId].res[2]);
+            //printf("grid cell count %d: %d\n", gridId, oCellCounts[gridId]);
 
         }
         else
@@ -284,10 +289,12 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
             aMemoryManager.resZ = cudastd::max(1, static_cast<int>(diagonal.z));
 
             mSetResolution = true;
+            mSetLeafResolution = true;
         }
         else
         {
             mSetResolution = false;
+            mSetLeafResolution = false;
         }
 
         aMemoryManager.topLevelDensity = aTopLevelDensity;
@@ -530,16 +537,10 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
             aNumGrids,
             aMemoryManager.leafLevelDensity,
             aMemoryManager.gridsDevice,
-            mSetResolution,
+            mSetLeafResolution,
             aMemoryManager.cellCountsBuffer
             );
 
-
-        //////////////////////////////////////////////////////////////////////////
-        cudaEventRecord(mLeafCellCount, 0);
-        cudaEventSynchronize(mLeafCellCount);
-        MY_CUT_CHECK_ERROR("Counting leaf level cells failed.\n");
-        //////////////////////////////////////////////////////////////////////////
 
         ExclusiveScan escan;
         escan(aMemoryManager.cellCountsBuffer, aNumGrids + 1);
@@ -549,7 +550,14 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
         MY_CUDA_SAFE_CALL( cudaMemcpy(aMemoryManager.cellCountsBufferHost + aNumGrids, (aMemoryManager.refCountsBuffer + aNumGrids), sizeof(uint), cudaMemcpyDeviceToHost) );
 #endif
 
+        //////////////////////////////////////////////////////////////////////////
+        cudaEventRecord(mLeafCellCount, 0);
+        cudaEventSynchronize(mLeafCellCount);
+        MY_CUT_CHECK_ERROR("Counting leaf level cells failed.\n");
+        //////////////////////////////////////////////////////////////////////////
+
         const uint numLeafCells = *(aMemoryManager.cellCountsBufferHost + aNumGrids);
+        //cudastd::logger::out << "Num leaf cells: " << numLeafCells << "\n";
 
         aMemoryManager.allocateDeviceLeaves(numLeafCells);
         aMemoryManager.setDeviceLeavesToZero();
@@ -597,7 +605,8 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
         //////////////////////////////////////////////////////////////////////////
 
         const uint numLeafLevelPairs = aMemoryManager.refCountsBufferHost[numCounters];
-
+        //cudastd::logger::out << "Num leaf pairs: " << numLeafLevelPairs << "\n";
+        
         //aMemoryManager.allocateLeafLevelPairsBufferPair(numLeafLevelPairs);
         aMemoryManager.allocateLeafLevelKeyValueBuffers(numLeafLevelPairs);
 

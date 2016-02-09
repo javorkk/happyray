@@ -63,6 +63,9 @@ struct SceneConfiguration
     bool hasFrameFileNamePrefix;
     bool hasFrameFileNameSuffix;
 
+    const char* instancesFileName;
+    bool hasInstancesFileName;
+
 };
 
 

@@ -46,9 +46,9 @@
 #include "RT/Integrator/SimpleIntegrator.h"
 #include "RT/Integrator/PathTracer.h"
 #include "RT/Integrator/AOIntegrator.h" //USE_3D_TEXTURE defined there
+#include "RT/Integrator/TLGridHierarchyAOIntegrator.h"
 
 //////////////////////////////////////////////////////////////////////////
-//DEBUG only
 #include "RT/Structure/TwoLevelGridHierarchy.h"
 #include "RT/Structure/TLGridHierarchyMemoryManager.h"
 #include "RT/Algorithm/TLGridHierarchySortBuilder.h"
@@ -59,16 +59,16 @@
 
 typedef Triangle    t_Primitive;
 
-//#define TLGRIDHIERARCHY
+#define TLGRIDHIERARCHY
 #define TLGRID
 
-#ifdef TLGRIDHIERARCHY //DEBUG PURPOSES ONLY
+#ifdef TLGRIDHIERARCHY 
 typedef TLGridHierarchyMemoryManager                t_MemoryManager;
-typedef TLGridHierarchySortBuilder                 t_AccStructBuilder;
+typedef TLGridHierarchySortBuilder                  t_AccStructBuilder;
 typedef TwoLevelGridHierarchy                       t_AccStruct;
 #define Traverser_t                                 TLGridHierarchyTraverser
 float                                               sTopLevelDensity = 1.2f;
-float                                               sLeafLevelDensity = 5.f; //dummy
+float                                               sLeafLevelDensity = 5.f;
 #elif defined TLGRID
 typedef TLGridMemoryManager             t_MemoryManager;
 typedef TLGridSortBuilder<t_Primitive>  t_AccStructBuilder;
@@ -140,6 +140,14 @@ AOIntegrator<
     MollerTrumboreIntersectionTest
 >                           sAOIntegrator;
 
+#ifdef TLGRIDHIERARCHY
+TLGHAOIntegrator<
+    Triangle,
+    TLGridHierarchyTraverser,
+    MollerTrumboreIntersectionTest,
+    MollerTrumboreIntersectionTest
+>                           sTLGHAOIntegrator;
+#endif
 
 void RTEngine::init()
 {
@@ -212,16 +220,110 @@ void RTEngine::upload(
     }
 #endif
 
-    sAOIntegrator.setAlpha(len(sMemoryManager.bounds.vtx[1]- sMemoryManager.bounds.vtx[0]) * 0.05f);
+    sAOIntegrator.setAlpha(len(sMemoryManager.bounds.vtx[1] - sMemoryManager.bounds.vtx[0]) * 0.05f);
+
+#ifdef TLGRIDHIERARCHY
+    sTLGHAOIntegrator.setAlpha(len(sMemoryManager.bounds.vtx[1] - sMemoryManager.bounds.vtx[0]) * 0.05f);
+
+    if(aFrame1.getNumInstances() <= 1u)
+        return;
+
+    sMemoryManager.allocateGrids(aFrame1.getNumObjects());
+    for (size_t it = 0; it < aFrame1.getNumObjects(); ++it)
+    {
+        int2 primitiveRange = aFrame1.getObjectRange(it);
+        sMemoryManager.primitiveCounts[it] = primitiveRange.y - primitiveRange.x;
+
+        float3 minBound = make_float3(FLT_MAX, FLT_MAX, FLT_MAX);
+        float3 maxBound = make_float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+        for (int primId = primitiveRange.x; primId < primitiveRange.y; ++primId)
+        {
+            WFObject::Face face = aFrame1.getFace(primId);
+            const float3& vtx1 = aFrame1.getVertex(face.vert1);
+            minBound = min(minBound, vtx1);
+            maxBound = max(maxBound, vtx1);
+
+            const float3& vtx2 = aFrame1.getVertex(face.vert2);
+            minBound = min(minBound, vtx2);
+            maxBound = max(maxBound, vtx2);
+
+            const float3& vtx3 = aFrame1.getVertex(face.vert3);
+            minBound = min(minBound, vtx3);
+            maxBound = max(maxBound, vtx3);
+        }
+
+        minBound.x = minBound.x - 10.f * EPS;
+        minBound.y = minBound.y - 10.f * EPS;
+        minBound.z = minBound.z - 10.f * EPS;
+        maxBound.x = maxBound.x + 10.f * EPS;
+        maxBound.y = maxBound.y + 10.f * EPS;
+        maxBound.z = maxBound.z + 10.f * EPS;
+
+        if (minBound.x >= maxBound.x ||
+            minBound.y >= maxBound.y ||
+            minBound.z >= maxBound.z
+            )
+        {
+            cudastd::logger::out << "Empty bounding box! Tile id: " << it << "\n";
+        }
+        sMemoryManager.gridsHost[it].vtx[0].x = minBound.x;
+        sMemoryManager.gridsHost[it].vtx[0].y = minBound.y;
+        sMemoryManager.gridsHost[it].vtx[0].z = minBound.z;
+        sMemoryManager.gridsHost[it].vtx[1].x = maxBound.x;
+        sMemoryManager.gridsHost[it].vtx[1].y = maxBound.y;
+        sMemoryManager.gridsHost[it].vtx[1].z = maxBound.z;
+
+        float3 diagonal = sMemoryManager.gridsHost[it].vtx[1] - sMemoryManager.gridsHost[it].vtx[0];
+        const float volume = diagonal.x * diagonal.y * diagonal.z;
+        const float lambda = sLeafLevelDensity;
+        const float magicConstant =
+            powf(lambda * static_cast<float>(sMemoryManager.primitiveCounts[it]) / volume, 0.3333333f);
+
+        float3 resolution = diagonal * magicConstant;
+        int resX = static_cast<int>(resolution.x);
+        int resY = static_cast<int>(resolution.y);
+        int resZ = static_cast<int>(resolution.z);
+        sMemoryManager.gridsHost[it].res[0] = resX > 0 ? resX : 1;
+        sMemoryManager.gridsHost[it].res[1] = resY > 0 ? resY : 1;
+        sMemoryManager.gridsHost[it].res[2] = resZ > 0 ? resZ : 1;
+
+        sMemoryManager.gridsHost[it].setCellSize((sMemoryManager.gridsHost[it].vtx[1] - sMemoryManager.gridsHost[it].vtx[0]) / make_float3(sMemoryManager.gridsHost[it].res[0], sMemoryManager.gridsHost[it].res[1], sMemoryManager.gridsHost[it].res[2]));
+        sMemoryManager.gridsHost[it].setCellSizeRCP(make_float3(sMemoryManager.gridsHost[it].res[0], sMemoryManager.gridsHost[it].res[1], sMemoryManager.gridsHost[it].res[2]) / (sMemoryManager.gridsHost[it].vtx[1] - sMemoryManager.gridsHost[it].vtx[0]));
+    }
+    sMemoryManager.copyGridsHostToDevice();
+
+    //Instances
+    sMemoryManager.allocateDeviceInstances(aFrame1.getNumInstances());
+    sMemoryManager.allocateHostInstances(aFrame1.getNumInstances());
+
+    for (size_t it = 0; it < aFrame1.getNumInstances(); ++it)
+    {   
+        const WFObject::Instance& instance = aFrame1.getInstance(it);
+        sMemoryManager.instancesHost[it].setIndex(instance.objectId);
+        sMemoryManager.instancesHost[it].setTransformation(
+            instance.m00, instance.m10, instance.m20, instance.m30,
+            instance.m01, instance.m11, instance.m21, instance.m31,
+            instance.m02, instance.m12, instance.m22, instance.m32);
+#ifndef COMPACT_INSTANCES
+        sMemoryManager.instancesHost[it].vtx[0] = instance.min;
+        sMemoryManager.instancesHost[it].vtx[1] = instance.max;
+#endif
+    }
+
+    sMemoryManager.copyInstancesHostToDevice();
+#endif
 
 }
 
 void RTEngine::buildAccStruct()
-
 {
+#ifdef TLGRIDHIERARCHY
+    sBuilder.init(sMemoryManager, sMemoryManager.instancesSize / sizeof(GeometryInstance), sTopLevelDensity, sLeafLevelDensity);
+    sBuilder.build(sMemoryManager, sMemoryManager.gridsSize / sizeof(UniformGrid), sMemoryManager.primitiveCounts, sTriangleArray);
+#else
     sBuilder.init(sMemoryManager, (uint)sTriangleArray.numPrimitives, sTopLevelDensity, sLeafLevelDensity);
     sBuilder.build(sMemoryManager, sTriangleArray);
-
+#endif
     //TLGridHierarchySortBuilder< t_Primitive > dbgBuilder;
     //TLGridHierarchyMemoryManager dbgMemManager;
     //dbgMemManager.bounds = sMemoryManager.bounds;
@@ -259,6 +361,11 @@ void RTEngine::setLights(const AreaLightSourceCollection& aLights)
 
 void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId, const int aRenderMode)
 {
+#ifdef TLGRIDHIERARCHY
+    t_AccStruct grid = sMemoryManager.getParameters();
+    sRandomRayGen.sampleId = aImageId;
+    sTLGHAOIntegrator.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, grid, sRandomRayGen, aFrameBuffer, aImageId);
+#else
     t_AccStruct grid = sMemoryManager.getParameters();
 
     switch ( aRenderMode ) 
@@ -290,7 +397,7 @@ void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId, const 
     default:
         break;
     }//switch ( mRenderMode )
-
+#endif
 }
 
 void RTEngine::cleanup()

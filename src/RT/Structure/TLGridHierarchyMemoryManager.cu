@@ -197,6 +197,9 @@ HOST UniformGrid* TLGridHierarchyMemoryManager::allocateGrids( const size_t aNum
 {
     if(gridsSize < aNumGrids * sizeof(UniformGrid) || gridsHost == NULL)
     {
+        MY_CUDA_SAFE_CALL( cudaFreeHost(primitiveCounts));
+        MY_CUDA_SAFE_CALL( cudaHostAlloc((void**)&primitiveCounts,
+            aNumGrids * sizeof(int), cudaHostAllocDefault));
         MY_CUDA_SAFE_CALL( cudaFreeHost(gridsHost) );
         MY_CUDA_SAFE_CALL(cudaHostAlloc((void**)&gridsHost,
             aNumGrids * sizeof(UniformGrid), cudaHostAllocDefault));
@@ -358,6 +361,8 @@ HOST void TLGridHierarchyMemoryManager::freeGridMemory()
     gridsDevice = NULL;
     MY_CUDA_SAFE_CALL( cudaFreeHost(gridsHost) );
     gridsHost = NULL;
+    MY_CUDA_SAFE_CALL(cudaFreeHost(primitiveCounts));
+    primitiveCounts = NULL;
     gridsSize = 0;
 }
 

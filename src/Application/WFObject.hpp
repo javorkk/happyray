@@ -49,12 +49,14 @@ public:
 public:
     WFObject():
         mNumVertices(0u), mNumNormals(0u), mNumFaces(0u), mNumMaterials(0u),
-            mNumTexCoords(0u),
+        mNumTexCoords(0u), mNumObjects(0u), mNumInstances(0u),
         mVerticesBufferSize(0u), mNormalsBufferSize(0u), mFacesBufferSize(0u),
             mMaterialsBufferSize(0u), mTexCoordsBufferSize(0u),
+            mObjectsBufferSize(0u), mInstancesBufferSize(0u),
         mVertices(NULL), mNormals(NULL), mVertexIndices(NULL),
         mNormalIndices(NULL),mFaces(NULL), mMaterials(NULL),
-            mTexCoords(NULL)
+            mTexCoords(NULL),
+            mObjects(NULL), mInstances(NULL)
     {}
 
     ~WFObject()
@@ -149,6 +151,17 @@ public:
         Face(WFObject * _obj) : m_lwObject(_obj) {}
     };
 
+    struct Instance
+    {
+        size_t objectId;
+        //Transformation
+        float m00, m10, m20, m30;
+        float m01, m11, m21, m31;
+        float m02, m12, m22, m32;
+        //bounding box
+        float3 min;
+        float3 max;
+    };
 
     size_t getNumVertices() const
     {
@@ -171,6 +184,15 @@ public:
         return mNumTexCoords;
     }
     
+    size_t getNumObjects() const
+    {
+        return mNumObjects;
+    }
+    size_t getNumInstances() const
+    {
+        return mNumInstances;
+    }
+
     float3 getVertex(size_t aVtxId) const
     {
         return *reinterpret_cast<float3*>(mVertices + aVtxId);
@@ -210,6 +232,7 @@ public:
         return *reinterpret_cast<float3*>(mVertices + aVtxId);
     }
 
+
     float3& getNormal(size_t aNormalId)
     {
         return *reinterpret_cast<float3*>(mNormals + aNormalId);
@@ -228,6 +251,21 @@ public:
     float2& getTexCoords(size_t aCoordId)
     {
         return mTexCoords[aCoordId];
+    }
+
+    int2 getObjectRange(size_t aId) const
+    {
+        return mObjects[aId];
+    }
+
+    Instance& getInstance(size_t aInstanceId)
+    {
+        return mInstances[aInstanceId];
+    }
+
+    const Instance& getInstance(size_t aInstanceId) const
+    {
+        return mInstances[aInstanceId];
     }
 
     size_t insertVertex(const float3& aVertex);
@@ -314,9 +352,35 @@ public:
 
     }
 
+    void allocateObjects(const size_t aSize)
+    {
+        if (mObjects != NULL)
+        {
+            delete[] mObjects;
+        }
+
+        mObjectsBufferSize = aSize + cudastd::max((size_t)1, aSize / 4u);
+        mObjects = new int2[mObjectsBufferSize];
+        mNumObjects = aSize;
+
+    }
+
+    void allocateInstances(const size_t aSize)
+    {
+        if (mInstances != NULL)
+        {
+            delete[] mInstances;
+        }
+
+        mInstancesBufferSize = aSize + cudastd::max((size_t)1, aSize / 4u);
+        mInstances = new Instance[mInstancesBufferSize];
+        mNumInstances = aSize;
+    }
+
     //Reads the FrontWave3D object from a file
     void read(const char* aFileName);
     void loadWFObj(const char* aFileName);
+    void loadInstances(const char* aFileName);
     void copyVectorsToArrays(); //hack for using std constructs without nvcc knowing about them
 
     typedef const float3* t_VertexIterator;
@@ -324,6 +388,8 @@ public:
     typedef const Face* t_FaceIterator;
     typedef const Material* t_MaterialIterator;
     typedef Material* t_MaterialIteratorNonConst;
+    typedef int2* t_ObjectIterator;
+    typedef Instance* t_InstanceIterator;
 
 
     t_VertexIterator verticesBegin() const
@@ -396,9 +462,32 @@ public:
         return mNormals + mNumNormals;
     }
 
+    t_ObjectIterator objectsBegin() const
+    {
+        return mObjects;
+    }
+
+    t_ObjectIterator objectsEnd() const
+    {
+        return mObjects + mNumObjects;
+    }
+
+    t_InstanceIterator instancesBegin() const
+    {
+        return mInstances;
+    }
+
+    t_InstanceIterator instancesEnd() const
+    {
+        return mInstances + mNumInstances;
+    }
+
+
 private:
     size_t mNumVertices, mNumNormals, mNumFaces, mNumMaterials, mNumTexCoords;
+    size_t mNumObjects, mNumInstances;
     size_t mVerticesBufferSize, mNormalsBufferSize, mFacesBufferSize, mMaterialsBufferSize, mTexCoordsBufferSize;
+    size_t mObjectsBufferSize, mInstancesBufferSize;
     float3* mVertices;
     float3* mNormals;
     uint* mVertexIndices;
@@ -406,6 +495,8 @@ private:
     Face*  mFaces;
     Material* mMaterials;
     float2* mTexCoords;
+    int2* mObjects;
+    Instance* mInstances;
 };
 
 #endif // FWOBJECT_HPP_INCLUDED_45834E1E_1D79_4F3E_ABD3_77E318EF9223

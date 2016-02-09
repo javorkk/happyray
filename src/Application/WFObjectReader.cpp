@@ -60,12 +60,17 @@ typedef std::vector<float3> t_vecVector;
 typedef std::vector<WFObject::Face> t_faceVector;
 typedef std::vector<WFObject::Material> t_materialVector;
 typedef std::vector<float2> t_texCoordVector;
+typedef std::vector<int2> t_objectVector;
+typedef std::vector<WFObject::Instance> t_instancesVector;
 
 t_vecVector vertices;
 t_vecVector normals;
 t_faceVector faces;
 t_materialVector materials;
 t_texCoordVector texCoords;
+t_objectVector objects;
+t_instancesVector instances;
+
 std::map<std::string, size_t> materialMap;
 
 namespace objLoaderUtil
@@ -278,6 +283,7 @@ void WFObject::read(const char* aFileName)
     materials.clear();
     texCoords.clear();
     materialMap.clear();
+    objects.clear();
 
     Material defaultMaterial;
     defaultMaterial.name = "Default";
@@ -322,6 +328,8 @@ void WFObject::loadWFObj(const char* aFileName)
 	int tmpVertPointer, tmpIdxPtr, vertexType;
 	size_t curMat = 0, curLine = 0;
 	std::vector<std::string> matFiles;
+
+    int currentObjectBegin = (int)faces.size();
 
 	if(inputStream.fail())
     {
@@ -491,6 +499,23 @@ void WFObject::loadWFObj(const char* aFileName)
 			break;
 
 		case 'o':
+            cmdString++;
+            skipWS(cmdString);
+
+            if (currentObjectBegin < faces.size())
+            {
+                objects.push_back(make_int2(currentObjectBegin, (int)faces.size()));
+
+                char *objNewCmdString;
+                if (strtol(cmdString, &objNewCmdString, 10) != objects.size())
+                {
+                    std::cerr << "Warning at line " << curLine << ": non-consecutive object index will be ignored!" << std::endl;
+                }
+            }
+            currentObjectBegin = (int)faces.size();
+
+            break;
+
 		case 'g':
 		case 's': //?
 		case '#':
@@ -535,6 +560,8 @@ parse_err_found:
 		std::cerr << "Error at line " << curLine << std::endl;
 	}
 
+
+    objects.push_back(make_int2(currentObjectBegin, (int)faces.size()));
 
 	std::string objDir = getDirName(aFileName);
 
@@ -623,6 +650,15 @@ void WFObject::copyVectorsToArrays()
         for (size_t it = 0; it < texCoords.size(); ++it)
         {
             mTexCoords[it] = texCoords[it];
+        }
+    }
+
+    if (objects.size() > 0u)
+    {
+        allocateObjects(objects.size());
+        for (size_t i = 0; i < objects.size(); i++)
+        {
+            mObjects[i] = objects[i];
         }
     }
 }
@@ -745,4 +781,85 @@ size_t WFObject::insertMaterial(const Material& aMaterial)
     memcpy(mMaterials + mNumMaterials, &aMaterial, sizeof(Material));
 
     return mNumMaterials++;
+}
+
+void WFObject::loadInstances(const char* aFileName)
+{
+    std::ifstream input(aFileName, std::ios::in);
+
+    if (input.fail())
+        std::cerr << "Could not open file " << aFileName << " for reading.\n"
+        << __FILE__ << __LINE__ << std::endl;
+
+    std::string line, buff;
+    instances.clear();
+
+    Instance newInstance;
+    newInstance.objectId = 0u;
+    newInstance.m00 = newInstance.m11 = newInstance.m22 = 1.f;
+    newInstance.m01 = newInstance.m02 = newInstance.m12 = 0.f;
+    newInstance.m10 = newInstance.m20 = newInstance.m21 = 0.f;
+    newInstance.m30 = newInstance.m31 = newInstance.m32 = 0.f;
+    newInstance.min = make_float3(FLT_MAX, FLT_MAX, FLT_MAX);
+    newInstance.min = make_float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+    while (!input.eof())
+    {
+        std::getline(input, line);
+
+        line = skipComments(line, "#");
+
+        if (line.size() < 1)
+        {
+            continue;
+        }       
+        
+        std::stringstream ss(line);
+        ss >> buff;
+
+        if (buff == "obj_id")
+        {
+            //start new instance
+            instances.push_back(newInstance);
+            ss >> instances.back().objectId;
+        }
+        else if (buff == "m_row_0")
+        {
+            ss >> instances.back().m00 >> instances.back().m10 >> instances.back().m20 >> instances.back().m30;
+        }
+        else if (buff == "m_row_1")
+        {
+            ss >> instances.back().m01 >> instances.back().m11 >> instances.back().m21 >> instances.back().m31;
+        }
+        else if (buff == "m_row_2")
+        {
+            ss >> instances.back().m02 >> instances.back().m12 >> instances.back().m22 >> instances.back().m32;
+        }
+        else if (buff == "AABB_min")
+        {
+            ss >> instances.back().min.x >> instances.back().min.y >> instances.back().min.z;
+        }
+        else if (buff == "AABB_max")
+        {
+            ss >> instances.back().max.x >> instances.back().max.y >> instances.back().max.z;
+        }
+    }
+
+    input.close();
+
+    if (instances.size() > 0u)
+    {
+        allocateInstances(instances.size());
+
+        for (size_t it = 0; it < instances.size(); ++it)
+        {
+            if (instances[it].objectId >= mNumObjects)
+            {
+                std::cerr << "Skipping instance " << it << " with invalid object id " << instances[it].objectId << "\n";
+                --mNumInstances;
+                continue;
+            }
+            mInstances[it] = instances[it];
+        }
+    }
 }

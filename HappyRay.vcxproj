@@ -300,6 +300,7 @@
     <ClInclude Include="src\RT\Integrator\AOIntegrator.h" />
     <ClInclude Include="src\RT\Integrator\PathTracer.h" />
     <ClInclude Include="src\RT\Integrator\SimpleIntegrator.h" />
+    <ClInclude Include="src\RT\Integrator\TLGridHierarchyAOIntegrator.h" />
     <ClInclude Include="src\RT\Primitive\BBox.hpp" />
     <ClInclude Include="src\RT\Primitive\Camera.h" />
     <ClInclude Include="src\RT\Primitive\LightSource.hpp" />
