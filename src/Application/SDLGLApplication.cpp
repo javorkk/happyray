@@ -129,7 +129,11 @@ void SDLGLApplication::initScene()
     CUDAApplication::initScene();
     mRESX = mInitialCamera.getResX();
     mRESY = mInitialCamera.getResY();
+    mMoveStep = CUDAApplication::getBBoxDiagonalLength() * 0.05f;
     //changeWindowSize();
+
+    //dumps all interpolated frames as .obj
+    //CUDAApplication::dumpFrames();
 }
 
 void SDLGLApplication::WindowActive	()

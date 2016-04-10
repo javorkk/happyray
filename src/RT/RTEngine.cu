@@ -47,6 +47,7 @@
 #include "RT/Integrator/PathTracer.h"
 #include "RT/Integrator/AOIntegrator.h" //USE_3D_TEXTURE defined there
 #include "RT/Integrator/TLGridHierarchyAOIntegrator.h"
+#include "RT/Integrator/AORayExporter.h"
 
 //////////////////////////////////////////////////////////////////////////
 #include "RT/Structure/TwoLevelGridHierarchy.h"
@@ -59,7 +60,7 @@
 
 typedef Triangle    t_Primitive;
 
-#define TLGRIDHIERARCHY
+//#define TLGRIDHIERARCHY
 #define TLGRID
 
 #ifdef TLGRIDHIERARCHY 
@@ -74,7 +75,7 @@ typedef TLGridMemoryManager             t_MemoryManager;
 typedef TLGridSortBuilder<t_Primitive>  t_AccStructBuilder;
 typedef TwoLevelGrid                    t_AccStruct;
 #define Traverser_t                     TLGridTraverser
-float                                   sTopLevelDensity =  1.2;//1.2f;// 0.0625f;
+float                                   sTopLevelDensity = 0.0625f;//1.2f;// 0.0625f;
 float                                   sLeafLevelDensity =  1.2f;   //5.f;// 2.2f;
 #else
 const bool exact  = true; //true = exact triangle insertion, false = fast construction
@@ -82,7 +83,7 @@ typedef UGridMemoryManager              t_MemoryManager;
 typedef UGridSortBuilder<t_Primitive, exact>   t_AccStructBuilder;
 typedef UniformGrid                     t_AccStruct;
 #define Traverser_t                     UGridTraverser
-float                                   sTopLevelDensity = 5.f;
+float                                   sTopLevelDensity = 0.12f;
 float                                   sLeafLevelDensity = 1.2f; //dummy
 #endif
 
@@ -140,6 +141,14 @@ AOIntegrator<
     MollerTrumboreIntersectionTest
 >                           sAOIntegrator;
 
+//AORayExporter<
+//    Triangle,
+//    t_AccStruct,
+//    Traverser_t,
+//    MollerTrumboreIntersectionTest,
+//    MollerTrumboreIntersectionTest
+//>                           sAOIntegrator;
+
 #ifdef TLGRIDHIERARCHY
 TLGHAOIntegrator<
     Triangle,
@@ -153,6 +162,11 @@ void RTEngine::init()
 {
     sResX = 0;
     sResY = 0;
+}
+
+float RTEngine::getBoundingBoxDiagonalLength()
+{
+    return len(sMemoryManager.bounds.vtx[1] - sMemoryManager.bounds.vtx[0]);
 }
 
 void RTEngine::upload(

@@ -11,7 +11,7 @@
 #include "RT/Primitive/BBox.hpp"
 #include "RT/Structure/UniformGrid.h"
 
-//#define COMPACT_INSTANCES
+#define COMPACT_INSTANCES
 #ifdef COMPACT_INSTANCES
 #include "DeviceConstants.h"
 class  UnboundedGeometryInstanceQuaternion
@@ -206,10 +206,10 @@ public:
                 col1.x, col1.y, col1.z,
                 col2.x, col2.y, col2.z
                 );
-            //Apply reflection
-            col0.x = -col0.x;
-            col1.x = -col1.x;
-            col2.x = -col2.x;
+            ////Apply reflection
+            //col0.x = -col0.x;
+            //col1.x = -col1.x;
+            //col2.x = -col2.x;
 
             float3 normalT = col0 * aNormal.x + col1 * aNormal.y + col2 * aNormal.z;
 
@@ -374,8 +374,8 @@ public:
     DEVICE HOST bool isIdentityTransformation() const
     {
         return fabsf(itranslation.x) + fabsf(itranslation.y) + fabsf(itranslation.z) < EPS
-                && isIdentity(irotation, EPS)
-                && !isReflection();
+            && isIdentity(irotation, EPS)
+            && !isReflection();
     }
 
 
@@ -391,8 +391,8 @@ public:
         itranslation.z = m32;
 
         const float det = m00 * m11 * m22 + m10 * m21 * m02 + m20 * m01 * m12 -
-                          m20 * m11 * m02 - m10 * m01 * m22 - m00 * m21 * m12;
-        if(det > 0.f)
+            m20 * m11 * m02 - m10 * m01 * m22 - m00 * m21 * m12;
+        if (det > 0.f)
         {
             setNoReflection();
             irotation = quaternion3f(
@@ -463,7 +463,7 @@ public:
             float3 rayOrgT = col0 * aRayOrg.x + col1 * aRayOrg.y + col2 * aRayOrg.z + itranslation;
 
             return rayOrgT;
-            
+
         }
         else
         {
@@ -500,11 +500,11 @@ public:
         {
             float3 rayOrgT = transformVec(irotation, aPoint) + itranslation;
 
-            return rayOrgT;            
+            return rayOrgT;
         }
     }
 
-    DEVICE HOST float3 transformNormalToGlobal(const float3 aNormal) const
+    DEVICE HOST float3 transformNormalToGlobal(const float3& aNormal) const
     {
 
         if (isReflection())
@@ -544,6 +544,17 @@ public:
     //float3 rotation0, rotation1, rotation2, translation;
     float3 irotation0, irotation1, irotation2;    
     float3 itranslation;
+
+    DEVICE HOST uint getIndex() const
+    {
+        return index;
+    }
+
+    DEVICE HOST void setIndex(uint aIndex)
+    {
+        index = aIndex;
+    }
+
 
     DEVICE HOST void setIdentityTransormation()
     {
@@ -611,7 +622,7 @@ public:
     }
 
     //returns the new origin, overwrites the old direction
-    DEVICE HOST float3 transformRay(const float3 aRayOrg, float3& oRayDirRCP) const
+    DEVICE HOST float3 transformRay(const float3& aRayOrg, float3& oRayDirRCP) const
     {
         float3 rayOrgT = aRayOrg + itranslation;
         rayOrgT = irotation0 * aRayOrg.x + irotation1 * aRayOrg.y + irotation2 * aRayOrg.z + itranslation;
@@ -626,12 +637,12 @@ public:
         return rayOrgT;
     }
 
-    DEVICE HOST float3 transformPointToLocal(const float3 aPoint) const
+    DEVICE HOST float3 transformPointToLocal(const float3& aPoint) const
     {
         return irotation0 * aPoint.x + irotation1 * aPoint.y + irotation2 * aPoint.z + itranslation;
     }
 
-    DEVICE HOST float3 transformNormalToGlobal(const float3 aNormal) const
+    DEVICE HOST float3 transformNormalToGlobal(const float3& aNormal) const
     {
         float m00; float m10; float m20; float m30;
         float m01; float m11; float m21; float m31;
@@ -701,7 +712,7 @@ public:
 
 typedef UnboundedGeometryInstanceQuaternion GeometryInstance;
 #else
-typedef GeometryInstanceQuaternion GeometryInstance;
+typedef GeometryInstanceMatrix GeometryInstance;
 #endif
 
 class TwoLevelGridHierarchy : public UniformGrid

@@ -129,6 +129,8 @@ public:
     void read(const char* aFileNamePrefix,
         const char* aFileNameSuffix,
         size_t aNumFrames);
+
+    void dumpFrame();
 };
 
 #undef _GET_MEMBER

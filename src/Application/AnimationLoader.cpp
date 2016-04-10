@@ -24,6 +24,7 @@
 #include "StdAfx.hpp"
 #include "AnimationManager.hpp"
 
+
 void AnimationManager::read(const char* aFileNamePrefix,
           const char* aFileNameSuffix,
           size_t aNumFrames)
@@ -66,3 +67,120 @@ void AnimationManager::read(const char* aFileNamePrefix,
     }
 }
 
+#include "Application/ObjWriter.h"
+
+void AnimationManager::dumpFrame()
+{
+    const size_t frameId1 = getFrameId();
+    const size_t frameId2 = getNextFrameId();
+
+    const WFObject& aKeyFrame1 = getFrame(frameId1);
+    const WFObject& aKeyFrame2 = getFrame(frameId2);
+
+    const float aCoeff = getInterpolationCoefficient();
+
+    ObjWriter objOut;
+    std::string filename("frame_dump_");
+    filename.append(itoa(frameId1));
+    filename.append("_");
+    filename.append(ftoa(aCoeff));
+    filename.append(".obj");
+    
+    std::ofstream objFileStream(filename.c_str(), std::ios::binary | std::ios::out);
+
+    if (!objFileStream)
+    {
+        std::cerr << "Could not open file " << filename <<" for writing!\n";
+        return;
+    }
+
+    //////////////////////////////////////////////////////////////////////////
+    //write vertex data
+    //////////////////////////////////////////////////////////////////////////
+    const size_t numVertices1 = aKeyFrame1.getNumVertices();
+    const size_t numVertices2 = aKeyFrame2.getNumVertices();
+    const size_t numVertices = numVertices2;
+
+    size_t it = 0;
+    for (; it < std::min(numVertices1, numVertices2); ++it)
+    {
+        float x,y,z;
+        x = aKeyFrame1.getVertex(it).x * (1.f - aCoeff) + aKeyFrame2.getVertex(it).x * aCoeff;
+        y = aKeyFrame1.getVertex(it).y * (1.f - aCoeff) + aKeyFrame2.getVertex(it).y * aCoeff;
+        z = aKeyFrame1.getVertex(it).z * (1.f - aCoeff) + aKeyFrame2.getVertex(it).z * aCoeff;
+        
+        objOut.writeVertex(objFileStream,x,y,z);
+    }
+
+    for (; it < numVertices2; ++it)
+    {
+        float x, y, z;
+        x = aKeyFrame2.getVertex(it).x;
+        y = aKeyFrame2.getVertex(it).y;
+        z = aKeyFrame2.getVertex(it).z;
+
+        objOut.writeVertex(objFileStream, x, y, z);
+    }
+
+
+    //////////////////////////////////////////////////////////////////////////
+    //write normal data
+    //////////////////////////////////////////////////////////////////////////
+    const size_t numNormals1 = aKeyFrame1.getNumNormals();
+    const size_t numNormals2 = aKeyFrame2.getNumNormals();
+    const size_t numNormals = numNormals2;
+
+    it = 0;
+    for (; it < std::min(numNormals1, numNormals2); ++it)
+    {
+        float x, y, z;
+        x = aKeyFrame1.getNormal(it).x * (1.f - aCoeff) + aKeyFrame2.getNormal(it).x * aCoeff;
+        y = aKeyFrame1.getNormal(it).y * (1.f - aCoeff) + aKeyFrame2.getNormal(it).y * aCoeff;
+        z = aKeyFrame1.getNormal(it).z * (1.f - aCoeff) + aKeyFrame2.getNormal(it).z * aCoeff;
+        objOut.writeVertexNormal(objFileStream, x, y, z);
+    }
+
+    for (; it < numNormals2; ++it)
+    {
+        float x, y, z;
+        x = aKeyFrame2.getNormal(it).x;
+        y = aKeyFrame2.getNormal(it).y;
+        z = aKeyFrame2.getNormal(it).z;
+        objOut.writeVertexNormal(objFileStream, x, y, z);
+    }
+
+    //////////////////////////////////////////////////////////////////////////
+    //write indices
+    //////////////////////////////////////////////////////////////////////////
+    const size_t numIndices1 = aKeyFrame1.getNumFaces() * 3;
+    const size_t numIndices2 = aKeyFrame1.getNumFaces() * 3;
+    const size_t numIndices = numIndices2;
+
+    it = 0;
+    for (; it < std::min(numIndices1, numIndices2); it += 3)
+    {
+        uint id0 = aKeyFrame1.getVertexIndex(it + 0);
+        uint id1 = aKeyFrame1.getVertexIndex(it + 1);
+        uint id2 = aKeyFrame1.getVertexIndex(it + 2);
+
+        objOut.writeTriangleIndices(objFileStream,
+            id0,
+            id1,
+            id2);
+    }
+
+    for (; it < numIndices2; it += 3)
+    {
+        uint id0 = aKeyFrame2.getVertexIndex(it + 0);
+        uint id1 = aKeyFrame2.getVertexIndex(it + 1);
+        uint id2 = aKeyFrame2.getVertexIndex(it + 2);
+
+        objOut.writeTriangleIndices(objFileStream,
+            id0,
+            id1,
+            id2);
+    }
+
+    objFileStream.close();
+
+}

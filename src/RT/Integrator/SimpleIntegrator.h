@@ -188,7 +188,6 @@ public:
         cudaEventCreate(&mTrace);
 
         cudaEventRecord(mStart, 0);
-        cudaEventSynchronize(mStart);
 
         trace<tPrimitive, tAccelerationStructure, t_PrimaryRayGenerator, t_RayBuffer, tTraverser, tPrimaryIntersector, false >
             <<< blockGridTrace, threadBlockTrace, sharedMemoryTrace>>>(

@@ -33,7 +33,7 @@ std::string itoa(const int a)
 std::string ftoa(const float a)
 {
     std::stringstream ss;
-    ss.precision(1);
+    ss.precision(2);
     ss.setf(std::ios::fixed,std::ios::floatfield);
     ss<<a;
     return ss.str();

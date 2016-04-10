@@ -400,8 +400,8 @@ public:
         //aMemoryManager.bindDeviceDataToTexture();
         ////////////////////////////////////////////////////////////////////////////
 
-        cudastd::logger::out << "Number of pairs:" << numPairs << "\n";
-        outputStats();
+        //cudastd::logger::out << "Number of pairs:" << numPairs << "\n";
+        //outputStats();
 
         cleanup();
     }

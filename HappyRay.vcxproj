@@ -276,6 +276,7 @@
     <ClInclude Include="src\Application\CameraManager.hpp" />
     <ClInclude Include="src\Application\CUDAApplication.h" />
     <ClInclude Include="src\Application\LightSourceLoader.hpp" />
+    <ClInclude Include="src\Application\ObjWriter.h" />
     <ClInclude Include="src\Application\SceneConfiguration.hpp" />
     <ClInclude Include="src\Application\SceneLoader.hpp" />
     <ClInclude Include="src\Application\SDLGLApplication.hpp" />
@@ -298,6 +299,7 @@
     <ClInclude Include="src\RT\Algorithm\UGridTraverser.h" />
     <ClInclude Include="src\RT\Algorithm\UniformGridBuildKernels.h" />
     <ClInclude Include="src\RT\Integrator\AOIntegrator.h" />
+    <ClInclude Include="src\RT\Integrator\AORayExporter.h" />
     <ClInclude Include="src\RT\Integrator\PathTracer.h" />
     <ClInclude Include="src\RT\Integrator\SimpleIntegrator.h" />
     <ClInclude Include="src\RT\Integrator\TLGridHierarchyAOIntegrator.h" />
@@ -336,6 +338,7 @@
     <ClCompile Include="src\Application\AnimationLoader.cpp" />
     <ClCompile Include="src\Application\CameraManager.cpp" />
     <ClCompile Include="src\Application\LightSourceLoader.cpp" />
+    <ClCompile Include="src\Application\ObjWriter.cpp" />
     <ClCompile Include="src\Application\SceneConfigurationReader.cpp" />
     <ClCompile Include="src\Application\SceneLoader.cpp" />
     <ClCompile Include="src\Application\SDLGLApplication.cpp" />

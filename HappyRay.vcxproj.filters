@@ -253,6 +253,12 @@
     <ClInclude Include="src\RT\Integrator\TLGridHierarchyAOIntegrator.h">
       <Filter>RT\Integrator</Filter>
     </ClInclude>
+    <ClInclude Include="src\RT\Integrator\AORayExporter.h">
+      <Filter>RT\Integrator</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Application\ObjWriter.h">
+      <Filter>Application</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\stdafx.cpp">
@@ -293,6 +299,9 @@
     </ClCompile>
     <ClCompile Include="src\RT\Primitive\Triangle.cpp">
       <Filter>RT\Primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Application\ObjWriter.cpp">
+      <Filter>Application</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

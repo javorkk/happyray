@@ -133,7 +133,7 @@ public:
         mUpOrientationAngleChange(0.f), mNumImages(0), mNumScreenshots(0),
         mPixelSamplesPerDumpedFrame(1),
         mDumpFrames(false),mPauseAnimation(false),
-        mRenderMode(DEFAULT), mMinimizedWindowName("Happy Ray"),
+        mRenderMode(AMBIENT_OCCLUSION), mMinimizedWindowName("Happy Ray"),
         mActiveWindowName("Fps: "), CONFIGURATION("scene.cfg")
     {}
 

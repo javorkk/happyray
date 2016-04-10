@@ -59,6 +59,8 @@ public:
     static void renderFrame(FrameBuffer& aFrameBuffer, const int aImageId, const int aRenderMode);
 
     static void cleanup();
+
+    static float getBoundingBoxDiagonalLength();
 };
 
 #endif // RTENGINE_H_6F33553F_C8E8_4EB9_B0D1_8AA967B3CEC5

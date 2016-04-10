@@ -40,14 +40,14 @@ struct AreaLightSource
     float3 position, normal, intensity, edge1, edge2;
     int e1MaxDimension, e2MaxDimension;
 
-    DEVICE HOST float3 AreaLightSource::getPoint(float aXCoord, float aYCoord) const
+    DEVICE HOST float3 getPoint(float aXCoord, float aYCoord) const
     {
         float3 result;
         result = position + aXCoord * edge1 + aYCoord * edge2;
         return result;
     }
 
-    DEVICE HOST bool AreaLightSource::isOnLS(float3 aPt) const
+    DEVICE HOST bool isOnLS(float3 aPt) const
     {
         bool onPlane = dot(aPt - position, normal) < 0.00001f;
 
@@ -74,7 +74,7 @@ struct AreaLightSource
         return inside;
     }
 
-    DEVICE HOST float AreaLightSource::getArea() const
+    DEVICE HOST float getArea() const
     {
         return len((edge1 % edge2));
     }

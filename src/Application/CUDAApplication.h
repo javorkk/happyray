@@ -77,6 +77,7 @@ public:
     }
 
     static void initScene();
+    static float getBBoxDiagonalLength();
     static float nextFrame();
 
     static float generateFrame(
@@ -94,6 +95,8 @@ public:
     {
         return sFrameBufferFloatPtr;
     }
+
+    static void dumpFrames();
 
     static void cleanup();
 };

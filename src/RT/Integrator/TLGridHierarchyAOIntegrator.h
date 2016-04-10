@@ -349,13 +349,14 @@ public:
 
         float3 normal = ~realNormal; /* ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);  */
 
-        if (dot(normal, oRayDir) > 0.f)
-            normal = -normal;
-
         if (instanceId < (uint)-1)
         {
             normal = instancesPtr[instanceId].transformNormalToGlobal(normal);
         }
+
+        //if (dot(normal, oRayDir) > 0.f)
+        //    normal = -normal;
+
 
 
         //////////////////////////////////////////////////////////////////////////

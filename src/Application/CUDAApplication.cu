@@ -49,6 +49,11 @@ void CUDAApplication::initScene()
 
 }
 
+float CUDAApplication::getBBoxDiagonalLength()
+{
+    return gRTEngine.getBoundingBoxDiagonalLength();
+}
+
 float CUDAApplication::nextFrame()
 {
     sAnimationManager.nextFrame();
@@ -125,6 +130,37 @@ float CUDAApplication::generateFrame(
 
     return oRenderTime;
 }
+
+void CUDAApplication::dumpFrames()
+{
+    if(sAnimationManager.getNumKeyFrames() <= 1u)
+        return;
+
+    cudastd::logger::out << "Dumping interpolated frame  ";
+    size_t frameId1 = sAnimationManager.getFrameId();
+    size_t frameId2 = sAnimationManager.getNextFrameId();
+    size_t previousFrameId1 = frameId1;
+    while (true)
+    {
+        for (int zeroes = 0; zeroes <= previousFrameId1 / 10; ++zeroes)
+            cudastd::logger::out << "\b";
+        
+        cudastd::logger::out << frameId1;
+        
+        if (frameId1 != previousFrameId1 && frameId1 == 0u)
+            break;
+
+        sAnimationManager.dumpFrame();
+        sAnimationManager.nextFrame();
+        
+        previousFrameId1 = frameId1;
+        frameId1 = sAnimationManager.getFrameId();
+        frameId2 = sAnimationManager.getNextFrameId();
+    }
+
+    cudastd::logger::out << "...done.\n";
+}
+
 
 void CUDAApplication::cleanup()
 {
