@@ -45,26 +45,17 @@
 
 class AnimationManager
 {
-    size_t mNumKeyFrames;
-    WFObject* mKeyFrames;
+    std::vector<WFObject> mKeyFrames;
+    std::vector<bool> mInterpolatable;
     float mCurrentFrameId; //interpolation coefficient
     float mStepSize;
 public:
 
-    AnimationManager(): mNumKeyFrames(0u), mKeyFrames(NULL),
+    AnimationManager() :
         mCurrentFrameId(0.f), mStepSize(0.8f)
     {}
 
-    ~AnimationManager()
-    {
-        if (mKeyFrames != NULL)
-        {
-            delete[] mKeyFrames;
-        }
-    }
-
-    _GET_MEMBER(NumKeyFrames, size_t);
-    _SET_MEMBER(NumKeyFrames, size_t);
+    size_t getNumKeyFrames() const { return mKeyFrames.size(); }
 
     _GET_MEMBER(CurrentFrameId, float);
     _SET_MEMBER(CurrentFrameId, float);
@@ -72,8 +63,7 @@ public:
     _GET_MEMBER(StepSize, float);
     _SET_MEMBER(StepSize, float);
 
-    _GET_MEMBER(KeyFrames, WFObject*);
-    _SET_MEMBER(KeyFrames, WFObject*);
+    WFObject* getKeyFrames() { return (WFObject*)mKeyFrames.data(); }
 
     size_t getFrameId() const
     {
@@ -82,10 +72,11 @@ public:
 
     size_t getNextFrameId() const
     {
-        return 
-            (static_cast<size_t>(mCurrentFrameId)
+        size_t nextFrameId = (getFrameId()
             + 1u
-            + static_cast<size_t>(mStepSize)) % mNumKeyFrames;
+            + static_cast<size_t>(mStepSize)) % getNumKeyFrames();
+
+        return mInterpolatable[nextFrameId] && mInterpolatable[getFrameId()] ? nextFrameId : getFrameId();
     }
 
     WFObject& getFrame(size_t aFrameId)
@@ -93,7 +84,10 @@ public:
         return mKeyFrames[aFrameId];
     }
 
-    
+    bool isInterpolatable(size_t aFrameId)
+    {
+        return mInterpolatable[aFrameId];
+    }
 
 
     float getInterpolationCoefficient() const
@@ -106,29 +100,39 @@ public:
     {
         mCurrentFrameId += mStepSize;
 
-        if (static_cast<size_t>(mCurrentFrameId) >= mNumKeyFrames)
+        if (static_cast<size_t>(mCurrentFrameId) >= getNumKeyFrames())
         {
             mCurrentFrameId -=
-                static_cast<float>(mNumKeyFrames);
+                static_cast<float>(getNumKeyFrames());
         }
     }
 
-    void allocateFrames(const size_t aSize)
+    void previousFrame()
     {
-        if (mKeyFrames != NULL)
+        mCurrentFrameId -= mStepSize;
+
+        if (mCurrentFrameId < 0.f)
         {
-            delete[] mKeyFrames;
+            mCurrentFrameId +=
+                static_cast<float>(getNumKeyFrames());
         }
-
-        mKeyFrames = new WFObject[aSize];
-        mNumKeyFrames = aSize;
-
     }
+
+    std::pair<float3, float3> getBounds(size_t aFrameId = 0u);
 
     //frameFileName is aFileNamePrefix::frameIndex::aFileNameSuffix
     void read(const char* aFileNamePrefix,
         const char* aFileNameSuffix,
         size_t aNumFrames);
+
+    void read(const char* aFileName);
+
+    void loadEmptyFrame()
+    {
+        WFObject frame;
+        mKeyFrames.push_back(frame);
+        mInterpolatable.push_back(false);
+    }
 
     void dumpFrame();
 };

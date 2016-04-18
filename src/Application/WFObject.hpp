@@ -37,61 +37,16 @@
 //	them selfs. Each face is a triangle and only contains indices
 //	into the position, normal, texture coordinate, and material
 //	buffers.
+#include <string>
+#include <vector>
 
 class WFObject
 {
 public:
-    class Face;
+    std::string  name;
     static const float3 C0;
     static const float3 C1;
     static const float3 C099;
-
-public:
-    WFObject():
-        mNumVertices(0u), mNumNormals(0u), mNumFaces(0u), mNumMaterials(0u),
-        mNumTexCoords(0u), mNumObjects(0u), mNumInstances(0u),
-        mVerticesBufferSize(0u), mNormalsBufferSize(0u), mFacesBufferSize(0u),
-            mMaterialsBufferSize(0u), mTexCoordsBufferSize(0u),
-            mObjectsBufferSize(0u), mInstancesBufferSize(0u),
-        mVertices(NULL), mNormals(NULL), mVertexIndices(NULL),
-        mNormalIndices(NULL),mFaces(NULL), mMaterials(NULL),
-            mTexCoords(NULL),
-            mObjects(NULL), mInstances(NULL)
-    {}
-
-    ~WFObject()
-    {
-        //TODO : fix destructor
-        if (mVertices != NULL)
-        {
-            delete[] mVertices;
-        }
-        if (mNormals != NULL)
-        {
-            delete[] mNormals;
-        }
-        if(mVertexIndices != NULL)
-        {
-            delete mVertexIndices;
-        }
-        if(mNormalIndices != NULL)
-        {
-            delete mNormalIndices;
-        }
-
-        if (mFaces != NULL)
-        {
-            delete[] mFaces;
-        }
-        if (mMaterials != NULL)
-        {
-            delete[] mMaterials;
-        }
-        if (mTexCoords != NULL)
-        {
-            delete[] mTexCoords;
-        }
-    }
 
     //Represents a material
     struct Material
@@ -112,7 +67,7 @@ public:
         bool isRefractive;
 
 
-        Material():
+        Material() :
             diffuseCoeff(C0),
             specularCoeff(C0),
             ambientCoeff(C0),
@@ -151,6 +106,33 @@ public:
         Face(WFObject * _obj) : m_lwObject(_obj) {}
     };
 
+    class Line
+    {
+        WFObject *m_lwObject;
+    public:
+        size_t material;
+        size_t vert1, tex1, norm1;
+        size_t vert2, tex2, norm2;
+
+        Line() : m_lwObject(NULL)
+        {}
+
+        Line(WFObject * _obj) : m_lwObject(_obj) {}
+    };
+
+    class Point
+    {
+        WFObject *m_lwObject;
+    public:
+        size_t material;
+        size_t vert1, tex1, norm1;
+
+        Point() : m_lwObject(NULL)
+        {}
+
+        Point(WFObject * _obj) : m_lwObject(_obj) {}
+    };
+
     struct Instance
     {
         size_t objectId;
@@ -163,109 +145,141 @@ public:
         float3 max;
     };
 
+    typedef std::vector<float3> t_vecVector;
+    typedef std::vector<WFObject::Face> t_FaceVector;
+    typedef std::vector<WFObject::Line> t_LineVector;
+    typedef std::vector<WFObject::Point> t_PointVector;
+    typedef std::vector<WFObject::Material> t_materialVector;
+    typedef std::vector<float2> t_texCoordVector;
+    typedef std::vector<int2> t_objectVector;
+    typedef std::vector<WFObject::Instance> t_instancesVector;
+
+    t_vecVector vertices;
+    t_vecVector normals;
+    t_FaceVector faces;
+    t_LineVector lines;
+    t_PointVector points;
+    t_materialVector materials;
+    t_texCoordVector texCoords;
+    t_objectVector objects;
+    t_instancesVector instances;
+
     size_t getNumVertices() const
     {
-        return mNumVertices;
+        return vertices.size();
     }
     size_t getNumNormals() const
     {
-        return mNumNormals;
+        return normals.size();
     }
     size_t getNumFaces() const
     {
-        return mNumFaces;
+        return faces.size();
+    }
+    size_t getNumLines() const
+    {
+        return lines.size();
+    }
+    size_t getNumPoints() const
+    {
+        return points.size();
     }
     size_t getNumMaterials() const
     {
-        return mNumMaterials;
+        return materials.size();
     }
     size_t getNumTexCoords() const
     {
-        return mNumTexCoords;
+        return texCoords.size();
     }
-    
+
     size_t getNumObjects() const
     {
-        return mNumObjects;
+        return objects.size();
     }
     size_t getNumInstances() const
     {
-        return mNumInstances;
+        return instances.size();
     }
 
     float3 getVertex(size_t aVtxId) const
     {
-        return *reinterpret_cast<float3*>(mVertices + aVtxId);
+        return vertices[aVtxId];
     }
 
     float3 getNormal(size_t aNormalId) const
     {
-        return *reinterpret_cast<float3*>(mNormals + aNormalId);
+        return normals[aNormalId];
     }
 
     Face getFace(size_t aFaceId) const
     {
-        return mFaces[aFaceId];
+        return faces[aFaceId];
     }
 
-    uint getVertexIndex(size_t aId) const
+    Line getLine(size_t aId) const
     {
-        return mVertexIndices[aId];
+        return lines[aId];
     }
 
-    uint getNormalIndex(size_t aId) const
+    Point getPoint(size_t aId) const
     {
-        return mNormalIndices[aId];
+        return points[aId];
     }
+
+    uint getVertexIndex(size_t aId) const;
+
+    uint getNormalIndex(size_t aId) const;
+
     Material getMaterial(size_t aMatId) const
     {
-        return mMaterials[aMatId];
+        return materials[aMatId];
     }
 
     float2 getTexCoords(size_t aCoordId) const
     {
-        return mTexCoords[aCoordId];
+        return texCoords[aCoordId];
     }
 
     float3& getVertex(size_t aVtxId)
     {
-        return *reinterpret_cast<float3*>(mVertices + aVtxId);
+        return vertices[aVtxId];
     }
 
 
     float3& getNormal(size_t aNormalId)
     {
-        return *reinterpret_cast<float3*>(mNormals + aNormalId);
+        return normals[aNormalId];
     }
 
     Face& getFace(size_t aFaceId)
     {
-        return mFaces[aFaceId];
+        return faces[aFaceId];
     }
 
     Material& getMaterial(size_t aMatId)
     {
-        return mMaterials[aMatId];
+        return materials[aMatId];
     }
 
     float2& getTexCoords(size_t aCoordId)
     {
-        return mTexCoords[aCoordId];
+        return texCoords[aCoordId];
     }
 
     int2 getObjectRange(size_t aId) const
     {
-        return mObjects[aId];
+        return objects[aId];
     }
 
     Instance& getInstance(size_t aInstanceId)
     {
-        return mInstances[aInstanceId];
+        return instances[aInstanceId];
     }
 
     const Instance& getInstance(size_t aInstanceId) const
     {
-        return mInstances[aInstanceId];
+        return instances[aInstanceId];
     }
 
     size_t insertVertex(const float3& aVertex);
@@ -274,229 +288,17 @@ public:
 
     size_t insertFace(const Face& aFace);
 
+    size_t insertLine(const Line& aLine);
+
+    size_t insertPoint(const Point& aPoint);
+
+
     size_t insertMaterial(const Material& aMaterial);
-
-
-    void allocateVertices(const size_t aSize)
-    {
-        if (mVertices != NULL)
-        {
-            delete[] mVertices;
-        }
-
-        mVerticesBufferSize = aSize + cudastd::max((size_t)1,aSize / 4u);
-        mVertices = new float3[mVerticesBufferSize];
-        mNumVertices = aSize;
-    }
-
-
-    void allocateNormals(const size_t aSize)
-    {
-        if (mNormals != NULL)
-        {
-            delete[] mNormals;
-        }
-
-        mNormalsBufferSize = aSize + cudastd::max((size_t)1,aSize / 4u);
-        mNormals = new float3[mNormalsBufferSize];
-        mNumNormals = aSize;
-    }
-
-    void allocateFaces(const size_t aSize)
-    {
-        if (mFaces != NULL)
-        {
-            delete[] mFaces;
-        }
-
-        if (mVertexIndices != NULL)
-        {
-            delete mVertexIndices;
-        }
-
-        if (mNormalIndices != NULL)
-        {
-            delete mNormalIndices;
-        }
-
-        mFacesBufferSize = aSize + cudastd::max((size_t)1, aSize / 4u);
-        mFaces = new Face[mFacesBufferSize];
-        mVertexIndices = new uint[mFacesBufferSize * 3];
-        mNormalIndices = new uint[mFacesBufferSize * 3];
-        mNumFaces = aSize;
-    }
-
-    void allocateMaterials(const size_t aSize)
-    {
-        if (mMaterials != NULL)
-        {
-            delete[] mMaterials;
-        }
-
-        mMaterialsBufferSize = aSize + cudastd::max((size_t)1,aSize / 4u);
-        mMaterials = new Material[mMaterialsBufferSize];
-        mNumMaterials = aSize;
-
-    }
-
-    void allocateTexCoords(const size_t aSize)
-    {
-        if (mTexCoords != NULL)
-        {
-            delete[] mTexCoords;
-        }
-
-        mTexCoordsBufferSize = aSize + cudastd::max((size_t)1, aSize / 4u);
-        mTexCoords = new float2[mTexCoordsBufferSize];
-        mNumTexCoords = aSize;
-
-    }
-
-    void allocateObjects(const size_t aSize)
-    {
-        if (mObjects != NULL)
-        {
-            delete[] mObjects;
-        }
-
-        mObjectsBufferSize = aSize + cudastd::max((size_t)1, aSize / 4u);
-        mObjects = new int2[mObjectsBufferSize];
-        mNumObjects = aSize;
-
-    }
-
-    void allocateInstances(const size_t aSize)
-    {
-        if (mInstances != NULL)
-        {
-            delete[] mInstances;
-        }
-
-        mInstancesBufferSize = aSize + cudastd::max((size_t)1, aSize / 4u);
-        mInstances = new Instance[mInstancesBufferSize];
-        mNumInstances = aSize;
-    }
 
     //Reads the FrontWave3D object from a file
     void read(const char* aFileName);
     void loadWFObj(const char* aFileName);
     void loadInstances(const char* aFileName);
-    void copyVectorsToArrays(); //hack for using std constructs without nvcc knowing about them
 
-    typedef const float3* t_VertexIterator;
-    typedef const uint* t_IndexIterator;
-    typedef const Face* t_FaceIterator;
-    typedef const Material* t_MaterialIterator;
-    typedef Material* t_MaterialIteratorNonConst;
-    typedef int2* t_ObjectIterator;
-    typedef Instance* t_InstanceIterator;
-
-
-    t_VertexIterator verticesBegin() const
-    {
-        return mVertices;
-    }
-
-    t_VertexIterator verticesEnd() const
-    {
-        return mVertices + mNumVertices;
-    }
-
-    t_FaceIterator facesBegin() const
-    {
-        return mFaces;
-    }
-
-    t_FaceIterator facesEnd() const
-    {
-        return mFaces + mNumFaces;
-    }
-
-    t_MaterialIterator materialsBegin() const
-    {
-        return mMaterials;
-    }
-
-    t_MaterialIterator materialsEnd() const
-    {
-        return mMaterials + mNumMaterials;
-    }
-
-    t_MaterialIteratorNonConst materialsBegin()
-    {
-        return mMaterials;
-    }
-
-    t_MaterialIteratorNonConst materialsEnd()
-    {
-        return mMaterials + mNumMaterials;
-    }
-
-    t_IndexIterator vertexIndicesBegin()
-    {
-        return mVertexIndices;
-    }
-
-    t_IndexIterator vertexIndicesEnd()
-    {
-        return mVertexIndices + mNumFaces * 3;
-    }
-
-    t_IndexIterator NormalIndicesBegin()
-    {
-        return mNormalIndices;
-    }
-
-    t_IndexIterator NormalIndicesEnd()
-    {
-        return mNormalIndices + mNumFaces * 3;
-    }
-
-    t_VertexIterator normalsBegin() const
-    {
-        return mNormals;
-    }
-
-    t_VertexIterator normalsEnd() const
-    {
-        return mNormals + mNumNormals;
-    }
-
-    t_ObjectIterator objectsBegin() const
-    {
-        return mObjects;
-    }
-
-    t_ObjectIterator objectsEnd() const
-    {
-        return mObjects + mNumObjects;
-    }
-
-    t_InstanceIterator instancesBegin() const
-    {
-        return mInstances;
-    }
-
-    t_InstanceIterator instancesEnd() const
-    {
-        return mInstances + mNumInstances;
-    }
-
-
-private:
-    size_t mNumVertices, mNumNormals, mNumFaces, mNumMaterials, mNumTexCoords;
-    size_t mNumObjects, mNumInstances;
-    size_t mVerticesBufferSize, mNormalsBufferSize, mFacesBufferSize, mMaterialsBufferSize, mTexCoordsBufferSize;
-    size_t mObjectsBufferSize, mInstancesBufferSize;
-    float3* mVertices;
-    float3* mNormals;
-    uint* mVertexIndices;
-    uint* mNormalIndices;
-    Face*  mFaces;
-    Material* mMaterials;
-    float2* mTexCoords;
-    int2* mObjects;
-    Instance* mInstances;
 };
-
 #endif // FWOBJECT_HPP_INCLUDED_45834E1E_1D79_4F3E_ABD3_77E318EF9223

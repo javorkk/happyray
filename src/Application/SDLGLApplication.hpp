@@ -28,28 +28,26 @@
 #ifndef SDLGLAPPLICATION_HPP_INCLUDED_2AF01D18_08BE_4F7C_987F_80AD91626F7F
 #define SDLGLAPPLICATION_HPP_INCLUDED_2AF01D18_08BE_4F7C_987F_80AD91626F7F
 
-// OpenGL extensions
-#include <GL/glew.h>
-#ifdef _WIN32
-#   include <GL/wglew.h>
+//////////////////////////////////////////////////////////////////////////
+//SDL is a cross-platform windowing...
+//////////////////////////////////////////////////////////////////////////
+#if !defined(__CUDA_ARCH__) && !defined(__CUDACC__) && !defined(__NVCC__) && !defined(__CUDABE__) && !defined(__CUDANVVM__)
+#if !defined(__APPLE__)
+#    ifdef _WIN32
+#        include "../contrib/include/SDL.h"
+#    else
+#        include <SDL2/SDL.h>
+#    endif
 #else
-#   include <GL/glxew.h>
-#endif
-
-//#define GL3_PROTOTYPES 1 // Ensure we are using opengl's core profile only
-//#include <GL3/gl3.h>
-
-//SDL is a cross-platform windowing library
-#ifdef _WIN32
-#   include "SDL.h"
-#else
-#   include "SDL2/SDL.h"
-#endif
+#    include <SDL2/SDL.h>
+#endif //__APPLE__
+#endif //HAS CUDA
 
 //////////////////////////////////////////////////////////////////////////
 //CUDA specific includes (host code only)
 //////////////////////////////////////////////////////////////////////////
 #include "Application/CameraManager.hpp"
+#include "RenderBug/RenderBug.hpp"
 
 class SDLGLApplication
 {
@@ -84,7 +82,7 @@ class SDLGLApplication
     int mPixelSamplesPerDumpedFrame;
     bool mDumpFrames;
     bool mPauseAnimation;
-    enum RenderMode {DEFAULT = 0, PATH_TRACE = 1, AMBIENT_OCCLUSION = 2};
+    enum RenderMode { DEFAULT = 0, PATH_TRACE = 1, AMBIENT_OCCLUSION = 2, OPEN_GL = 3 };
     RenderMode mRenderMode;
     //////////////////////////////////////////////////////////////////////////
     //IO
@@ -105,21 +103,6 @@ public:
     //////////////////////////////////////////////////////////////////////////
     // OpenGL
     static SDL_GLContext maincontext; //OpenGL Context
-    static GLuint vao;//Vertex Array Object
-    static GLuint vbo[3]; //tree Vertex Buffer Objects
-    static const GLchar *vertexsource;//vtx shader source
-    static const GLchar *fragmentsource;//fragment shader source
-    static GLuint vertexshader, fragmentshader;//shaders
-    static GLuint shaderprogram; //shader program
-    //////////////////////////////////////////////////////////////////////////
-    //Textures & related
-    //GL_TEXTURE_RECTANGLE_ARB allows non-normalized texture coordinates
-    static const int TEXTURE_TARGET = GL_TEXTURE_2D;
-    static const int INTERNAL_FORMAT = GL_RGB32F_ARB;//GL_LUMINANCE32F_ARB;
-    static const int TEXTURE_FORMAT = GL_RGB;//GL_LUMINANCE;
-    //static float* frameBufferFloatPtr;
-    static GLuint sFBTextureId;
-    static GLuint sFBOId;
     //////////////////////////////////////////////////////////////////////////
 
     SDLGLApplication():mRESX(256), mRESY(256), mBACKGROUND_R(0.5f),
@@ -229,18 +212,15 @@ public:
 
     void pauseAnimation();
 
+    void previousFrame();
+    void nextFrame();
+
     //////////////////////////////////////////////////////////////////////////
     //
     //OpenGL specific
     //
     //////////////////////////////////////////////////////////////////////////
     void initVideo();
-
-    static void initFrameBufferTexture(GLuint *aTextureId, const int aResX, const int aResY);
-
-    static void initGLSL(void);
-
-    void runGLSLShader(void);
 
     //////////////////////////////////////////////////////////////////////////
 

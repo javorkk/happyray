@@ -120,7 +120,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>cudart.lib;SDL2.lib;opengl32.lib;glew32.lib;gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cudart.lib;SDL2.lib;opengl32.lib;gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
     </Link>
@@ -154,7 +154,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>cudart.lib;SDL2.lib;opengl32.lib;glew32.lib;gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cudart.lib;SDL2.lib;opengl32.lib;gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
     </Link>
@@ -195,7 +195,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>cudart.lib;SDL2.lib;opengl32.lib;glew32.lib;gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cudart.lib;SDL2.lib;opengl32.lib;gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
     </Link>
@@ -232,7 +232,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>cudart.lib;SDL2.lib;opengl32.lib;glew32.lib;gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cudart.lib;SDL2.lib;opengl32.lib;gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
     </Link>
@@ -287,6 +287,9 @@
     <ClInclude Include="src\Core\SSEAlgebra.hpp" />
     <ClInclude Include="src\CUDAStdAfx.h" />
     <ClInclude Include="src\DeviceConstants.h" />
+    <ClInclude Include="src\gl_core_3_2.h" />
+    <ClInclude Include="src\RenderBug\GLUtilities.hpp" />
+    <ClInclude Include="src\RenderBug\RenderBug.hpp" />
     <ClInclude Include="src\RT\Algorithm\RayGenerators.h" />
     <ClInclude Include="src\RT\Algorithm\RayTracingKernels.h" />
     <ClInclude Include="src\RT\Algorithm\RayTriangleIntersector.h" />
@@ -344,7 +347,10 @@
     <ClCompile Include="src\Application\SDLGLApplication.cpp" />
     <ClCompile Include="src\Application\WFObjectReader.cpp" />
     <ClCompile Include="src\Core\SSEAlgebra.cpp" />
+    <ClCompile Include="src\gl_core_3_2.cpp" />
     <ClCompile Include="src\Main.cpp" />
+    <ClCompile Include="src\RenderBug\GLUtilities.cpp" />
+    <ClCompile Include="src\RenderBug\RenderBug.cpp" />
     <ClCompile Include="src\RT\Primitive\Triangle.cpp" />
     <CudaCompile Include="src\RT\Algorithm\TLGridHierarchySortBuilder.cu" />
     <CudaCompile Include="src\RT\Algorithm\UniformGridBuildKernels.cu" />

@@ -25,30 +25,52 @@
 #include "AnimationManager.hpp"
 
 
+std::pair<float3, float3> AnimationManager::getBounds(size_t aFrameId)
+{
+    float3 minBound = make_float3(FLT_MAX, FLT_MAX, FLT_MAX);
+    float3 maxBound = make_float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+    if (getNumKeyFrames() == 0u)
+    {
+        return std::pair<float3, float3>(minBound, maxBound);
+    }
+
+    size_t frameId = aFrameId % getNumKeyFrames();
+
+    const WFObject& frame = mKeyFrames[frameId];
+
+    for (size_t it = 0u; it < frame.getNumVertices(); ++it)
+    {
+        minBound = min(frame.vertices[it], minBound);
+        maxBound = max(frame.vertices[it], maxBound);
+    }
+
+    return std::pair<float3, float3>(minBound, maxBound);
+}
+
 void AnimationManager::read(const char* aFileNamePrefix,
-          const char* aFileNameSuffix,
-          size_t aNumFrames)
+    const char* aFileNameSuffix,
+    size_t aNumFrames)
 {
     const std::string fileNamePrefix = aFileNamePrefix;
     const std::string fileNameSuffix = aFileNameSuffix;
 
     int numDigits = 0;
-    int numFrames = static_cast<int>(aNumFrames) - 1;
+    int numFrames = static_cast<int>(aNumFrames)-1;
 
-    for(; numFrames > 0; numFrames /= 10, ++numDigits)
-    {}
+    for (; numFrames > 0; numFrames /= 10, ++numDigits)
+    {
+    }
 
     if (aNumFrames > 0u)
     {
-        allocateFrames(aNumFrames);
-
-        for(size_t frameId = 0; frameId < aNumFrames; ++frameId)
+        for (size_t frameId = 0; frameId < aNumFrames; ++frameId)
         {
             std::string frameIdStr;
             int currNumDigits = 1;
             int hlpFrameId = static_cast<int>(frameId);
-            for(; hlpFrameId > 9; hlpFrameId /= 10, ++currNumDigits)
-            {}
+            for (; hlpFrameId > 9; hlpFrameId /= 10, ++currNumDigits)
+            {
+            }
 
             for (; currNumDigits < numDigits; ++currNumDigits)
             {
@@ -62,10 +84,22 @@ void AnimationManager::read(const char* aFileNamePrefix,
                 frameIdStr +
                 fileNameSuffix;
 
-            mKeyFrames[frameId].read(fileName.c_str());
+            WFObject currentFrame;
+            currentFrame.read(fileName.c_str());
+            mKeyFrames.push_back(currentFrame);
+            mInterpolatable.push_back(true);
         }
     }
 }
+
+void AnimationManager::read(const char * aFileName)
+{
+    WFObject currentFrame;
+    currentFrame.read(aFileName);
+    mKeyFrames.push_back(currentFrame);
+    mInterpolatable.push_back(false);
+}
+
 
 #include "Application/ObjWriter.h"
 

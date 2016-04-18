@@ -32,62 +32,17 @@
 SDL_Window* SDLGLApplication::mainwindow;
 
 SDL_GLContext SDLGLApplication::maincontext;
-GLuint SDLGLApplication::vao;
-GLuint SDLGLApplication::vbo[3]; 
-const GLchar *SDLGLApplication::vertexsource  = "#version 150 \n               \
-                        precision highp float;\n                               \
-                        in  vec2 in_Position; \n                               \
-                        in  vec2 in_TexCoord; \n                               \
-                        out vec2 aTexCoord; \n                                 \
-                        void main(void) { \n                                   \
-                            gl_Position = vec4(in_Position, 0.0, 1.0);\n       \
-                            aTexCoord = in_TexCoord;\n                         \
-                        }";
-const GLchar *SDLGLApplication::fragmentsource = "#version 150 \n              \
-                        precision highp float; \n                              \
-                        uniform sampler2D uTexture; \n                         \
-                        in  vec2 aTexCoord; \n                                 \
-                        out vec4 gl_FragColor; \n                              \
-                                                                               \
-                        vec4 gammaCorrection(float aGamma)                     \
-                        {                                                      \
-                        float gammaRecip = 1.0 / aGamma;                       \
-                        return pow(texture2D(uTexture, aTexCoord.st),          \
-                        vec4(gammaRecip, gammaRecip, gammaRecip, 1.0));        \
-                        }                                                      \
-                                                                               \
-                        void main(void) { \n                                   \
-                        gl_FragColor = gammaCorrection(2.2); \n                \
-                        }";
-GLuint SDLGLApplication::vertexshader;
-GLuint SDLGLApplication::fragmentshader;
-GLuint SDLGLApplication::shaderprogram;
-GLuint SDLGLApplication::sFBTextureId;
-GLuint SDLGLApplication::sFBOId;
 
 const float MAXSTEPSIZE = 200.f;
 const float MINSTEPSIZE = 0.01f;
 const float ROTATESCALEFACTOR = 0.003f;
 const float ROTATEUPSCALEFACTOR = 0.01f;
 
+RenderBug gOpenGLRenderer;
+
 SDLGLApplication::~SDLGLApplication()
 {
-#ifdef USE_OPEN_GL
-    //texture
-    glDeleteTextures(1, &sFBTextureId);
-    //shader & buffers
-    glUseProgram(0);
-    glDetachShader(shaderprogram, vertexshader);
-    glDetachShader(shaderprogram, fragmentshader);
-    glDeleteProgram(shaderprogram);
-    glDeleteShader(vertexshader);
-    glDeleteShader(fragmentshader);
-    glDeleteBuffers(3, vbo);
-    glDeleteVertexArrays(1, &vao);
-
-    SDL_GL_DeleteContext(maincontext);
-#endif
-
+    cleanup();
     CUDAApplication::cleanup();
     SDL_Quit();
 }
@@ -123,6 +78,9 @@ void SDLGLApplication::initScene()
         CUDAApplication::sAnimationManager,
         mInitialCamera,
         CUDAApplication::sAreaLightSources);
+
+    if (CUDAApplication::sAnimationManager.getNumKeyFrames() == 1u)
+        gOpenGLRenderer.setupSceneGeometry(CUDAApplication::sAnimationManager);
 
     mCamera = mInitialCamera;
 
@@ -216,6 +174,14 @@ void SDLGLApplication::KeyUp		(SDL_Keysym& aSym)
 
     switch(SDL_GetKeyFromScancode(aSym.scancode)) 
     {
+    case SDLK_PERIOD:
+    case SDLK_GREATER:
+        nextFrame();
+        break;
+    case SDLK_COMMA:
+    case SDLK_LESS:
+        previousFrame();
+        break;
     case SDLK_LEFTBRACKET:
         mMoveStep = std::max(MINSTEPSIZE, mMoveStep / 2.f);
         break;           
@@ -571,6 +537,7 @@ void SDLGLApplication::printHelp()
     std::cerr << "Adjust movement step size: Mouse scroll\n\n";
     std::cerr << "Reset Camera: Space\n\n";
     std::cerr << "Pause Animation: p\n\n";
+    std::cerr << "Go to previous/next frame: , / . or < / >";
     std::cerr << "Output camera parameters: c\n\n";
     std::cerr << "Set window width and height: r\n\n";
     std::cerr << "Set background color: b\n\n";
@@ -620,7 +587,7 @@ void SDLGLApplication::toggleFullSreenMode(void)
 
 void SDLGLApplication::nextRenderMode()
 {
-    switch ( mRenderMode ) 
+    switch (mRenderMode)
     {
     case DEFAULT:
         mRenderMode = PATH_TRACE;
@@ -629,6 +596,10 @@ void SDLGLApplication::nextRenderMode()
         mRenderMode = AMBIENT_OCCLUSION;
         break;
     case AMBIENT_OCCLUSION:
+        mRenderMode = OPEN_GL;
+        gOpenGLRenderer.setupSceneGeometry(CUDAApplication::sAnimationManager);
+        break;
+    case OPEN_GL:
     default:
         mRenderMode = DEFAULT;
         break;
@@ -650,6 +621,22 @@ void SDLGLApplication::dumpFrames()
 void SDLGLApplication::pauseAnimation()
 {
     mPauseAnimation = !mPauseAnimation;
+    cameraChanged();
+}
+
+void SDLGLApplication::previousFrame()
+{
+    CUDAApplication::nextFrame();
+    //CUDAApplication::sAnimationManager.previousFrame();
+    gOpenGLRenderer.setupSceneGeometry(CUDAApplication::sAnimationManager);
+    cameraChanged();
+}
+
+void SDLGLApplication::nextFrame()
+{
+    CUDAApplication::nextFrame();
+    //CUDAApplication::sAnimationManager.nextFrame();
+    gOpenGLRenderer.setupSceneGeometry(CUDAApplication::sAnimationManager);
     cameraChanged();
 }
 //////////////////////////////////////////////////////////////////////////
@@ -701,12 +688,12 @@ void SDLGLApplication::initVideo()
         /* This makes our buffer swap syncronized with the monitor's vertical refresh */
         SDL_GL_SetSwapInterval(1);
 
-        GLenum err=glewInit();
-        if(err!=GLEW_OK)
-        {
-            //problem: glewInit failed, something is seriously wrong
-            std::cerr << "Error: "<< glewGetErrorString(err) << "\n";
-        }
+        //GLenum err=glewInit();
+        //if(err!=GLEW_OK)
+        //{
+        //    //problem: glewInit failed, something is seriously wrong
+        //    std::cerr << "Error: "<< glewGetErrorString(err) << "\n";
+        //}
 
         /* Enable Z depth testing so objects closest to the viewpoint are in front of objects further away */
         glEnable(GL_DEPTH_TEST);
@@ -723,8 +710,10 @@ void SDLGLApplication::initVideo()
 
         }
 
-        initGLSL();
-        initFrameBufferTexture(&sFBTextureId, mRESX, mRESY);
+        gOpenGLRenderer.initFBufferShader();
+        gOpenGLRenderer.initFrameBufferTexture(mRESX, mRESY);
+        gOpenGLRenderer.initCartoonShader();
+        gOpenGLRenderer.initConstantShader();        
 
         SDL_ShowWindow(mainwindow);
 
@@ -761,7 +750,20 @@ void SDLGLApplication::displayFrame()
         
         if(!mPauseAnimation)
         {
-            buildTime = CUDAApplication::nextFrame();
+            switch (mRenderMode)
+            {
+            case DEFAULT:
+            case PATH_TRACE:
+            case AMBIENT_OCCLUSION:
+                buildTime = CUDAApplication::nextFrame();
+                break;
+            case OPEN_GL:
+                CUDAApplication::sAnimationManager.nextFrame();
+                gOpenGLRenderer.setupSceneGeometry(CUDAApplication::sAnimationManager);
+                break;
+            default:
+                break;
+            }//switch ( mRenderMode )
         }
 
         for (int i = 0; i < mPixelSamplesPerDumpedFrame; ++i)
@@ -775,8 +777,12 @@ void SDLGLApplication::displayFrame()
                 renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 1);
                 break;
             case AMBIENT_OCCLUSION:
-            default:
                 renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 2);
+            case OPEN_GL:
+
+                break;
+            default:
+                
                 break;
             }//switch ( mRenderMode )
 
@@ -786,41 +792,70 @@ void SDLGLApplication::displayFrame()
             ++mNumImages;
         }
 
+        //display frame rate in window title
+        std::string windowName(mActiveWindowName);
+        
+        time = renderTime + buildTime;
+        const float fps = 1000.f / time;
+
         if(mPauseAnimation)
         {
             ++mNumImages;
         }
 
-        time = renderTime + buildTime;
-        //display frame rate in window title
-        std::string windowName(mActiveWindowName);
-        const float fps = 1000.f / time;
-        if (fps < 10.f)
-            windowName += " ";
-        windowName += ftoa(fps);
+        switch (mRenderMode)
+        {
+        case DEFAULT:
+        case PATH_TRACE:
+        case AMBIENT_OCCLUSION:
+            if (fps < 10.f)
+                windowName += " ";
+            windowName += ftoa(fps);
 
-        windowName += " (render: ";
-       if (renderTime < 100.f)
-            windowName += " ";
-        if (renderTime < 10.f)
-            windowName += " ";
-        windowName += ftoa(renderTime);
-        
-        windowName += " build: ";
-        if (buildTime < 10.f)
-            windowName += " ";
+            windowName += " (render: ";
+            if (renderTime < 100.f)
+                windowName += " ";
+            if (renderTime < 10.f)
+                windowName += " ";
+            windowName += ftoa(renderTime);
 
-        windowName += ftoa(buildTime);
-        windowName += ") spp: ";
-        windowName += itoa(mNumImages);
+            windowName += " build: ";
+            if (buildTime < 10.f)
+                windowName += " ";
+
+            windowName += ftoa(buildTime);
+            windowName += ") spp: ";
+            windowName += itoa(mNumImages);
 
 
-        SDL_SetWindowTitle(mainwindow, windowName.c_str());
+            SDL_SetWindowTitle(mainwindow, windowName.c_str());
 #ifdef USE_OPEN_GL        
-        runGLSLShader();
+            gOpenGLRenderer.renderFBuffer(CUDAApplication::getFrameBuffer(), mRESX, mRESY);
+            SDL_GL_SwapWindow(mainwindow);
 #else
-        drawFrameBuffer();
+            drawFrameBuffer();
 #endif
+            break;
+        case OPEN_GL:
+#ifdef USE_OPEN_GL 
+            //display frame rate in window title	
+            windowName = "file: ";
+            windowName += CUDAApplication::sAnimationManager.getFrame(CUDAApplication::sAnimationManager.getFrameId()).name;
+            SDL_SetWindowTitle(mainwindow, windowName.c_str());
+
+            gOpenGLRenderer.renderScene(mCamera);
+
+            /* Swap our buffers to make our changes visible */
+            SDL_GL_SwapWindow(mainwindow);
+
+            /* Sleep for roughly 33 milliseconds between frames */
+            SDL_Delay(33);
+#endif
+            break;
+        default:
+            break;
+        }//switch ( mRenderMode )
+
 
         if(!mPauseAnimation && mDumpFrames)
         {
@@ -830,32 +865,6 @@ void SDLGLApplication::displayFrame()
     }
 }
 
-void SDLGLApplication::initFrameBufferTexture(GLuint *aTextureId, const int aResX, const int aResY)
-{   
-    // create a new texture name
-    glGenTextures (1, aTextureId);
-    // bind the texture name to a texture target
-    glBindTexture(TEXTURE_TARGET, *aTextureId);
-    // turn off filtering and set proper wrap mode 
-    // (obligatory for float textures atm)
-    glTexParameteri(TEXTURE_TARGET, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(TEXTURE_TARGET, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(TEXTURE_TARGET, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameteri(TEXTURE_TARGET, GL_TEXTURE_WRAP_T, GL_CLAMP);
-    // set texenv to replace instead of the default modulate
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-    // and allocate graphics memory
-
-    glTexImage2D(TEXTURE_TARGET, 
-        0, //not to use any mipmap levels for this texture
-        INTERNAL_FORMAT,
-        aResX,
-        aResY,
-        0, //turns off borders
-        TEXTURE_FORMAT,
-        GL_FLOAT,
-        0);
-}
 
 void SDLGLApplication::drawFrameBuffer(void)
 {
@@ -961,235 +970,10 @@ void SDLGLApplication::drawFrameBuffer(void)
 
 }
 
-void SDLGLApplication::initGLSL(void)
-{
-        int isCompiled_VS, isCompiled_FS;
-        int IsLinked;
-        int maxLength;
-        char *vertexInfoLog;
-        char *fragmentInfoLog;
-        char *shaderProgramInfoLog;
-
-        /* Allocate and assign a Vertex Array Object to our handle */
-        glGenVertexArrays(1, &vao);
-
-        /* Bind our Vertex Array Object as the current used object */
-        glBindVertexArray(vao);
-
-        /* Allocate and assign tree Vertex Buffer Objects to our handle */
-        glGenBuffers(3, vbo);
-
-        /* Create an empty vertex shader handle */
-        vertexshader = glCreateShader(GL_VERTEX_SHADER);
-
-        /* Send the vertex shader source code to GL */
-        /* Note that the source code is NULL character terminated. */
-        /* GL will automatically detect that therefore the length info can be 0 in this case (the last parameter) */
-        glShaderSource(vertexshader, 1, (const GLchar**)&vertexsource, 0);
-
-        /* Compile the vertex shader */
-        glCompileShader(vertexshader);
-
-        glGetShaderiv(vertexshader, GL_COMPILE_STATUS, &isCompiled_VS);
-        if(isCompiled_VS == 0)
-        {
-            glGetShaderiv(vertexshader, GL_INFO_LOG_LENGTH, &maxLength);
-
-            /* The maxLength includes the NULL character */
-            vertexInfoLog = (char *)malloc(maxLength);
-
-            glGetShaderInfoLog(vertexshader, maxLength, &maxLength, vertexInfoLog);
-
-            /* Handle the error in an appropriate way such as displaying a message or writing to a log file. */
-            std::cerr << "Shader program compilation failed\n";
-            std::cerr << vertexInfoLog << "\n";
-
-            free(vertexInfoLog);
-            return;
-        }
-
-        /* Create an empty fragment shader handle */
-        fragmentshader = glCreateShader(GL_FRAGMENT_SHADER);
-
-        /* Send the fragment shader source code to GL */
-        /* Note that the source code is NULL character terminated. */
-        /* GL will automatically detect that therefore the length info can be 0 in this case (the last parameter) */
-        glShaderSource(fragmentshader, 1, (const GLchar**)&fragmentsource, 0);
-
-        /* Compile the fragment shader */
-        glCompileShader(fragmentshader);
-
-        glGetShaderiv(fragmentshader, GL_COMPILE_STATUS, &isCompiled_FS);
-        if(isCompiled_FS == 0)
-        {
-            glGetShaderiv(fragmentshader, GL_INFO_LOG_LENGTH, &maxLength);
-
-            /* The maxLength includes the NULL character */
-            fragmentInfoLog = (char *)malloc(maxLength);
-
-            glGetShaderInfoLog(fragmentshader, maxLength, &maxLength, fragmentInfoLog);
-
-            /* Handle the error in an appropriate way such as displaying a message or writing to a log file. */
-            std::cerr << "Shader program compilation failed\n";
-            std::cerr << fragmentInfoLog << "\n";
-
-            free(fragmentInfoLog);
-            return;
-        }
-
-        /* If we reached this point it means the vertex and fragment shaders compiled and are syntax error free. */
-        /* We must link them together to make a GL shader program */
-        /* GL shader programs are monolithic. It is a single piece made of 1 vertex shader and 1 fragment shader. */
-        /* Assign our program handle a "name" */
-        shaderprogram = glCreateProgram();
-
-        /* Attach our shaders to our program */
-        glAttachShader(shaderprogram, vertexshader);
-        glAttachShader(shaderprogram, fragmentshader);
-
-        /* Bind attribute index 0 (coordinates) to in_Position, attribute index 1 to in_TexCoord */
-        /* Attribute locations must be setup before calling glLinkProgram. */
-        glBindAttribLocation(shaderprogram, 0, "in_Position");
-        glBindAttribLocation(shaderprogram, 1, "in_TexCoord");
-
-        /* Link our program */
-        /* At this stage, the vertex and fragment programs are inspected, optimized and a binary code is generated for the shader. */
-        /* The binary code is uploaded to the GPU, if there is no error. */
-        glLinkProgram(shaderprogram);
-
-        /* Again, we must check and make sure that it linked. If it fails, it would mean either there is a mismatch between the vertex */
-        /* and fragment shaders. It might be that you have surpassed your GPU's abilities. Perhaps too many ALU operations or */
-        /* too many texel fetch instructions or too many interpolators or dynamic loops. */
-        glGetProgramiv(shaderprogram, GL_LINK_STATUS, (int *)&IsLinked);
-        if(IsLinked == 0)
-        {
-            /* Noticed that glGetProgramiv is used to get the length for a shader program, not glGetShaderiv. */
-            glGetProgramiv(shaderprogram, GL_INFO_LOG_LENGTH, &maxLength);
-
-            /* The maxLength includes the NULL character */
-            shaderProgramInfoLog = (char *)malloc(maxLength);
-
-            /* Notice that glGetProgramInfoLog, not glGetShaderInfoLog. */
-            glGetProgramInfoLog(shaderprogram, maxLength, &maxLength, shaderProgramInfoLog);
-
-            /* Handle the error in an appropriate way such as displaying a message or writing to a log file. */
-            /* In this simple program, we'll just leave */
-            free(shaderProgramInfoLog);
-            return;
-        }
-
-        /* Load the shader into the rendering pipeline */
-        glUseProgram(shaderprogram);
-}
-
-void SDLGLApplication::runGLSLShader(void)
-{
-    glEnable(TEXTURE_TARGET);
-    // enable texture x (read-only, not changed in the computation loop)
-    glActiveTexture(GL_TEXTURE0);	
-    glBindTexture(TEXTURE_TARGET, sFBTextureId);
-    glUniform1i(glGetUniformLocation(shaderprogram, "uTexture"), 0); // texture unit 0
-
-    //////////////////////////////////////////////////////////////////////////
-    //NVidia
-    float* frameBufferFloatPtr = CUDAApplication::getFrameBuffer();
-    glTexSubImage2D(TEXTURE_TARGET,0,0,0,mRESX,mRESY,
-        TEXTURE_FORMAT, GL_FLOAT, frameBufferFloatPtr);
-    //////////////////////////////////////////////////////////////////////////
-
-    const GLfloat quad[4][2] = 
-    {
-        {-1.f, -1.f},
-        {1.f, -1.f},
-        {1.f, 1.f},
-        {-1.f, 1.f}
-    };
-
-    const GLfloat texCoords[4][2] =
-    {
-        {0.f, 1.f},
-        {1.f, 1.f},
-        {1.f, 0.f},
-        {0.f, 0.f}
-    };
-
-    const GLuint indices[6] = {0,1,2,0,3,2};
-
-    /////////////////////////////////////////////////////////////////////////////////////////
-    //Setup OpenGL buffers
-
-    /* Bind our first VBO as being the active buffer and storing vertex attributes (coordinates) */
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-
-    /* Copy the vertex positions to our buffer */
-    /* 4 * 3 * sizeof(GLfloat) is the size of the positions array, since it contains 4 * 3 GLfloat values */
-    glBufferData(GL_ARRAY_BUFFER, 4 * 2 * sizeof(GLfloat), quad, GL_STATIC_DRAW);
-
-    /* Specify that our coordinate data is going into attribute index 0, and contains 2 floats per vertex */
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-    /* Enable attribute index 0 as being used */
-    glEnableVertexAttribArray(0);
-
-    /* Bind our second VBO as being the active buffer and storing vertex attributes (texture coordinates) */
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-
-    /* Copy the color data from colors to our buffer */
-    /* 4 * 3 * sizeof(GLfloat) is the size of the colors array, since it contains 4 * 3 GLfloat values */
-    glBufferData(GL_ARRAY_BUFFER, 4 * 2 * sizeof(GLfloat), texCoords, GL_STATIC_DRAW);
-
-    /* Specify that our color data is going into attribute index 1, and contains 2 floats per vertex */
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-    /* Enable attribute index 1 as being used */
-    glEnableVertexAttribArray(1);
-
-    /* Bind our third VBO as being the active buffer and storing vertex attributes (indices) */
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[2]);
-
-    /* Copy the index data from indices to our buffer */
-    /* 2 * 3 * sizeof(GLfloat) is the size of the indices array, since it contains 2*3 GLubyte values */
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * 3 * sizeof(GLuint), indices, GL_STATIC_DRAW);
-
-    /* Specify that our index data is going into attribute index 2, and contains three ints per vertex */
-    glVertexAttribPointer(2, 3, GL_UNSIGNED_INT, GL_FALSE, 0, 0);
-
-    /* Enable attribute index 2 as being used */
-    glEnableVertexAttribArray(2);
-
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    /* Invoke glDrawElements telling it to draw triangles using indicies */
-    glDrawElements(GL_TRIANGLES, 2 * 3, GL_UNSIGNED_INT, 0);
-
-    /* Disable vertex arrays */
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-    glDisableVertexAttribArray(2);
-
-    //un-bind texture
-    glBindTexture(TEXTURE_TARGET, 0);
-
-    glDisable(TEXTURE_TARGET);
-
-    SDL_GL_SwapWindow(mainwindow);
-}
-
 void SDLGLApplication::cleanup(void)
 {
 #ifdef USE_OPEN_GL
-    //texture
-    glDeleteTextures(1, &sFBTextureId);
-    //shader & buffers
-    glUseProgram(0);
-    glDetachShader(shaderprogram, vertexshader);
-    glDetachShader(shaderprogram, fragmentshader);
-    glDeleteProgram(shaderprogram);
-    glDeleteShader(vertexshader);
-    glDeleteShader(fragmentshader);
-    glDeleteBuffers(3, vbo);
-    glDeleteVertexArrays(1, &vao);
-
+    gOpenGLRenderer.cleanup();
     SDL_GL_DeleteContext(maincontext);
 #endif
 
@@ -1201,25 +985,16 @@ void SDLGLApplication::changeWindowSize(void)
 {
     cameraChanged();
 #ifdef USE_OPEN_GL
-    //texture
-    glDeleteTextures(1, &sFBTextureId);
-     //shader & buffers
-    glUseProgram(0);
-    glDetachShader(shaderprogram, vertexshader);
-    glDetachShader(shaderprogram, fragmentshader);
-    glDeleteProgram(shaderprogram);
-    glDeleteShader(vertexshader);
-    glDeleteShader(fragmentshader);
-    glDeleteBuffers(3, vbo);
-    glDeleteVertexArrays(1, &vao);
-
+    gOpenGLRenderer.cleanup();
     SDL_GL_DeleteContext(maincontext);
 #endif
     SDL_SetWindowSize(mainwindow, mRESX, mRESY);
 
 #ifdef USE_OPEN_GL
     maincontext = SDL_GL_CreateContext(mainwindow);
-    initGLSL();
-    initFrameBufferTexture(&sFBTextureId, mRESX, mRESY);
+    gOpenGLRenderer.initFBufferShader();
+    gOpenGLRenderer.initFrameBufferTexture(mRESX, mRESY);
+    gOpenGLRenderer.initCartoonShader();
+    gOpenGLRenderer.initConstantShader();
 #endif
 }

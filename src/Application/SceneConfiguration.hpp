@@ -45,28 +45,46 @@
     bool hasString_##aName () const			                                    
 
 
+#include <string>
+#include <vector>
+
 struct SceneConfiguration
 {
-    const char* objFileName;
-    const char* cameraFileName;
-    const char* cameraPathFileName;
-    const char* lightsFileName;
-    const char* frameFileNamePrefix;
-    const char* frameFileNameSuffix;
+    std::vector<std::string> objFileNames;
+    std::string cameraFileName;
+    std::string cameraPathFileName;
+    std::string lightsFileName;
+    std::string frameFileNamePrefix;
+    std::string frameFileNameSuffix;
     int   numFrames;
     float frameStepSize;
 
-    bool hasObjFileName;
-    bool hasCameraFileName;
-    bool hasCameraPathFileName;
-    bool hasLightsFileName;
-    bool hasFrameFileNamePrefix;
-    bool hasFrameFileNameSuffix;
-
-    const char* instancesFileName;
-    bool hasInstancesFileName;
+    std::string instancesFileName;
 
 };
+
+//struct SceneConfiguration
+//{
+//    const char* objFileName;
+//    const char* cameraFileName;
+//    const char* cameraPathFileName;
+//    const char* lightsFileName;
+//    const char* frameFileNamePrefix;
+//    const char* frameFileNameSuffix;
+//    int   numFrames;
+//    float frameStepSize;
+//
+//    bool hasObjFileName;
+//    bool hasCameraFileName;
+//    bool hasCameraPathFileName;
+//    bool hasLightsFileName;
+//    bool hasFrameFileNamePrefix;
+//    bool hasFrameFileNameSuffix;
+//
+//    const char* instancesFileName;
+//    bool hasInstancesFileName;
+//
+//};
 
 
 SceneConfiguration loadSceneConfiguration(const char* aFileName);
@@ -74,5 +92,6 @@ SceneConfiguration loadSceneConfiguration(const char* aFileName);
 #undef _GET_MEMBER
 #undef _SET_MEMBER
 #undef _HAS_STRING_MEMBER_DECL
+
 
 #endif // SCENECONFIGURATION_HPP_INCLUDED_453E4C50_F59A_476A_B8CB_EA50C10655E5
