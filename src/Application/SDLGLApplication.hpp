@@ -47,7 +47,6 @@
 //CUDA specific includes (host code only)
 //////////////////////////////////////////////////////////////////////////
 #include "Application/CameraManager.hpp"
-#include "RenderBug/RenderBug.hpp"
 
 class SDLGLApplication
 {

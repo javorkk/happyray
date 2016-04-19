@@ -29,6 +29,11 @@
 
 #define USE_OPEN_GL
 
+#ifdef USE_OPEN_GL
+#include "RenderBug/RenderBug.hpp"
+
+RenderBug gOpenGLRenderer;
+#endif
 SDL_Window* SDLGLApplication::mainwindow;
 
 SDL_GLContext SDLGLApplication::maincontext;
@@ -38,7 +43,7 @@ const float MINSTEPSIZE = 0.01f;
 const float ROTATESCALEFACTOR = 0.003f;
 const float ROTATEUPSCALEFACTOR = 0.01f;
 
-RenderBug gOpenGLRenderer;
+
 
 SDLGLApplication::~SDLGLApplication()
 {
@@ -79,8 +84,10 @@ void SDLGLApplication::initScene()
         mInitialCamera,
         CUDAApplication::sAreaLightSources);
 
+#ifdef USE_OPEN_GL
     if (CUDAApplication::sAnimationManager.getNumKeyFrames() == 1u)
         gOpenGLRenderer.setupSceneGeometry(CUDAApplication::sAnimationManager);
+#endif
 
     mCamera = mInitialCamera;
 
@@ -648,7 +655,7 @@ void SDLGLApplication::nextFrame()
 void SDLGLApplication::initVideo()
 {
 #ifdef USE_OPEN_GL
-        mSDLVideoModeFlags = SDL_WINDOW_OPENGL| SDL_WINDOW_SHOWN | SDL_WINDOW_INPUT_FOCUS;
+        mSDLVideoModeFlags = SDL_WINDOW_OPENGL| SDL_WINDOW_SHOWN | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_RESIZABLE;
         
         // Request an opengl 3.2 context.
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -758,8 +765,10 @@ void SDLGLApplication::displayFrame()
                 buildTime = CUDAApplication::nextFrame();
                 break;
             case OPEN_GL:
+#ifdef USE_OPEN_GL
                 CUDAApplication::sAnimationManager.nextFrame();
                 gOpenGLRenderer.setupSceneGeometry(CUDAApplication::sAnimationManager);
+#endif
                 break;
             default:
                 break;
@@ -779,10 +788,7 @@ void SDLGLApplication::displayFrame()
             case AMBIENT_OCCLUSION:
                 renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 2);
             case OPEN_GL:
-
-                break;
-            default:
-                
+            default:            
                 break;
             }//switch ( mRenderMode )
 
@@ -976,7 +982,6 @@ void SDLGLApplication::cleanup(void)
     gOpenGLRenderer.cleanup();
     SDL_GL_DeleteContext(maincontext);
 #endif
-
     SDL_DestroyWindow(mainwindow);
     CUDAApplication::cleanup();
 }
@@ -992,9 +997,15 @@ void SDLGLApplication::changeWindowSize(void)
 
 #ifdef USE_OPEN_GL
     maincontext = SDL_GL_CreateContext(mainwindow);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+
     gOpenGLRenderer.initFBufferShader();
     gOpenGLRenderer.initFrameBufferTexture(mRESX, mRESY);
     gOpenGLRenderer.initCartoonShader();
     gOpenGLRenderer.initConstantShader();
+
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 #endif
 }
