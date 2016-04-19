@@ -54,9 +54,16 @@ float CUDAApplication::getBBoxDiagonalLength()
     return gRTEngine.getBoundingBoxDiagonalLength();
 }
 
-float CUDAApplication::nextFrame()
+float CUDAApplication::nextFrame(bool reverseDirection)
 {
-    sAnimationManager.nextFrame();
+    if (reverseDirection)
+    {
+        sAnimationManager.previousFrame();
+    }
+    else
+    {
+        sAnimationManager.nextFrame();
+    }
     const size_t frameId1 = sAnimationManager.getFrameId();
     const size_t frameId2 = sAnimationManager.getNextFrameId();
 

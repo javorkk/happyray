@@ -78,7 +78,7 @@ public:
 
     static void initScene();
     static float getBBoxDiagonalLength();
-    static float nextFrame();
+    static float nextFrame(bool reverseDirection = false);
 
     static float generateFrame(
         CameraManager& aView,

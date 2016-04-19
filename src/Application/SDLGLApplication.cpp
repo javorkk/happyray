@@ -633,7 +633,7 @@ void SDLGLApplication::pauseAnimation()
 
 void SDLGLApplication::previousFrame()
 {
-    CUDAApplication::nextFrame();
+    CUDAApplication::nextFrame(true);
     //CUDAApplication::sAnimationManager.previousFrame();
     gOpenGLRenderer.setupSceneGeometry(CUDAApplication::sAnimationManager);
     cameraChanged();
