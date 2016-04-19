@@ -253,6 +253,52 @@ bool SceneLoader::loadScene(
             << CONFIGURATION << "\n";
     }
 
+    if (loadAnimation)
+    {
+        if (sceneConfig.lightsFileName != "")
+        {
+            cudastd::logger::out << "Loading area lights...\n";
+            LightSourceLoader loader;
+            std::vector<AreaLightSource> lights = loader.loadFromFile(sceneConfig.lightsFileName.c_str());
+            for (size_t ls = 0; ls < lights.size(); ++ls)
+            {
+                oLightSources.upload(lights[ls].getArea()*len(lights[ls].intensity), lights[ls]);
+                for (size_t it = 0; it < oAnimation.getNumKeyFrames(); ++it)
+                {
+                    insertLightSourceGeometry(lights[ls], oAnimation.getFrame(it));
+                }
+            }
+        }
+        else
+        {
+            createLightSources(oLightSources, oAnimation.getFrame(0));
+            cudastd::logger::out << "Found " << oLightSources.size() << " area lights.\n";
+        }
+
+        oLightSources.normalizeALSIntensities();
+    }
+    else if (retval)
+    {
+        if (sceneConfig.lightsFileName != "")
+        {
+            cudastd::logger::out << "Loading area lights...\n";
+            LightSourceLoader loader;
+            std::vector<AreaLightSource> lights = loader.loadFromFile(sceneConfig.lightsFileName.c_str());
+            for (size_t ls = 0; ls < lights.size(); ++ls)
+            {
+                oLightSources.upload(lights[ls].getArea()*len(lights[ls].intensity), lights[ls]);
+                insertLightSourceGeometry(lights[ls], oAnimation.getFrame(0));
+            }
+        }
+        else
+        {
+            createLightSources(oLightSources, oAnimation.getFrame(0));
+            cudastd::logger::out << "Found " << oLightSources.size() << " area lights.\n";
+        }
+
+        oLightSources.normalizeALSIntensities();
+    }
+
     if (retval == false)
     {
         oAnimation.loadEmptyFrame();

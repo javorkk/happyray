@@ -85,6 +85,8 @@ public:
 	unsigned int   *indices;
 	int   numIndices;
 
+    float sceneDiagonalLength;
+
 	static GLuint vao;//Vertex Array Object
 	static GLuint vbo[4]; //Vertex Buffer Objects
 
@@ -112,6 +114,8 @@ public:
 		numPositions = 0;
 		indices = NULL;
 		numIndices = 0;
+
+        sceneDiagonalLength = 0.f;
 	}
 
 	~RenderBug()

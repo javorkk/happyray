@@ -98,7 +98,7 @@ public:
 
     void nextFrame()
     {
-        mCurrentFrameId += mStepSize;
+        mCurrentFrameId += isInterpolatable(getFrameId()) ? mStepSize : 1.f;
 
         if (static_cast<size_t>(mCurrentFrameId) >= getNumKeyFrames())
         {

@@ -62,7 +62,7 @@ const GLchar *fragment_source_constant_color = "#version 150 core\n\
                             //intensity = dot(normalize(lightDir),normalize(normal));\n\
 							//color = vec4(ex_Color * intensity, 1.0);\n\
                             // Pass through our original color with full opacity. \n\
-                            fragColor = vec4(ex_Color * 3.14159, 1.0); \n\
+                            fragColor = vec4(ex_Color, 1.0); \n\
                         }";
 
 GLuint RenderBug::vertexshader_mvp;
@@ -167,20 +167,40 @@ void RenderBug::setupSceneGeometry(AnimationManager& aSceneManager)
 
 	numPositions = numVertices;
 
-	//Itereate trough the vertex array and interpolate coordinates
+    float minX =  FLT_MAX;
+    float minY =  FLT_MAX;
+    float minZ =  FLT_MAX;
+    float maxX = -FLT_MAX;
+    float maxY = -FLT_MAX;
+    float maxZ = -FLT_MAX;
+
+
+    //Itereate trough the vertex array and interpolate coordinates
 	size_t it = 0u;
 	size_t offset = 0u;
 	for (; it < std::min(keyFrame1.getNumVertices(), keyFrame2.getNumVertices()); ++it)
 	{
-		positions[3 * (offset + it)] = keyFrame1.vertices[it].x * (1.f - coeff) + keyFrame2.vertices[it].x * coeff;
+		positions[3 * (offset + it) + 0] = keyFrame1.vertices[it].x * (1.f - coeff) + keyFrame2.vertices[it].x * coeff;
 		positions[3 * (offset + it) + 1] = keyFrame1.vertices[it].y * (1.f - coeff) + keyFrame2.vertices[it].y * coeff;
 		positions[3 * (offset + it) + 2] = keyFrame1.vertices[it].z * (1.f - coeff) + keyFrame2.vertices[it].z * coeff;
 
-		colors[3 * (offset + it)] = color.x;
+        minX = std::min(minX, positions[3 * (offset + it) + 0]);
+        minY = std::min(minY, positions[3 * (offset + it) + 1]);
+        minZ = std::min(minZ, positions[3 * (offset + it) + 2]);
+
+        maxX = std::max(maxX, positions[3 * (offset + it) + 0]);
+        maxY = std::max(maxY, positions[3 * (offset + it) + 1]);
+        maxZ = std::max(maxZ, positions[3 * (offset + it) + 2]);
+
+
+		colors[3 * (offset + it) + 0] = color.x;
 		colors[3 * (offset + it) + 1] = color.y;
 		colors[3 * (offset + it) + 2] = color.z;
 
 	}
+
+    sceneDiagonalLength = sqrtf((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY) + (maxZ - minZ) * (maxZ - minZ));
+
 	//Key frame 2 may have more vertices, add them w/o interpolation
 	for (; it < keyFrame2.vertices.size(); ++it)
 	{
@@ -209,17 +229,17 @@ void RenderBug::setupSceneGeometry(AnimationManager& aSceneManager)
 			indices[3 * (indicesOffset + faceId) + 1] = (GLuint)(offset + keyFrame2.faces[faceId].vert2);
 			indices[3 * (indicesOffset + faceId) + 2] = (GLuint)(offset + keyFrame2.faces[faceId].vert3);
 
-			colors[3 * (keyFrame2.faces[faceId].vert1) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x;
-			colors[3 * (keyFrame2.faces[faceId].vert1) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y;
-			colors[3 * (keyFrame2.faces[faceId].vert1) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z;
+            colors[3 * (keyFrame2.faces[faceId].vert1) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159;
+            colors[3 * (keyFrame2.faces[faceId].vert1) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159;
+            colors[3 * (keyFrame2.faces[faceId].vert1) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159;
 
-			colors[3 * (keyFrame2.faces[faceId].vert2) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x;
-			colors[3 * (keyFrame2.faces[faceId].vert2) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y;
-			colors[3 * (keyFrame2.faces[faceId].vert2) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z;
+            colors[3 * (keyFrame2.faces[faceId].vert2) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159;
+            colors[3 * (keyFrame2.faces[faceId].vert2) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159;
+            colors[3 * (keyFrame2.faces[faceId].vert2) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159;
 
-			colors[3 * (keyFrame2.faces[faceId].vert3) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x;
-			colors[3 * (keyFrame2.faces[faceId].vert3) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y;
-			colors[3 * (keyFrame2.faces[faceId].vert3) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z;
+            colors[3 * (keyFrame2.faces[faceId].vert3) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159;
+            colors[3 * (keyFrame2.faces[faceId].vert3) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159;
+            colors[3 * (keyFrame2.faces[faceId].vert3) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159;
 
 			float3 normal1, normal2, normal3;
 			if (faceId < keyFrame1.getNumFaces())
@@ -261,13 +281,13 @@ void RenderBug::setupSceneGeometry(AnimationManager& aSceneManager)
 			indices[2 * (indicesOffset + lineId)] = (GLuint)(offset + keyFrame2.lines[lineId].vert1);
 			indices[2 * (indicesOffset + lineId) + 1] = (GLuint)(offset + keyFrame2.lines[lineId].vert2);
 
-			colors[3 * (keyFrame2.lines[lineId].vert1) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x;
-			colors[3 * (keyFrame2.lines[lineId].vert1) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y;
-			colors[3 * (keyFrame2.lines[lineId].vert1) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z;
+            colors[3 * (keyFrame2.lines[lineId].vert1) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x * 3.14159;
+            colors[3 * (keyFrame2.lines[lineId].vert1) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y * 3.14159;
+            colors[3 * (keyFrame2.lines[lineId].vert1) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z * 3.14159;
 
-			colors[3 * (keyFrame2.lines[lineId].vert2) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x;
-			colors[3 * (keyFrame2.lines[lineId].vert2) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y;
-			colors[3 * (keyFrame2.lines[lineId].vert2) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z;
+            colors[3 * (keyFrame2.lines[lineId].vert2) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x * 3.14159;
+            colors[3 * (keyFrame2.lines[lineId].vert2) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y * 3.14159;
+            colors[3 * (keyFrame2.lines[lineId].vert2) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z * 3.14159;
 		}
 
 		break;
@@ -281,9 +301,9 @@ void RenderBug::setupSceneGeometry(AnimationManager& aSceneManager)
 		{
 			indices[(indicesOffset + pointId)] = (GLuint)(offset + keyFrame2.points[pointId].vert1);
 
-			colors[3 * (keyFrame2.points[pointId].vert1) + 0] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.x;
-			colors[3 * (keyFrame2.points[pointId].vert1) + 1] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.y;
-			colors[3 * (keyFrame2.points[pointId].vert1) + 2] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.z;
+            colors[3 * (keyFrame2.points[pointId].vert1) + 0] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.x * 3.14159;
+            colors[3 * (keyFrame2.points[pointId].vert1) + 1] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.y * 3.14159;
+            colors[3 * (keyFrame2.points[pointId].vert1) + 2] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.z * 3.14159;
 		}
 
 		break;
@@ -545,7 +565,7 @@ void RenderBug::renderTriangles( const CameraManager& aCamera)
 	/* Create our projection matrix with a 45 degree field of view
 	* a width to height ratio of RESX/RESY and view from .1 to 100 infront of us */
 	const GLfloat aspectRatio = static_cast<float>(aCamera.getResX()) / static_cast<float>(aCamera.getResY());
-	perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, 100.0f);
+    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, sceneDiagonalLength);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	//Setup Camera and background color
@@ -683,7 +703,7 @@ void RenderBug::renderLines(const CameraManager& aCamera)
 	/* Create our projection matrix with a 45 degree field of view
 	* a width to height ratio of RESX/RESY and view from .1 to 100 infront of us */
 	const GLfloat aspectRatio = static_cast<float>(aCamera.getResX()) / static_cast<float>(aCamera.getResY());
-	perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, 100.0f);
+    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, sceneDiagonalLength);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	//Setup Camera and background color
@@ -802,7 +822,7 @@ void RenderBug::renderPoints(const CameraManager& aCamera)
 	/* Create our projection matrix with a 45 degree field of view
 	* a width to height ratio of RESX/RESY and view from .1 to 100 infront of us */
 	const GLfloat aspectRatio = static_cast<float>(aCamera.getResX()) / static_cast<float>(aCamera.getResY());
-	perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, 100.0f);
+    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, sceneDiagonalLength);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	//Setup Camera and background color
