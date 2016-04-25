@@ -35,8 +35,6 @@
 * Lukas Marsalek, 01.07.2008
 ****************************************************************************/
 
-#include <stdio.h>
-
 namespace cudastd 
 {	
     class NewLine
@@ -92,16 +90,7 @@ namespace cudastd
 
         static logger out;		
 
-        logger()
-        { 
-            hexOutput = false;
-            loggingOff = false;
-#ifdef _WIN32
-            _snprintf_s(fpString, 256, "%%f");
-#else
-            snprintf(fpString, 256, "%%f");			
-#endif
-        }
+		logger();
 
         static NewLine endl()
         {
@@ -133,178 +122,29 @@ namespace cudastd
             return out;
         }
 
-        logger& operator << (const NewLine&)
-        {
-            if(loggingOff) return out;
-#ifdef _WIN32
-            printf_s("\n");
-#else
-            printf("\n");
-#endif
-            return out;
-        }	
+		logger& operator << (const NewLine&);
 
-        logger& operator << (const FloatPrecision& fp)
-        {			
-            if(loggingOff) return out;
-#ifdef _WIN32
-            _snprintf_s(fpString, 256, "%%.%df", fp.getPrecision());
-#else
-            snprintf(fpString, 256, "%%.%df", fp.getPrecision());			
-#endif
+		logger& operator << (const FloatPrecision& fp);
 
-            return out;
-        }	
+		logger& operator << (const Hex&);
 
-        logger& operator << (const Hex&)
-        {
-            if(loggingOff) return out;
+		logger& operator << (const char* str);
 
-            hexOutput = true;
-            return out;
-        }	
+		logger& operator << (const unsigned long long value);
 
+		logger& operator << (const unsigned int value);
 
-        logger& operator << (const char* str)
-        {
-            if(loggingOff) return out;
-
-#ifdef _WIN32
-            printf_s("%s", str);
-#else
-            printf("%s", str);			
-#endif            		
-            return out;
-        }		
-
-        logger& operator << (const unsigned long long value)
-        {
-            if(loggingOff) return out;
-
-            if(hexOutput)
-            {
-                printf("0x%llx", value);
-            }
-            else
-            {
-                printf("%lld", value);
-            }
-            hexOutput = false;
-            return out;
-        }		
-
-        logger& operator << (const unsigned int value)
-        {
-            if(loggingOff) return out;
-
-            if(hexOutput)
-            {
-#ifdef _WIN32
-                printf_s("0x%x", value);
-#else
-                printf("0x%x", value);
-#endif
-            }
-            else
-            {
-#ifdef _WIN32
-                printf_s("%d", value);
-#else
-                printf("%d", value);
-#endif
-            }
-            hexOutput = false;
-            return out;
-        }	
-
-        logger& operator << (const int value)
-        {
-            if(loggingOff) return out;
-
-            if(hexOutput)
-            {
-#ifdef _WIN32
-                printf_s("0x%x", value);
-#else
-                printf("0x%x", value);
-#endif
-            }
-            else
-            {
-#ifdef _WIN32
-                printf_s("%d", value);
-#else
-                printf("%d", value);
-#endif
-            }
-            hexOutput = false;
-            return out;
-        }
+		logger& operator << (const int value);
 
 #ifndef _WIN32
 
-        logger& operator << (const size_t value)
-        {
-            if(loggingOff) return out;
-
-            if(hexOutput)
-            {
-#ifdef _WIN32
-                printf_s("0x%lx", value);
-#else
-                printf("0x%lx", value);
-#endif
-            }
-            else
-            {
-#ifdef _WIN32
-                printf_s("%ld", value);
-#else
-                printf("%ld", value);
-#endif
-            }			
-            hexOutput = false;
-            return out;
-        }
+		logger& operator << (const size_t value);
 
 #endif		
-        logger& operator << (const long int value)
-        {
-            if(loggingOff) return out;
-
-            if(hexOutput)
-            {
-#ifdef _WIN32
-                printf_s("0x%lx", value);
-#else
-                printf("0x%lx", value);
-#endif
-            }
-            else
-            {
-#ifdef _WIN32
-                printf_s("%ld", value);
-#else
-                printf("%ld", value);
-#endif
-            }			
-            hexOutput = false;
-            return out;
-        }
+		logger& operator << (const long int value);
 
 
-        logger& operator << (const float value)
-        {			
-            if(loggingOff) return out;
-#ifdef _WIN32
-            printf_s((const char*)fpString, value);
-            _snprintf_s(fpString, 256, "%%f");
-#else
-            printf((const char*)fpString, value);
-            snprintf(fpString, 256, "%%f");
-#endif
-            return out;
-        }	
+		logger& operator << (const float value);
 
     private:
 

@@ -29,8 +29,6 @@
 #define PREFIXSUM_H_INCLUDED_5FEA3B3A_E2F1_49B2_9483_55F751905C38
 
 #include "CUDAStdAfx.h"
-#include "Utils/CUDAUtil.h"
-
 
 class ExclusiveScan
 {
