@@ -21,8 +21,9 @@
 */
 /****************************************************************************/
 
+#include "StdAfx.hpp"
 #include "CUDAUtil.h"
-#include <cuda_runtime_api.h>
+
 
 #include <stdio.h>
 

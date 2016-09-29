@@ -229,17 +229,17 @@ void RenderBug::setupSceneGeometry(AnimationManager& aSceneManager)
 			indices[3 * (indicesOffset + faceId) + 1] = (GLuint)(offset + keyFrame2.faces[faceId].vert2);
 			indices[3 * (indicesOffset + faceId) + 2] = (GLuint)(offset + keyFrame2.faces[faceId].vert3);
 
-            colors[3 * (keyFrame2.faces[faceId].vert1) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159;
-            colors[3 * (keyFrame2.faces[faceId].vert1) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159;
-            colors[3 * (keyFrame2.faces[faceId].vert1) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159;
+            colors[3 * (keyFrame2.faces[faceId].vert1) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159f;
+            colors[3 * (keyFrame2.faces[faceId].vert1) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159f;
+            colors[3 * (keyFrame2.faces[faceId].vert1) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159f;
 
-            colors[3 * (keyFrame2.faces[faceId].vert2) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159;
-            colors[3 * (keyFrame2.faces[faceId].vert2) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159;
-            colors[3 * (keyFrame2.faces[faceId].vert2) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159;
+            colors[3 * (keyFrame2.faces[faceId].vert2) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159f;
+            colors[3 * (keyFrame2.faces[faceId].vert2) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159f;
+            colors[3 * (keyFrame2.faces[faceId].vert2) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159f;
 
-            colors[3 * (keyFrame2.faces[faceId].vert3) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159;
-            colors[3 * (keyFrame2.faces[faceId].vert3) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159;
-            colors[3 * (keyFrame2.faces[faceId].vert3) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159;
+            colors[3 * (keyFrame2.faces[faceId].vert3) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159f;
+            colors[3 * (keyFrame2.faces[faceId].vert3) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159f;
+            colors[3 * (keyFrame2.faces[faceId].vert3) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159f;
 
 			float3 normal1, normal2, normal3;
 			if (faceId < keyFrame1.getNumFaces())
@@ -565,7 +565,7 @@ void RenderBug::renderTriangles( const CameraManager& aCamera)
 	/* Create our projection matrix with a 45 degree field of view
 	* a width to height ratio of RESX/RESY and view from .1 to 100 infront of us */
 	const GLfloat aspectRatio = static_cast<float>(aCamera.getResX()) / static_cast<float>(aCamera.getResY());
-    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, sceneDiagonalLength);
+    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, 4.f * sceneDiagonalLength);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	//Setup Camera and background color
@@ -703,7 +703,7 @@ void RenderBug::renderLines(const CameraManager& aCamera)
 	/* Create our projection matrix with a 45 degree field of view
 	* a width to height ratio of RESX/RESY and view from .1 to 100 infront of us */
 	const GLfloat aspectRatio = static_cast<float>(aCamera.getResX()) / static_cast<float>(aCamera.getResY());
-    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, sceneDiagonalLength);
+    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, 4.f * sceneDiagonalLength);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	//Setup Camera and background color
@@ -822,7 +822,7 @@ void RenderBug::renderPoints(const CameraManager& aCamera)
 	/* Create our projection matrix with a 45 degree field of view
 	* a width to height ratio of RESX/RESY and view from .1 to 100 infront of us */
 	const GLfloat aspectRatio = static_cast<float>(aCamera.getResX()) / static_cast<float>(aCamera.getResY());
-    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, sceneDiagonalLength);
+    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, 4.f * sceneDiagonalLength);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	//Setup Camera and background color

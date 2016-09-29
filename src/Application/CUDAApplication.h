@@ -66,10 +66,7 @@ public:
         }
     }
 
-    static void deviceInit(int argc, char* argv[])
-    {
-        cudastd::getBestCUDADevice(argc, argv);
-    }
+    static void deviceInit(int argc, char** argv);
 
     static void changeWindowSize(const int aResX, const int aResY)
     {
@@ -90,6 +87,8 @@ public:
         sBACKGROUND_G = aG;
         sBACKGROUND_B = aB;
     }
+
+    static void setGridDensities(float aTopLevel, float aLeafLevel);
 
     static float*& getFrameBuffer()
     {

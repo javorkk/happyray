@@ -11,7 +11,7 @@
 #include "RT/Primitive/BBox.hpp"
 #include "RT/Structure/UniformGrid.h"
 
-#define COMPACT_INSTANCES
+//#define COMPACT_INSTANCES
 #ifdef COMPACT_INSTANCES
 #include "DeviceConstants.h"
 class  UnboundedGeometryInstanceQuaternion

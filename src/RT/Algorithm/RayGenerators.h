@@ -349,18 +349,19 @@ public:
 template<class tRayBuffer>
 class RayLoader
 {
-    tRayBuffer mBuffer;
 public:
-    RayLoader(const tRayBuffer& aBuffer):mBuffer(aBuffer)
+    tRayBuffer buffer;
+
+    RayLoader(const tRayBuffer& aBuffer) :buffer(aBuffer)
     {}
 public:
     DEVICE float operator()(float3& oRayOrg, float3& oRayDir, const uint aRayId,
         const uint aNumRays)
     {
-        oRayOrg = mBuffer.loadOrigin(aRayId, aNumRays);
-        oRayDir = mBuffer.loadDirection(aRayId, aNumRays);
+        oRayOrg = buffer.loadOrigin(aRayId, aNumRays);
+        oRayDir = buffer.loadDirection(aRayId, aNumRays);
 
-        return mBuffer.loadDistance(aRayId, aNumRays);
+        return buffer.loadDistance(aRayId, aNumRays);
     }
 };
 

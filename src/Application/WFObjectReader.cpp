@@ -274,7 +274,7 @@ void WFObject::read(const char* aFileName)
 
     Material defaultMaterial;
     defaultMaterial.name = "Default";
-    defaultMaterial.diffuseCoeff = rep(.9774f);
+    defaultMaterial.diffuseCoeff = rep(.6774f);
     defaultMaterial.specularCoeff = rep(0.f);
     defaultMaterial.specularExp = 1.f;
     defaultMaterial.ambientCoeff = rep(0.2f);
@@ -580,7 +580,7 @@ void WFObject::loadWFObj(const char* aFileName)
 
     for (std::vector<std::string>::const_iterator it = matFiles.begin(); it != matFiles.end(); it++)
     {
-        std::string mtlFileName = objDir + _PATH_SEPARATOR + *it;
+        std::string mtlFileName = objDir + *it;
 
         readMtlLib(mtlFileName, materials, materialMap);
     }

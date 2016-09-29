@@ -25,6 +25,8 @@
 //
 
 #include "StdAfx.hpp"
+
+#define SDL_MAIN_HANDLED
 #include "Application/SDLGLApplication.hpp"
 
 #include "Test/TestAlgebra.h"
@@ -36,11 +38,8 @@ struct CompactUGrid : public Primitive<2>
     uint cells;
 };
 
-#ifdef _WIN32
-int wmain (int argc, char* argv[])
-#else
+
 int main(int argc, char* argv[])
-#endif
 {
     //TestQuaternions test;
     //if (test.run() != 0)
@@ -54,7 +53,6 @@ int main(int argc, char* argv[])
     //std::cerr << "UGridPtr size: " << sizeof(UniformGrid*) << "\n";
     //std::cerr << "UGrid size: " << sizeof(UniformGrid) << "\n";
     //std::cerr << "CompactUGrid size: " << sizeof(CompactUGrid) << "\n";
-
 
     SDLGLApplication app;
     app.init(argc, argv);

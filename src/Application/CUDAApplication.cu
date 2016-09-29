@@ -39,6 +39,27 @@ AreaLightSourceCollection   CUDAApplication::sAreaLightSources;
 RTEngine                    gRTEngine;
 FrameBuffer                 gFrameBuffer;
 
+
+void CUDAApplication::deviceInit(int argc, char** argv)
+{
+    cudastd::getBestCUDADevice(argc, argv);
+
+    if (argc > 2)
+    {
+        //cudastd::logger::out << argv[2] <<"\n";
+        std::string rayFileName = argv[2];
+        gRTEngine.setInputRayFileName(rayFileName);
+    }
+    if (argc > 4)
+    {
+        //cudastd::logger::out << argv[3] << "\n";
+        //cudastd::logger::out << argv[4] << "\n";
+        float topDensity = (float)atof(argv[3]);
+        float leafDensity = (float)atof(argv[4]);
+        gRTEngine.setGridDensities(topDensity, leafDensity);
+    }
+}
+
 void CUDAApplication::initScene()
 {
         gRTEngine.init();
@@ -136,6 +157,12 @@ float CUDAApplication::generateFrame(
     MY_CUT_CHECK_ERROR("Error after frame buffer downloat (dev-host)!\n");
 
     return oRenderTime;
+}
+
+
+void CUDAApplication::setGridDensities(float aTopLevel, float aLeafLevel)
+{
+    gRTEngine.setGridDensities(aTopLevel, aLeafLevel);
 }
 
 void CUDAApplication::dumpFrames()

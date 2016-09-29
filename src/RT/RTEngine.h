@@ -58,9 +58,13 @@ public:
 
     static void renderFrame(FrameBuffer& aFrameBuffer, const int aImageId, const int aRenderMode);
 
+    static void setGridDensities(float aTopLvl, float aLeafLvl);
+
     static void cleanup();
 
     static float getBoundingBoxDiagonalLength();
+
+    static void setInputRayFileName(const std::string& aFileName);
 };
 
 #endif // RTENGINE_H_6F33553F_C8E8_4EB9_B0D1_8AA967B3CEC5

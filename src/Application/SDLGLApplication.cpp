@@ -52,7 +52,7 @@ SDLGLApplication::~SDLGLApplication()
     SDL_Quit();
 }
 
-void SDLGLApplication::init(int argc, char* argv[])
+void SDLGLApplication::init(int argc, char** argv)
 {
     //CUDA specific
     CUDAApplication::deviceInit(argc, argv);
@@ -69,7 +69,8 @@ void SDLGLApplication::init(int argc, char* argv[])
 
     if (argc > 1)
     {
-        CONFIGURATION = argv[1];
+        std::string fileName = argv[1];
+        CONFIGURATION = fileName;
     }
 
     initScene();
@@ -79,7 +80,7 @@ void SDLGLApplication::initScene()
 {
 
     bool haveScene = CUDAApplication::sSceneLoader.loadScene(
-        CONFIGURATION,
+        CONFIGURATION.c_str(),
         CUDAApplication::sAnimationManager,
         mInitialCamera,
         CUDAApplication::sAreaLightSources);

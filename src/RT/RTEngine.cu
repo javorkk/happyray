@@ -48,6 +48,7 @@
 #include "RT/Integrator/AOIntegrator.h" //USE_3D_TEXTURE defined there
 #include "RT/Integrator/TLGridHierarchyAOIntegrator.h"
 #include "RT/Integrator/AORayExporter.h"
+#include "RT/Integrator/SimpleRayTraverser.h"
 
 //////////////////////////////////////////////////////////////////////////
 #include "RT/Structure/TwoLevelGridHierarchy.h"
@@ -69,14 +70,14 @@ typedef TLGridHierarchySortBuilder                  t_AccStructBuilder;
 typedef TwoLevelGridHierarchy                       t_AccStruct;
 #define Traverser_t                                 TLGridHierarchyTraverser
 float                                               sTopLevelDensity = 1.2f;
-float                                               sLeafLevelDensity = 5.f;
+float                                               sLeafLevelDensity = 1.2f;
 #elif defined TLGRID
 typedef TLGridMemoryManager             t_MemoryManager;
 typedef TLGridSortBuilder<t_Primitive>  t_AccStructBuilder;
 typedef TwoLevelGrid                    t_AccStruct;
 #define Traverser_t                     TLGridTraverser
-float                                   sTopLevelDensity = 0.0625f;//1.2f;// 0.0625f;
-float                                   sLeafLevelDensity =  1.2f;   //5.f;// 2.2f;
+float                                   sTopLevelDensity = 0.12f;//1.2f;// 0.0625f;
+float                                   sLeafLevelDensity =  2.4f;   //5.f;// 2.2f;
 #else
 const bool exact  = true; //true = exact triangle insertion, false = fast construction
 typedef UGridMemoryManager              t_MemoryManager;
@@ -124,6 +125,19 @@ SimpleIntegrator<
     MollerTrumboreIntersectionTest,
     MollerTrumboreIntersectionTest
 >                           sSimpleIntegratorRnd;
+
+bool sUseInputRays = false;
+SimpleRayBuffer sSimpleRayBuffer(NULL);
+RayLoader<SimpleRayBuffer> sSimpleRayLoader(sSimpleRayBuffer);
+
+SimpleRayTraverser<
+    Triangle,
+    RayLoader< SimpleRayBuffer >,
+    t_AccStruct,
+    Traverser_t,
+    MollerTrumboreIntersectionTest,
+    MollerTrumboreIntersectionTest
+>                           sSimpleRayTraverser;
 
 PathTracer<
     Triangle,
@@ -385,7 +399,11 @@ void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId, const 
     switch ( aRenderMode ) 
     {
     case 0:
-        if(aImageId < 4)
+        if (sUseInputRays)
+        {
+            sSimpleRayTraverser.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, grid, sSimpleRayLoader, aFrameBuffer, 0);
+        } 
+        else if(aImageId < 4)
         {
             sRegularRayGen.sampleId = aImageId;
             sSimpleIntegratorReg.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, grid, sRegularRayGen, aFrameBuffer, aImageId);
@@ -414,6 +432,12 @@ void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId, const 
 #endif
 }
 
+void RTEngine::setGridDensities(float aTopLvl, float aLeafLvl)
+{
+    sTopLevelDensity = aTopLvl;
+    sLeafLevelDensity = aLeafLvl;
+}
+
 void RTEngine::cleanup()
 {
     sMemoryManager.cleanup();
@@ -427,3 +451,10 @@ void RTEngine::cleanup()
     sPathTracer.cleanup();
     
 }
+
+void RTEngine::setInputRayFileName(const std::string& aFileName)
+{
+    sSimpleRayTraverser.setInputRaysFileName(aFileName);
+    sUseInputRays = true;
+}
+

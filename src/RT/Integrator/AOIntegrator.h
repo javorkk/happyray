@@ -134,7 +134,7 @@ GLOBAL void computeAOIllumination(
 
                 float3 normal = ~realNormal;//~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
 
-                t_Material material = aMaterialStorage[0];
+                t_Material material = aMaterialStorage[bestHit];
                 float3 diffReflectance = material.getDiffuseReflectance(rayOrg.x, rayOrg.y, rayOrg.z);
 
                 sharedVec[threadId1D()].x *= diffReflectance.x * M_PI;

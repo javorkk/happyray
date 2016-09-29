@@ -87,7 +87,7 @@ class SDLGLApplication
     //IO
     const char* mMinimizedWindowName;
     const char* mActiveWindowName;
-    char* CONFIGURATION;
+    std::string CONFIGURATION;
 public:
     //////////////////////////////////////////////////////////////////////////
     //Window
@@ -121,7 +121,7 @@ public:
 
     ~SDLGLApplication();
 
-    void init(int argc, char* argv[]);
+    void init(int argc, char** argv);
 
     void initScene();
 

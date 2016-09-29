@@ -44,7 +44,7 @@
 
 #include "RT/Structure/TwoLevelGridHierarchy.h"
 
-static const int NUMAMBIENTOCCLUSIONSAMPLES_TLGH = 1;
+static const int NUMAMBIENTOCCLUSIONSAMPLES_TLGH = 4;
 
 //#define USE_3D_TEXTURE //instead of scene materials
 #ifdef USE_3D_TEXTURE
@@ -150,7 +150,8 @@ GLOBAL void computeAOIlluminationTLGH(
                 }
 
                 t_Material material = aMaterialStorage[bestHit];
-                float3 diffReflectance = material.getDiffuseReflectance(rayOrg.x, rayOrg.y, rayOrg.z);
+                float3 diffReflectance = material.getDiffuseReflectance(rayOrg.x, rayOrg.y, rayOrg.z) * 3.14159f;
+                //float3 diffReflectance = make_float3(0.7f, 0.7f, 0.7f);
 
                 sharedVec[threadId1D()].x *= diffReflectance.x;
                 sharedVec[threadId1D()].y *= diffReflectance.y;
@@ -166,9 +167,9 @@ GLOBAL void computeAOIlluminationTLGH(
                 //sharedVec[threadId1D()].x = u;//1.f;// M_PI_RCP; //u;
                 //sharedVec[threadId1D()].y = v;//1.f;//M_PI_RCP; //v;
                 //sharedVec[threadId1D()].z = 1.f-u-v;//1.f;//M_PI_RCP; //1.f - u - v;
-                //bool edgePt = u <= 0.01f || v <= 0.01f || u + v >= 0.99f;
-                //float edgeColorFactor = edgePt ? 0.f : 1.f;
-                //sharedVec[threadId1D()] *= edgeColorFactor;
+                bool edgePt = u <= 0.01f || v <= 0.01f || u + v >= 0.99f;
+                float edgeColorFactor = edgePt ? 0.f : 1.f;
+                sharedVec[threadId1D()] *= edgeColorFactor;
                 //////////////////////////////////////////////////////////////////////////
                 //sharedVec[threadId1D()] = rep(0.01f*rayT);
             }
@@ -354,10 +355,8 @@ public:
             normal = instancesPtr[instanceId].transformNormalToGlobal(normal);
         }
 
-        //if (dot(normal, oRayDir) > 0.f)
-        //    normal = -normal;
-
-
+        if (dot(normal, oRayDir) > 0.f)
+            normal = -normal;
 
         //////////////////////////////////////////////////////////////////////////
         //generate random direction and transform it in global coordinates

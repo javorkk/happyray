@@ -349,7 +349,7 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
             hostInstances[i].vtx[1] = hostInstances[i].vtx[0] + aMemoryManager.bounds.diagonal() * 0.25f;
 #endif
             //hostInstances[i].setOriginalPointer(aMemoryManager.gridsDevice);
-            hostInstances[i].setIndex(i % 4);
+            //hostInstances[i].setIndex(i % 4);
             //hostInstances[i].rotation0   = make_float3(1.f, 0.f, 0.f);
             //hostInstances[i].rotation1   = make_float3(0.f, 1.f, 0.f);
             //hostInstances[i].rotation2   = make_float3(0.f, 0.f, 1.f);
@@ -358,7 +358,7 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
             //hostInstances[i].irotation1   = make_float3(0.f, 1.f, 0.f);
             //hostInstances[i].irotation2   = make_float3(0.f, 0.f, 1.f);
             //hostInstances[i].itranslation =  make_float3(0.f, 0.f, 0.f); //aMemoryManager.bounds.diagonal() * (float) (-i / 4);
-            hostInstances[i].setIdentityTransormation();
+            //hostInstances[i].setIdentityTransormation();
         }
         aMemoryManager.copyInstancesHostToDevice();
         //END DEBUG
@@ -514,7 +514,7 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
         buildLevelTwo(aMemoryManager, aPrimitiveCounts, aNumUniqueInstances, aPrimitiveArray);
         //////////////////////////////////////////////////////////////////////////
         //DEBUG
-        test(aMemoryManager, aNumUniqueInstances, aPrimitiveCounts, aPrimitiveArray);
+        //test(aMemoryManager, aNumUniqueInstances, aPrimitiveCounts, aPrimitiveArray);
         //////////////////////////////////////////////////////////////////////////
 
     }

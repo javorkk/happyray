@@ -163,6 +163,8 @@ namespace cudastd
 *
 *******************************************************************************/
 
+#include <cuda_runtime_api.h>
+
 namespace cudastd 
 {	
     template<class tType>  __device__ __host__ inline
