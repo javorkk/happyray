@@ -79,7 +79,7 @@ struct AreaLightSource
         return len((edge1 % edge2));
     }
 
-    DEVICE HOST void AreaLightSource::create(
+    DEVICE HOST void create(
         const float3& aVtx0, const float3& aVtx1,
         const float3& aVtx2, const float3& aVtx3,
         const float3& aIntensity, const float3& aNormal)

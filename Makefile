@@ -3,7 +3,8 @@ SRCDIR    := src
 INTERMDIR := obj
 
 #default install location, use env var if invalid
-CUDA_INSTALL_PATH=/usr/local/cuda
+#CUDA_INSTALL_PATH=/usr/local/cuda
+CUDA_INSTALL_PATH=/usr
 
 # Name of the execuatable to build
 TARGET    := happyray
@@ -18,13 +19,12 @@ $(SRCDIR)/RT/Structure/3DTextureMemoryManager.cu \
 $(SRCDIR)/RT/Structure/TLGridHierarchyMemoryManager.cu \
 $(SRCDIR)/RT/Structure/TLGridMemManager.cu \
 $(SRCDIR)/RT/Structure/UGridMemoryManager.cu \
-$(SRCDIR)/Utils/CUDAUtil.cu \
 $(SRCDIR)/Utils/Scan.cu \
 $(SRCDIR)/Utils/Sort.cu
 
 MACHINE   := $(shell uname -s)
 #Additional libraries
-LIBS      := -lpng -lcudart -lGL -lGLU -lGLEW -lSDL2
+LIBS      := -lpng -lcudart -lGL -lSDL2
 
 # C/C++ source files (compiled with gcc / c++)
 CCFILES := $(shell find $(SRCDIR) -iname '*.cpp')
@@ -36,10 +36,10 @@ CCFILES := $(shell find $(SRCDIR) -iname '*.cpp')
 
 # detect OS
 OSUPPER = $(shell uname -s 2>/dev/null | tr [:lower:] [:upper:])
-OSLOWER = $(shell uname -s 2>/dev/null | tr [:upper:] [:lower:])
+OSLOWER = $(shell uname -s 2>/dev/nullcuda | tr [:upper:] [:lower:])
 
 # Compilers
-NVCC       := $(CUDA_INSTALL_PATH)/bin/nvcc
+NVCC       := nvcc
 CXX        := g++
 CC         := gcc
 LINK       := g++ -fPIC
@@ -72,7 +72,7 @@ ifeq ($(dbg),1)
         NVCCFLAGS   += -D_DEBUG
 else
         COMMONFLAGS += -O2
-        NVCCFLAGS   += -DNDEBUG --compiler-options -fno-strict-aliasing -use_fast_math -maxrregcount=32
+        NVCCFLAGS   += -DNDEBUG --compiler-options -fno-strict-aliasing -use_fast_math
 endif
 
 NVCCFLAGS  += $(COMMONFLAGS)
