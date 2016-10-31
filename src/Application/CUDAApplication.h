@@ -73,6 +73,7 @@ public:
        allocateHostBuffer(aResX, aResY);
     }
 
+    static bool loadScene(const char* aConfigurationFileName, CameraManager& aCameraManager){return sSceneLoader.loadScene(aConfigurationFileName, sAnimationManager, aCameraManager, sAreaLightSources);}
     static void initScene();
     static float getBBoxDiagonalLength();
     static float nextFrame(bool reverseDirection = false);

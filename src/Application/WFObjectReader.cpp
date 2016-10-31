@@ -93,8 +93,9 @@ namespace objLoaderUtil
         char *fnCopy = strdup(_name.c_str());
         const char* dirName = dirname(fnCopy);
         objDir = dirName;
+        objDir.append("/");
         free(fnCopy);
-        //cudastd::logger::out << "Dirname: " << objDir << "\n";
+        //std::cerr << "Dirname: " << objDir << "\n";
 
 #endif // _WIN32
 

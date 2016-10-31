@@ -40,13 +40,13 @@ OSLOWER = $(shell uname -s 2>/dev/nullcuda | tr [:upper:] [:lower:])
 
 # Compilers
 NVCC       := nvcc
-CXX        := g++
-CC         := gcc
-LINK       := g++ -fPIC
+CXX        := g++-4.9
+CC         := gcc-4.9
+LINK       := g++-4.9 -fPIC
 
 # Includes
 INCLUDES  += -I$(SRCDIR) -I$(CUDA_INSTALL_PATH)/include -I$(CUDA_SDK_DIR)/common/inc -I/usr/include/SDL -Icontrib/include
-CXXFLAGS += $(INCLUDES)
+CXXFLAGS += $(INCLUDES) -std=c++11
 CFLAGS += $(INCLUDES)
 NVCCFLAGS += $(INCLUDES)
 
