@@ -1,6 +1,6 @@
 /******************************************************************************
  * Copyright (c) 2011, Duane Merrill.  All rights reserved.
- * Copyright (c) 2011-2015, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2016, NVIDIA CORPORATION.  All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -669,30 +669,6 @@ struct KeyValuePair
 };
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS    // Do not document
-
-
-/**
- * Workaround for inability for SM1.x compiler to properly zero-initialize POD structures when it's supposed to
- */
-template <typename T>
-__host__ __device__ __forceinline__ T ZeroInitialize()
-{
-#if (CUB_PTX_ARCH > 0) && (CUB_PTX_ARCH <= 130)
-
-    typedef typename UnitWord<T>::ShuffleWord ShuffleWord;
-    const int MULTIPLE = sizeof(T) / sizeof(ShuffleWord);
-    ShuffleWord words[MULTIPLE];
-    #pragma unroll
-    for (int i = 0; i < MULTIPLE; ++i)
-        words[i] = 0;
-    return *reinterpret_cast<T*>(words);
-
-#else
-
-    return T();
-
-#endif
-}
 
 
 /**

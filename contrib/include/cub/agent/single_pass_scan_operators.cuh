@@ -1,6 +1,6 @@
 /******************************************************************************
  * Copyright (c) 2011, Duane Merrill.  All rights reserved.
- * Copyright (c) 2011-2015, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2016, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -257,16 +257,13 @@ struct ScanTileState<T, true>
         StatusWord      &status,
         T               &value)
     {
-        TxnWord         alias           = ThreadLoad<LOAD_CG>(reinterpret_cast<TxnWord*>(d_tile_status + TILE_STATUS_PADDING + tile_idx));
-        TileDescriptor  tile_descriptor = reinterpret_cast<TileDescriptor&>(alias);
-
-        while (tile_descriptor.status == SCAN_TILE_INVALID)
+        TileDescriptor  tile_descriptor;
+        do
         {
-            __threadfence_block(); // prevent hoisting loads from loop
-
-            alias           = ThreadLoad<LOAD_CG>(reinterpret_cast<TxnWord*>(d_tile_status + TILE_STATUS_PADDING + tile_idx));
+            TxnWord alias = ThreadLoad<LOAD_CG>(reinterpret_cast<TxnWord*>(d_tile_status + TILE_STATUS_PADDING + tile_idx));
             tile_descriptor = reinterpret_cast<TileDescriptor&>(alias);
-        }
+
+        } while (WarpAny(tile_descriptor.status == SCAN_TILE_INVALID));
 
         status = tile_descriptor.status;
         value = tile_descriptor.value;
@@ -666,6 +663,7 @@ struct TilePrefixCallbackOp
         typename WarpReduceT::TempStorage   warp_reduce;
         T                                   exclusive_prefix;
         T                                   inclusive_prefix;
+        T                                   block_aggregate;
     };
 
     // Alias wrapper allowing temporary storage to be unioned
@@ -721,6 +719,8 @@ struct TilePrefixCallbackOp
     __device__ __forceinline__
     T operator()(T block_aggregate)
     {
+        temp_storage.block_aggregate = block_aggregate;
+
         // Update our status with our tile-aggregate
         if (threadIdx.x == 0)
         {
@@ -773,6 +773,13 @@ struct TilePrefixCallbackOp
     T GetInclusivePrefix()
     {
         return temp_storage.inclusive_prefix;
+    }
+
+    // Get the block aggregate stored in temporary storage
+    __device__ __forceinline__
+    T GetBlockAggregate()
+    {
+        return temp_storage.block_aggregate;
     }
 
 };

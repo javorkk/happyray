@@ -1,6 +1,6 @@
 /******************************************************************************
  * Copyright (c) 2011, Duane Merrill.  All rights reserved.
- * Copyright (c) 2011-2015, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2016, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -367,7 +367,7 @@ struct AgentRle
         LengthOffsetPair    (&lengths_and_num_runs)[ITEMS_PER_THREAD])
     {
         // Perform warpscans
-        int warp_id = ((WARPS == 1) ? 0 : threadIdx.x / WARP_THREADS);
+        unsigned int warp_id = ((WARPS == 1) ? 0 : threadIdx.x / WARP_THREADS);
         int lane_id = LaneId();
 
         LengthOffsetPair identity;
@@ -421,7 +421,7 @@ struct AgentRle
         LengthOffsetPair    (&lengths_and_offsets)[ITEMS_PER_THREAD],
         Int2Type<true>      is_warp_time_slice)
     {
-        int warp_id = ((WARPS == 1) ? 0 : threadIdx.x / WARP_THREADS);
+        unsigned int warp_id = ((WARPS == 1) ? 0 : threadIdx.x / WARP_THREADS);
         int lane_id = LaneId();
 
         // Locally compact items within the warp (first warp)
@@ -478,7 +478,7 @@ struct AgentRle
         LengthOffsetPair    (&lengths_and_offsets)[ITEMS_PER_THREAD],
         Int2Type<false>     is_warp_time_slice)
     {
-        int warp_id = ((WARPS == 1) ? 0 : threadIdx.x / WARP_THREADS);
+        unsigned int warp_id = ((WARPS == 1) ? 0 : threadIdx.x / WARP_THREADS);
         int lane_id = LaneId();
 
         // Unzip
@@ -622,7 +622,7 @@ struct AgentRle
             // Load items
             T items[ITEMS_PER_THREAD];
             if (LAST_TILE)
-                BlockLoadT(temp_storage.load).Load(d_in + tile_offset, items, num_remaining, ZeroInitialize<T>());
+                BlockLoadT(temp_storage.load).Load(d_in + tile_offset, items, num_remaining, T());
             else
                 BlockLoadT(temp_storage.load).Load(d_in + tile_offset, items);
 
@@ -702,7 +702,7 @@ struct AgentRle
             // Load items
             T items[ITEMS_PER_THREAD];
             if (LAST_TILE)
-                BlockLoadT(temp_storage.load).Load(d_in + tile_offset, items, num_remaining, ZeroInitialize<T>());
+                BlockLoadT(temp_storage.load).Load(d_in + tile_offset, items, num_remaining, T());
             else
                 BlockLoadT(temp_storage.load).Load(d_in + tile_offset, items);
 
@@ -733,7 +733,7 @@ struct AgentRle
 
             // First warp computes tile prefix in lane 0
             TilePrefixCallbackOpT prefix_op(tile_status, temp_storage.prefix, Sum(), tile_idx);
-            int warp_id = ((WARPS == 1) ? 0 : threadIdx.x / WARP_THREADS);
+            unsigned int warp_id = ((WARPS == 1) ? 0 : threadIdx.x / WARP_THREADS);
             if (warp_id == 0)
             {
                 prefix_op(tile_aggregate);
