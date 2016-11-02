@@ -40,9 +40,9 @@ OSLOWER = $(shell uname -s 2>/dev/nullcuda | tr [:upper:] [:lower:])
 
 # Compilers
 NVCC       := nvcc
-CXX        := g++-4.9
-CC         := gcc-4.9
-LINK       := g++-4.9 -fPIC
+CXX        := ccbin/g++
+CC         := ccbin/gcc
+LINK       := ccbin/g++ -fPIC
 
 # Includes
 INCLUDES  += -I$(SRCDIR) -I$(CUDA_INSTALL_PATH)/include -I$(CUDA_SDK_DIR)/common/inc -I/usr/include/SDL -Icontrib/include
@@ -98,7 +98,7 @@ LDFLAGS += -L$(CUDA_INSTALL_PATH)/lib64 -L$(CUDA_SDK_DIR)/lib -L$(CUDA_SDK_DIR)/
 
 
 
-all: $(TARGET)
+all: ccbin $(TARGET)
 
 $(SRCDIR)/%.cubin : $(SRCDIR)/%.cu
 	$(NVCC) $(NVCCFLAGS) -o $@ $(COMPILATIONPHASE) $<
@@ -112,10 +112,10 @@ $(SRCDIR)/%.o : $(SRCDIR)/%.cpp
 $(TARGET): $(OBJS)
 	$(LINK) -o $(TARGET) $(OBJS) $(LDFLAGS)
 
-#ccbin :
-#	mkdir ccbin
-#	ln -sf /usr/bin/g++-4.1 ccbin/g++
-#	ln -sf /usr/bin/gcc-4.1 ccbin/gcc
+ccbin :
+	mkdir ccbin
+	ln -sf /usr/bin/g++-4.9 ccbin/g++
+	ln -sf /usr/bin/gcc-4.9 ccbin/gcc
 	
 clean :
 	rm -f $(OBJS)

@@ -449,6 +449,7 @@ void RTEngine::cleanup()
     sSimpleIntegratorReg.cleanup();
     sSimpleIntegratorRnd.cleanup();
     sPathTracer.cleanup();
+    sAOIntegrator.cleanup();
     
 }
 
