@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -27,28 +27,28 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.5.props" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 8.0.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -67,7 +67,7 @@
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
+    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE);$(CUDA_PATH)/include</IncludePath>
     <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x86;$(LIB32)</LibraryPath>
     <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x86;$(BIN32)</ExecutablePath>
     <ExcludePath>$(ExcludePath)</ExcludePath>
@@ -78,7 +78,7 @@
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
+    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE);$(CUDA_PATH)/include</IncludePath>
     <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x64;$(LIB64)</LibraryPath>
     <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x64;$(BIN64)</ExecutablePath>
     <ExcludePath>$(ExcludePath)</ExcludePath>
@@ -89,7 +89,7 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
+    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE);$(CUDA_PATH)/include</IncludePath>
     <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x86;$(LIB32)</LibraryPath>
     <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x86;$(BIN32)</ExecutablePath>
     <ExcludePath>$(ExcludePath)</ExcludePath>
@@ -100,7 +100,7 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)build\$(Configuration)$(Platform)\bin\</OutDir>
     <IntDir>$(SolutionDir)build\$(Configuration)$(Platform)\obj\</IntDir>
-    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE)</IncludePath>
+    <IncludePath>$(IncludePath);$(ProjectDir)src;$(ProjectDir)contrib/include;$(INCLUDE);$(CUDA_PATH)/include</IncludePath>
     <LibraryPath>$(LibraryPath);$(ProjectDir)contrib/lib/x64;$(LIB64)</LibraryPath>
     <ExecutablePath>$(ExecutablePath);$(ProjectDir)contrib/bin/x64;$(BIN64)</ExecutablePath>
     <ReferencePath>$(ReferencePath)</ReferencePath>
@@ -136,9 +136,9 @@
     </Cudart_Build_Rule>
     <CudaCompile>
       <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
-      <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
+      <Include>$(ProjectDir)src;$(ProjectDir)contrib/include;$(CUDA_PATH)/include</Include>
       <Runtime>MTd</Runtime>
-      <CodeGeneration>compute_50,sm_50</CodeGeneration>
+      <CodeGeneration>compute_20,sm_20</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -172,9 +172,9 @@
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
-      <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
+      <Include>$(ProjectDir)src;$(ProjectDir)contrib/include;$(CUDA_PATH)/include</Include>
       <Runtime>MTd</Runtime>
-      <CodeGeneration>compute_50,sm_50</CodeGeneration>
+      <CodeGeneration>compute_20,sm_20</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -209,9 +209,9 @@
     </Cudart_Build_Rule>
     <CudaCompile>
       <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
-      <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
+      <Include>$(ProjectDir)src;$(ProjectDir)contrib/include;$(CUDA_PATH)/include</Include>
       <Runtime>MT</Runtime>
-      <CodeGeneration>compute_50,sm_50</CodeGeneration>
+      <CodeGeneration>compute_20,sm_20</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -248,30 +248,19 @@
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <Defines>HAPPYRAY__CUDA_ARCH__=500</Defines>
-      <Include>$(ProjectDir)src;$(ProjectDir)contrib/include</Include>
+      <Include>$(ProjectDir)src;$(ProjectDir)contrib/include;$(CUDA_PATH)/include</Include>
       <Runtime>MT</Runtime>
       <PtxAsOptionV>true</PtxAsOptionV>
       <FastMath>true</FastMath>
-      <CodeGeneration>compute_50,sm_50</CodeGeneration>
+      <CodeGeneration>compute_20,sm_20</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="contrib\include\chag\pp\detail\compact.cu.inl" />
-    <None Include="contrib\include\chag\pp\detail\prefix.cu.inl" />
-    <None Include="contrib\include\chag\pp\detail\reduce.cu.inl" />
-    <None Include="contrib\include\chag\pp\detail\sort.cu.inl" />
-    <None Include="contrib\include\chag\pp\detail\split.cu.inl" />
-    <None Include="contrib\include\chag\pp\ext\detail\common.cu.inl" />
-    <None Include="contrib\include\chag\pp\ext\detail\range.cu.inl" />
-    <None Include="contrib\include\chag\pp\ext\detail\setup.cu.inl" />
-    <None Include="contrib\include\chag\pp\ext\detail\shared.cu.inl" />
-    <None Include="contrib\include\chag\pp\ext\detail\unit.cu.inl" />
     <Cudart_Build_Rule Include="src\Main.cu">
       <FileType>Document</FileType>
     </Cudart_Build_Rule>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="contrib\include\chag\pp\detail\nta.hpp" />
     <ClInclude Include="src\Application\AnimationManager.hpp" />
     <ClInclude Include="src\Application\CameraManager.hpp" />
     <ClInclude Include="src\Application\CUDAApplication.h" />
@@ -378,6 +367,6 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.5.targets" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 8.0.targets" />
   </ImportGroup>
 </Project>

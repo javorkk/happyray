@@ -485,6 +485,7 @@ GLOBAL void prepareCellRanges(
     }
 
 }
+
 template<class tPrimitive, template<class> class tPrimitiveArray>
 GLOBAL void checkGridCells(
                     tPrimitiveArray<tPrimitive>     aPrimitives,

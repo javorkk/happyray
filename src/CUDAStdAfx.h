@@ -139,23 +139,25 @@ __device__ inline uint numBlocks ()
 {
     return  gridDim.x * gridDim.y * gridDim.z;
 }
-__device__ inline uint blockSize ()
+__device__ inline uint blockSize (const uint aElementsPerThread = 1u)
 {
-    return  blockDim.x * blockDim.y * blockDim.z;
+    return  blockDim.x * blockDim.y * blockDim.z * aElementsPerThread;
 }
 
 __device__ inline uint blockId1D ()
 {
-    return  blockIdx.x + 
+    return  blockIdx.x +
             blockIdx.y * gridDim.x + 
             blockIdx.z * gridDim.x * gridDim.y;
 }
 
-__device__ inline uint threadId1D ()
+__device__ inline uint threadId1D (const uint aElementsPerThread = 1u)
 {
     return  threadIdx.x + 
+			aElementsPerThread * (
             threadIdx.y * blockDim.x + 
-            threadIdx.z * blockDim.x * blockDim.y;
+            threadIdx.z * blockDim.x * blockDim.y
+			);
 }
 
 __device__ inline uint threadId1D (int x, int y = 0, int z = 0)
@@ -165,7 +167,7 @@ __device__ inline uint threadId1D (int x, int y = 0, int z = 0)
 
 __device__ inline uint globalThreadId1D (const uint aElementsPerThread = 1u)
 {
-    return threadId1D() + blockId1D() * blockSize() * aElementsPerThread;
+    return threadId1D(aElementsPerThread) + blockId1D() * blockSize(aElementsPerThread);
 }
 
 __device__ inline uint threadId1DInWarp()

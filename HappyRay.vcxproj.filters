@@ -30,47 +30,12 @@
     <Filter Include="RT\Structure">
       <UniqueIdentifier>{ef7a3f2b-1c74-40a5-909d-3a5f6fd7edac}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Utils\pp">
-      <UniqueIdentifier>{e6115147-7670-41cf-9a96-4d36c6a56a9d}</UniqueIdentifier>
-    </Filter>
     <Filter Include="RT\Integrator">
       <UniqueIdentifier>{ce82bf06-36ff-4485-a95c-23d86452b5f7}</UniqueIdentifier>
     </Filter>
     <Filter Include="Test">
       <UniqueIdentifier>{3b731f8b-8e68-447c-9ff6-ec73bbde20a6}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="contrib\include\chag\pp\ext\detail\common.cu.inl">
-      <Filter>Utils\pp</Filter>
-    </None>
-    <None Include="contrib\include\chag\pp\detail\compact.cu.inl">
-      <Filter>Utils\pp</Filter>
-    </None>
-    <None Include="contrib\include\chag\pp\detail\prefix.cu.inl">
-      <Filter>Utils\pp</Filter>
-    </None>
-    <None Include="contrib\include\chag\pp\ext\detail\range.cu.inl">
-      <Filter>Utils\pp</Filter>
-    </None>
-    <None Include="contrib\include\chag\pp\detail\reduce.cu.inl">
-      <Filter>Utils\pp</Filter>
-    </None>
-    <None Include="contrib\include\chag\pp\ext\detail\setup.cu.inl">
-      <Filter>Utils\pp</Filter>
-    </None>
-    <None Include="contrib\include\chag\pp\ext\detail\shared.cu.inl">
-      <Filter>Utils\pp</Filter>
-    </None>
-    <None Include="contrib\include\chag\pp\detail\sort.cu.inl">
-      <Filter>Utils\pp</Filter>
-    </None>
-    <None Include="contrib\include\chag\pp\detail\split.cu.inl">
-      <Filter>Utils\pp</Filter>
-    </None>
-    <None Include="contrib\include\chag\pp\ext\detail\unit.cu.inl">
-      <Filter>Utils\pp</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\targetver.h">
@@ -123,9 +88,6 @@
     </ClInclude>
     <ClInclude Include="src\RT\Structure\PrimitiveArray.h">
       <Filter>RT\Structure</Filter>
-    </ClInclude>
-    <ClInclude Include="contrib\include\chag\pp\detail\nta.hpp">
-      <Filter>Utils\pp</Filter>
     </ClInclude>
     <ClInclude Include="src\RT\RTEngine.h">
       <Filter>RT</Filter>
@@ -326,6 +288,9 @@
     </ClCompile>
     <ClCompile Include="src\Utils\CUDAUtil.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Utils\CUDAUtil.cpp">
+      <Filter>Utils</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
