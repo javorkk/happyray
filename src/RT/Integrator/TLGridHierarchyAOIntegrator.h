@@ -410,8 +410,8 @@ public:
     t_RayBuffer             rayBuffer;
 
 
-    TLGHAOIntegrator(float aAlpha = 10.f) :rayBuffer(t_RayBuffer(NULL)),
-        mGlobalMemorySize(0u), mAORayGeneratorMemorySize(0u), mAlpha(aAlpha)
+    TLGHAOIntegrator(float aAlpha = 10.f) :rayBuffer(t_RayBuffer(NULL)), mGlobalMemoryPtr(NULL), 
+        mGlobalMemorySize(0u), mAORayGeneratorMemoryPtr(NULL), mAORayGeneratorMemorySize(0u), mAlpha(aAlpha)
     {}
 
     ~TLGHAOIntegrator()
@@ -554,13 +554,13 @@ public:
 
     HOST void cleanup()
     {
-        if (mGlobalMemorySize != 0u)
+        if (mGlobalMemorySize != 0u && mGlobalMemoryPtr != NULL)
         {
             MY_CUDA_SAFE_CALL(cudaFree(mGlobalMemoryPtr));
             mGlobalMemoryPtr = NULL;
             mGlobalMemorySize = 0u;
         }
-        if (mAORayGeneratorMemorySize != 0u)
+        if (mAORayGeneratorMemorySize != 0u && mAORayGeneratorMemoryPtr != NULL)
         {
             MY_CUDA_SAFE_CALL(cudaFree(mAORayGeneratorMemoryPtr));
             mAORayGeneratorMemoryPtr = NULL;

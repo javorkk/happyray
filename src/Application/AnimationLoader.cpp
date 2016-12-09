@@ -115,7 +115,7 @@ void AnimationManager::dumpFrame()
 
     ObjWriter objOut;
     std::string filename("frame_dump_");
-    filename.append(itoa(frameId1));
+    filename.append(itoa((uint)frameId1));
     filename.append("_");
     filename.append(ftoa(aCoeff));
     filename.append(".obj");

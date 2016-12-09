@@ -207,8 +207,8 @@ public:
     t_RayBuffer             rayBuffer;
 
 
-    AOIntegrator(float aAlpha = 10.f):rayBuffer(t_RayBuffer(NULL)), 
-        mGlobalMemorySize(0u), mAORayGeneratorMemorySize(0u), mAlpha(aAlpha)
+    AOIntegrator(float aAlpha = 10.f):rayBuffer(t_RayBuffer(NULL)), mGlobalMemoryPtr(NULL),
+        mGlobalMemorySize(0u), mAORayGeneratorMemoryPtr(NULL), mAORayGeneratorMemorySize(0u), mAlpha(aAlpha)
     {}
 
     ~AOIntegrator()

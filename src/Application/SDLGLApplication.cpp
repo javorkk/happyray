@@ -48,7 +48,6 @@ const float ROTATEUPSCALEFACTOR = 0.01f;
 SDLGLApplication::~SDLGLApplication()
 {
     cleanup();
-    CUDAApplication::cleanup();
     SDL_Quit();
 }
 

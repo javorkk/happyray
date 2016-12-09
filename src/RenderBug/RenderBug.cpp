@@ -281,13 +281,13 @@ void RenderBug::setupSceneGeometry(AnimationManager& aSceneManager)
 			indices[2 * (indicesOffset + lineId)] = (GLuint)(offset + keyFrame2.lines[lineId].vert1);
 			indices[2 * (indicesOffset + lineId) + 1] = (GLuint)(offset + keyFrame2.lines[lineId].vert2);
 
-            colors[3 * (keyFrame2.lines[lineId].vert1) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x * 3.14159;
-            colors[3 * (keyFrame2.lines[lineId].vert1) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y * 3.14159;
-            colors[3 * (keyFrame2.lines[lineId].vert1) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z * 3.14159;
-
-            colors[3 * (keyFrame2.lines[lineId].vert2) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x * 3.14159;
-            colors[3 * (keyFrame2.lines[lineId].vert2) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y * 3.14159;
-            colors[3 * (keyFrame2.lines[lineId].vert2) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z * 3.14159;
+            colors[3 * (keyFrame2.lines[lineId].vert1) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x * 3.14159f;
+            colors[3 * (keyFrame2.lines[lineId].vert1) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y * 3.14159f;
+            colors[3 * (keyFrame2.lines[lineId].vert1) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z * 3.14159f;
+																																			
+            colors[3 * (keyFrame2.lines[lineId].vert2) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x * 3.14159f;
+            colors[3 * (keyFrame2.lines[lineId].vert2) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y * 3.14159f;
+            colors[3 * (keyFrame2.lines[lineId].vert2) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z * 3.14159f;
 		}
 
 		break;
@@ -301,9 +301,9 @@ void RenderBug::setupSceneGeometry(AnimationManager& aSceneManager)
 		{
 			indices[(indicesOffset + pointId)] = (GLuint)(offset + keyFrame2.points[pointId].vert1);
 
-            colors[3 * (keyFrame2.points[pointId].vert1) + 0] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.x * 3.14159;
-            colors[3 * (keyFrame2.points[pointId].vert1) + 1] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.y * 3.14159;
-            colors[3 * (keyFrame2.points[pointId].vert1) + 2] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.z * 3.14159;
+            colors[3 * (keyFrame2.points[pointId].vert1) + 0] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.x * 3.14159f;
+            colors[3 * (keyFrame2.points[pointId].vert1) + 1] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.y * 3.14159f;
+            colors[3 * (keyFrame2.points[pointId].vert1) + 2] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.z * 3.14159f;
 		}
 
 		break;

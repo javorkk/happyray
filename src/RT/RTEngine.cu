@@ -61,7 +61,7 @@
 
 typedef Triangle    t_Primitive;
 
-//#define TLGRIDHIERARCHY
+#define TLGRIDHIERARCHY
 #define TLGRID
 
 #ifdef TLGRIDHIERARCHY 
@@ -77,14 +77,14 @@ typedef TLGridSortBuilder<t_Primitive>  t_AccStructBuilder;
 typedef TwoLevelGrid                    t_AccStruct;
 #define Traverser_t                     TLGridTraverser
 float                                   sTopLevelDensity = 0.12f;//1.2f;// 0.0625f;
-float                                   sLeafLevelDensity =  2.4f;   //5.f;// 2.2f;
+float                                   sLeafLevelDensity = 1.8f;   //5.f;// 2.2f;
 #else
 const bool exact  = true; //true = exact triangle insertion, false = fast construction
 typedef UGridMemoryManager              t_MemoryManager;
 typedef UGridSortBuilder<t_Primitive, exact>   t_AccStructBuilder;
 typedef UniformGrid                     t_AccStruct;
 #define Traverser_t                     UGridTraverser
-float                                   sTopLevelDensity = 0.12f;
+float                                   sTopLevelDensity = 5.f;
 float                                   sLeafLevelDensity = 1.2f; //dummy
 #endif
 
@@ -315,8 +315,8 @@ void RTEngine::upload(
         sMemoryManager.gridsHost[it].res[1] = resY > 0 ? resY : 1;
         sMemoryManager.gridsHost[it].res[2] = resZ > 0 ? resZ : 1;
 
-        sMemoryManager.gridsHost[it].setCellSize((sMemoryManager.gridsHost[it].vtx[1] - sMemoryManager.gridsHost[it].vtx[0]) / make_float3(sMemoryManager.gridsHost[it].res[0], sMemoryManager.gridsHost[it].res[1], sMemoryManager.gridsHost[it].res[2]));
-        sMemoryManager.gridsHost[it].setCellSizeRCP(make_float3(sMemoryManager.gridsHost[it].res[0], sMemoryManager.gridsHost[it].res[1], sMemoryManager.gridsHost[it].res[2]) / (sMemoryManager.gridsHost[it].vtx[1] - sMemoryManager.gridsHost[it].vtx[0]));
+        sMemoryManager.gridsHost[it].setCellSize((sMemoryManager.gridsHost[it].vtx[1] - sMemoryManager.gridsHost[it].vtx[0]) / make_float3((float)sMemoryManager.gridsHost[it].res[0], (float)sMemoryManager.gridsHost[it].res[1], (float)sMemoryManager.gridsHost[it].res[2]));
+        sMemoryManager.gridsHost[it].setCellSizeRCP(make_float3((float)sMemoryManager.gridsHost[it].res[0], (float)sMemoryManager.gridsHost[it].res[1], (float)sMemoryManager.gridsHost[it].res[2]) / (sMemoryManager.gridsHost[it].vtx[1] - sMemoryManager.gridsHost[it].vtx[0]));
     }
     sMemoryManager.copyGridsHostToDevice();
 
@@ -327,7 +327,7 @@ void RTEngine::upload(
     for (size_t it = 0; it < aFrame1.getNumInstances(); ++it)
     {   
         const WFObject::Instance& instance = aFrame1.getInstance(it);
-        sMemoryManager.instancesHost[it].setIndex(instance.objectId);
+        sMemoryManager.instancesHost[it].setIndex((uint)instance.objectId);
         sMemoryManager.instancesHost[it].setTransformation(
             instance.m00, instance.m10, instance.m20, instance.m30,
             instance.m01, instance.m11, instance.m21, instance.m31,
@@ -346,8 +346,8 @@ void RTEngine::upload(
 void RTEngine::buildAccStruct()
 {
 #ifdef TLGRIDHIERARCHY
-    sBuilder.init(sMemoryManager, sMemoryManager.instancesSize / sizeof(GeometryInstance), sTopLevelDensity, sLeafLevelDensity);
-    sBuilder.build(sMemoryManager, sMemoryManager.gridsSize / sizeof(UniformGrid), sMemoryManager.primitiveCounts, sTriangleArray);
+    sBuilder.init(sMemoryManager, (uint) sMemoryManager.instancesSize / sizeof(GeometryInstance), sTopLevelDensity, sLeafLevelDensity);
+    sBuilder.build(sMemoryManager, (uint)sMemoryManager.gridsSize / sizeof(UniformGrid), sMemoryManager.primitiveCounts, sTriangleArray);
 #else
     sBuilder.init(sMemoryManager, (uint)sTriangleArray.numPrimitives, sTopLevelDensity, sLeafLevelDensity);
     sBuilder.build(sMemoryManager, sTriangleArray);
@@ -449,8 +449,10 @@ void RTEngine::cleanup()
     sSimpleIntegratorReg.cleanup();
     sSimpleIntegratorRnd.cleanup();
     sPathTracer.cleanup();
+#ifdef TLGRIDHIERARCHY
+	sTLGHAOIntegrator.cleanup();
+#endif
     sAOIntegrator.cleanup();
-    
 }
 
 void RTEngine::setInputRayFileName(const std::string& aFileName)

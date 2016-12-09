@@ -201,4 +201,8 @@ void CUDAApplication::cleanup()
     gRTEngine.cleanup();
     gFrameBuffer.cleanup();
     deallocateHostBuffer();
+	cudaError_t cudaStatus = cudaDeviceReset();
+	if (cudaStatus != cudaSuccess) {
+		cudastd::logger::out << "cudaDeviceReset failed!\n";
+	}
 }

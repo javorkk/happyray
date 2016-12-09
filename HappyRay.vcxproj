@@ -138,7 +138,7 @@
       <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include;$(CUDA_PATH)/include</Include>
       <Runtime>MTd</Runtime>
-      <CodeGeneration>compute_20,sm_20</CodeGeneration>
+      <CodeGeneration>compute_61,sm_61</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -174,7 +174,7 @@
       <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include;$(CUDA_PATH)/include</Include>
       <Runtime>MTd</Runtime>
-      <CodeGeneration>compute_20,sm_20</CodeGeneration>
+      <CodeGeneration>compute_61,sm_61</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -211,7 +211,7 @@
       <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include;$(CUDA_PATH)/include</Include>
       <Runtime>MT</Runtime>
-      <CodeGeneration>compute_20,sm_20</CodeGeneration>
+      <CodeGeneration>compute_61,sm_61</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -252,7 +252,7 @@
       <Runtime>MT</Runtime>
       <PtxAsOptionV>true</PtxAsOptionV>
       <FastMath>true</FastMath>
-      <CodeGeneration>compute_20,sm_20</CodeGeneration>
+      <CodeGeneration>compute_61,sm_61</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>

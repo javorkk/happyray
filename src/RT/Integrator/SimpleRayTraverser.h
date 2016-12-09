@@ -209,7 +209,7 @@ public:
         }
 
         inputStream.seekg(std::ios::beg, std::ios::end);
-        uint size = inputStream.tellg();
+        uint size = (uint)inputStream.tellg();
 
         const uint numRays = size / (sizeof(float3) + sizeof(float3));
         const uint globalMemorySize = sizeof(uint) +    //Persistent threads
@@ -246,7 +246,7 @@ public:
             rayDir.y = buffer[rayId * 6 + 4];
             rayDir.z = buffer[rayId * 6 + 5];
 
-            rayBuffer.storeInput(rayOrg, rayDir, rayT, bestHit, rayId, numRays);
+            rayBuffer.storeInput(rayOrg, rayDir, rayT, bestHit, (uint)rayId, numRays);
 
         }
 
