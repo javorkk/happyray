@@ -36,6 +36,9 @@
     <Filter Include="Test">
       <UniqueIdentifier>{3b731f8b-8e68-447c-9ff6-ec73bbde20a6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="RenderBug">
+      <UniqueIdentifier>{02457f79-db13-4ae5-bad4-bab717980c5b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\targetver.h">
@@ -221,17 +224,17 @@
     <ClInclude Include="src\Application\ObjWriter.h">
       <Filter>Application</Filter>
     </ClInclude>
-    <ClInclude Include="src\RenderBug\GLUtilities.hpp">
-      <Filter>Headers</Filter>
-    </ClInclude>
-    <ClInclude Include="src\RenderBug\RenderBug.hpp">
-      <Filter>Headers</Filter>
-    </ClInclude>
     <ClInclude Include="src\gl_core_3_2.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="src\RT\Integrator\SimpleRayTraverser.h">
       <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RenderBug\RenderBug.hpp">
+      <Filter>RenderBug</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RenderBug\GLUtilities.hpp">
+      <Filter>RenderBug</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -277,12 +280,6 @@
     <ClCompile Include="src\Application\ObjWriter.cpp">
       <Filter>Application</Filter>
     </ClCompile>
-    <ClCompile Include="src\RenderBug\RenderBug.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\RenderBug\GLUtilities.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\gl_core_3_2.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -291,6 +288,12 @@
     </ClCompile>
     <ClCompile Include="src\Utils\CUDAUtil.cpp">
       <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\RenderBug\GLUtilities.cpp">
+      <Filter>RenderBug</Filter>
+    </ClCompile>
+    <ClCompile Include="src\RenderBug\RenderBug.cpp">
+      <Filter>RenderBug</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

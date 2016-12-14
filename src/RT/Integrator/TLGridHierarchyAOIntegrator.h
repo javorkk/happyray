@@ -167,9 +167,9 @@ GLOBAL void computeAOIlluminationTLGH(
                 //sharedVec[threadId1D()].x = u;//1.f;// M_PI_RCP; //u;
                 //sharedVec[threadId1D()].y = v;//1.f;//M_PI_RCP; //v;
                 //sharedVec[threadId1D()].z = 1.f-u-v;//1.f;//M_PI_RCP; //1.f - u - v;
-                bool edgePt = u <= 0.01f || v <= 0.01f || u + v >= 0.99f;
-                float edgeColorFactor = edgePt ? 0.f : 1.f;
-                sharedVec[threadId1D()] *= edgeColorFactor;
+                //bool edgePt = u <= 0.01f || v <= 0.01f || u + v >= 0.99f;
+                //float edgeColorFactor = edgePt ? 0.f : 1.f;
+                //sharedVec[threadId1D()] *= edgeColorFactor;
                 //////////////////////////////////////////////////////////////////////////
                 //sharedVec[threadId1D()] = rep(0.01f*rayT);
             }
@@ -373,7 +373,7 @@ public:
         getLocalCoordinates(normal, tangent, binormal);
 
         oRayDir = ~(normal * tmpDir.z + tangent * tmpDir.x + binormal * tmpDir.y);
-        oRayOrg += 0.01f * getOcclusionBuffer()->UNOCCLUDED_RAY_LENGTH * normal;
+        oRayOrg += 0.0001f * getOcclusionBuffer()->UNOCCLUDED_RAY_LENGTH * normal;
 
         float3 lsRadiance = rep(1.f);
         getOcclusionBuffer()->storeLSIntensity(lsRadiance, aRayId, aNumShadowRays);

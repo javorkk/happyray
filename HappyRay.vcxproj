@@ -360,7 +360,12 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\Application\CUDAApplication.cu" />
-    <CudaCompile Include="src\RT\RTEngine.cu" />
+    <CudaCompile Include="src\RT\RTEngine.cu">
+      <AdditionalDeps Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">RT/RTEngine.h</AdditionalDeps>
+      <AdditionalDeps Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">RT/RTEngine.h</AdditionalDeps>
+      <AdditionalDeps Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">RT/RTEngine.h</AdditionalDeps>
+      <AdditionalDeps Condition="'$(Configuration)|$(Platform)'=='Release|x64'">RT/RTEngine.h</AdditionalDeps>
+    </CudaCompile>
     <CudaCompile Include="src\RT\Structure\UGridMemoryManager.cu" />
     <CudaCompile Include="src\Utils\Scan.cu" />
     <CudaCompile Include="src\Utils\Sort.cu" />

@@ -25,8 +25,8 @@
 #pragma once
 #endif
 
-#ifndef SDLGLAPPLICATION_HPP_INCLUDED_AD5D925E_13F1_4765_9E59_CDEF4B46D453
-#define SDLGLAPPLICATION_HPP_INCLUDED_AD5D925E_13F1_4765_9E59_CDEF4B46D453
+#ifndef RENDERBUG_HPP_INCLUDED_AD5D925E_13F1_4765_9E59_CDEF4B46D453
+#define RENDERBUG_HPP_INCLUDED_AD5D925E_13F1_4765_9E59_CDEF4B46D453
 
 //////////////////////////////////////////////////////////////////////////
 //OpenGL extensions
@@ -82,8 +82,14 @@ public:
 	float *normals;
 	float *colors;
 	size_t   numPositions;
-	unsigned int   *indices;
-	int   numIndices;
+	float* interpolatedPositions;
+	size_t numInterpolatedPositions;
+	unsigned int *trIndices;
+	unsigned int *lnIndices;
+	unsigned int *ptIndices;
+	int   numTrIndices;
+	int   numLnIndices;
+	int   numPtIndices;
 
     float sceneDiagonalLength;
 
@@ -111,27 +117,51 @@ public:
 		positions = NULL;
 		normals = NULL;
 		colors = NULL;
-		numPositions = 0;
-		indices = NULL;
-		numIndices = 0;
+		numPositions = 0u;
+		interpolatedPositions = NULL;
+		numInterpolatedPositions = 0u;
+		trIndices = NULL;
+		lnIndices = NULL;
+		ptIndices = NULL;
+		numTrIndices = 0;
+		numLnIndices = 0;
+		numPtIndices = 0;
 
-        sceneDiagonalLength = 0.f;
+		sceneDiagonalLength = 0.f;
 	}
 
 	~RenderBug()
 	{
-		if (numIndices > 0)
+		if (numTrIndices > 0 || numLnIndices > 0 || numPtIndices > 0)
 		{
-			delete[] normals;
-			delete[] indices;
-			numIndices = 0;
+			if (trIndices != NULL)
+				delete[] trIndices;
+			if (lnIndices != NULL)
+				delete[] lnIndices;
+			if (ptIndices != NULL)
+				delete[] ptIndices;
+
+			trIndices = NULL;
+			lnIndices = NULL;
+			ptIndices = NULL;
+
+			numTrIndices = 0;
+			numLnIndices = 0;
+			numPtIndices = 0;
 		}
 
 		if (numPositions > 0)
 		{
 			delete[] colors;
 			delete[] positions;
+			delete[] normals;
 			numPositions = 0;
+		}
+
+		if (numInterpolatedPositions > 0)
+		{
+			delete[] interpolatedPositions;
+			numInterpolatedPositions = 0u;
 		}
 	}
 

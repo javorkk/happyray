@@ -94,9 +94,9 @@ public:
         {
             setReflection();
             irotation = quaternion3f(
-                -m00, m10, m20,
-                -m01, m11, m21,
-                -m02, m12, m22);
+                -m00, -m10, -m20,
+                -m01, -m11, -m21,
+                -m02, -m12, -m22);
         }
     }
 
@@ -116,6 +116,15 @@ public:
             m00 = -m00;
             m01 = -m01;
             m02 = -m02;
+
+			m10 = -m10;
+			m11 = -m11;
+			m12 = -m12;
+
+			m20 = -m20;
+			m21 = -m21;
+			m22 = -m22;
+
         }
         else
         {
@@ -142,6 +151,8 @@ public:
                 col0.z, col1.z, col2.z
                 );
             col0 = -col0;
+			col1 = -col1;
+			col2 = -col2;
 
             float3 rayDirT = col0 / oRayDirRCP.x + col1 / oRayDirRCP.y +
                 col2 / oRayDirRCP.z;
@@ -181,6 +192,8 @@ public:
                 col0.z, col1.z, col2.z
                 );
             col0 = -col0;
+			col1 = -col1;
+			col2 = -col2;
 
             float3 rayOrgT = col0 * aPoint.x + col1 * aPoint.y + col2 * aPoint.z + itranslation;
 
@@ -206,10 +219,19 @@ public:
                 col1.x, col1.y, col1.z,
                 col2.x, col2.y, col2.z
                 );
-            ////Apply reflection
-            //col0.x = -col0.x;
-            //col1.x = -col1.x;
-            //col2.x = -col2.x;
+            //Apply reflection
+            col0.x = -col0.x;
+            col1.x = -col1.x;
+            col2.x = -col2.x;
+
+			col0.y = -col0.y;
+			col1.y = -col1.y;
+			col2.y = -col2.y;
+
+			col0.z = -col0.z;
+			col1.z = -col1.z;
+			col2.z = -col2.z;
+
 
             float3 normalT = col0 * aNormal.x + col1 * aNormal.y + col2 * aNormal.z;
 
@@ -245,6 +267,16 @@ public:
             col0.x = -col0.x;
             col1.x = -col1.x;
             col2.x = -col2.x;
+
+			col0.y = -col0.y;
+			col1.y = -col1.y;
+			col2.y = -col2.y;
+
+			col0.z = -col0.z;
+			col1.z = -col1.z;
+			col2.z = -col2.z;
+
+
 
             float3 minBound = aBounds.vtx[0];
             minBound = minBound - itranslation;

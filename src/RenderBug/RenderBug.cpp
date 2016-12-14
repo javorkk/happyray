@@ -108,20 +108,28 @@ GLuint RenderBug::sFBOId;
 
 void RenderBug::renderScene(const CameraManager& aCamera)
 {
-	switch (mGeometryMode)
-	{
-	case TRIANGLES:
-		renderTriangles(aCamera);
-		break;
-	case LINES:
-		renderLines(aCamera);
-		break;
-	case POINTS:
-		renderPoints(aCamera);
-	default:
-		renderTriangles(aCamera);
-		break;
-	}//switch ( mGeometryMode )
+	/* Make our background black */
+	glClearColor(0.0, 0.0, 0.0, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	renderTriangles(aCamera);
+	renderLines(aCamera);
+	renderPoints(aCamera);
+
+	//switch (mGeometryMode)
+	//{
+	//case TRIANGLES:
+	//	renderTriangles(aCamera);
+	//	break;
+	//case LINES:
+	//	renderLines(aCamera);
+	//	break;
+	//case POINTS:
+	//	renderPoints(aCamera);
+	//default:
+	//	renderTriangles(aCamera);
+	//	break;
+	//}//switch ( mGeometryMode )
 }
 
 void RenderBug::setupSceneGeometry(AnimationManager& aSceneManager)
@@ -129,18 +137,36 @@ void RenderBug::setupSceneGeometry(AnimationManager& aSceneManager)
 	if (aSceneManager.getNumKeyFrames() < 1)
 		return;
 
-	if (numIndices > 0)
+	if (numTrIndices > 0 || numLnIndices > 0 || numPtIndices > 0)
 	{
-		delete[] normals;
-		delete[] indices;
-		numIndices = 0;
+		if (trIndices != NULL)
+			delete[] trIndices;
+		if (lnIndices != NULL)
+			delete[] lnIndices;
+		if (ptIndices != NULL)
+			delete[] ptIndices;
+
+		trIndices = NULL;
+		lnIndices = NULL;
+		ptIndices = NULL;
+
+		numTrIndices = 0;
+		numLnIndices = 0;
+		numPtIndices = 0;
 	}
 
 	if (numPositions > 0)
 	{
 		delete[] colors;
 		delete[] positions;
-		numPositions = 0;
+		delete[] normals;
+		numPositions = 0u;
+	}
+
+	if (numInterpolatedPositions > 0)
+	{
+		delete[] interpolatedPositions;
+		numInterpolatedPositions = 0u;
 	}
 
 	//The first frame
@@ -162,154 +188,179 @@ void RenderBug::setupSceneGeometry(AnimationManager& aSceneManager)
 	float4 color = defaultColor;
 
 	const size_t numVertices = std::max(keyFrame1.getNumVertices(), keyFrame2.getNumVertices());
-	positions = new float[numVertices * 3];
-	colors = new float[numVertices * 3];
+	numTrIndices = (GLsizei)std::max(keyFrame1.getNumFaces(), keyFrame2.getNumFaces());
+	numLnIndices = (GLsizei)std::max(keyFrame1.getNumLines(), keyFrame2.getNumLines());
+	numPtIndices = (GLsizei)std::max(keyFrame1.getNumPoints(), keyFrame2.getNumPoints());
 
-	numPositions = numVertices;
+	positions = new float[3 * (numTrIndices * 3 + numLnIndices * 2 + numPtIndices)];
+	colors = new float[3 * (numTrIndices * 3 + numLnIndices * 2 + numPtIndices)];
+	normals = new float[3 * (numTrIndices * 3 + numLnIndices * 2 + numPtIndices)];
 
-    float minX =  FLT_MAX;
-    float minY =  FLT_MAX;
-    float minZ =  FLT_MAX;
-    float maxX = -FLT_MAX;
-    float maxY = -FLT_MAX;
-    float maxZ = -FLT_MAX;
+	numPositions = numTrIndices * 3 + numLnIndices * 2 + numPtIndices;
+
+	interpolatedPositions = new float[3 * numVertices];
+	numInterpolatedPositions = numVertices;
+
+	float minX = FLT_MAX;
+	float minY = FLT_MAX;
+	float minZ = FLT_MAX;
+	float maxX = -FLT_MAX;
+	float maxY = -FLT_MAX;
+	float maxZ = -FLT_MAX;
 
 
-    //Itereate trough the vertex array and interpolate coordinates
+	//Itereate trough the vertex array and interpolate coordinates
 	size_t it = 0u;
 	size_t offset = 0u;
 	for (; it < std::min(keyFrame1.getNumVertices(), keyFrame2.getNumVertices()); ++it)
 	{
-		positions[3 * (offset + it) + 0] = keyFrame1.vertices[it].x * (1.f - coeff) + keyFrame2.vertices[it].x * coeff;
-		positions[3 * (offset + it) + 1] = keyFrame1.vertices[it].y * (1.f - coeff) + keyFrame2.vertices[it].y * coeff;
-		positions[3 * (offset + it) + 2] = keyFrame1.vertices[it].z * (1.f - coeff) + keyFrame2.vertices[it].z * coeff;
+		interpolatedPositions[3 * (offset + it) + 0] = keyFrame1.vertices[it].x * (1.f - coeff) + keyFrame2.vertices[it].x * coeff;
+		interpolatedPositions[3 * (offset + it) + 1] = keyFrame1.vertices[it].y * (1.f - coeff) + keyFrame2.vertices[it].y * coeff;
+		interpolatedPositions[3 * (offset + it) + 2] = keyFrame1.vertices[it].z * (1.f - coeff) + keyFrame2.vertices[it].z * coeff;
 
-        minX = std::min(minX, positions[3 * (offset + it) + 0]);
-        minY = std::min(minY, positions[3 * (offset + it) + 1]);
-        minZ = std::min(minZ, positions[3 * (offset + it) + 2]);
+		minX = std::min(minX, interpolatedPositions[3 * (offset + it) + 0]);
+		minY = std::min(minY, interpolatedPositions[3 * (offset + it) + 1]);
+		minZ = std::min(minZ, interpolatedPositions[3 * (offset + it) + 2]);
 
-        maxX = std::max(maxX, positions[3 * (offset + it) + 0]);
-        maxY = std::max(maxY, positions[3 * (offset + it) + 1]);
-        maxZ = std::max(maxZ, positions[3 * (offset + it) + 2]);
-
-
-		colors[3 * (offset + it) + 0] = color.x;
-		colors[3 * (offset + it) + 1] = color.y;
-		colors[3 * (offset + it) + 2] = color.z;
+		maxX = std::max(maxX, interpolatedPositions[3 * (offset + it) + 0]);
+		maxY = std::max(maxY, interpolatedPositions[3 * (offset + it) + 1]);
+		maxZ = std::max(maxZ, interpolatedPositions[3 * (offset + it) + 2]);
 
 	}
 
-    sceneDiagonalLength = sqrtf((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY) + (maxZ - minZ) * (maxZ - minZ));
+	sceneDiagonalLength = sqrtf((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY) + (maxZ - minZ) * (maxZ - minZ));
 
 	//Key frame 2 may have more vertices, add them w/o interpolation
 	for (; it < keyFrame2.vertices.size(); ++it)
 	{
-		positions[3 * (offset + it)] = keyFrame2.vertices[it].x;
-		positions[3 * (offset + it) + 1] = keyFrame2.vertices[it].y;
-		positions[3 * (offset + it) + 2] = keyFrame2.vertices[it].z;
-
-		colors[3 * (offset + it)] = color.x;
-		colors[3 * (offset + it) + 1] = color.y;
-		colors[3 * (offset + it) + 2] = color.z;
+		interpolatedPositions[3 * (offset + it) + 0] = keyFrame2.vertices[it].x;
+		interpolatedPositions[3 * (offset + it) + 1] = keyFrame2.vertices[it].y;
+		interpolatedPositions[3 * (offset + it) + 2] = keyFrame2.vertices[it].z;
 	}
 
 	size_t indicesOffset = 0u;
 
-	switch (mGeometryMode)
+	//switch (mGeometryMode)
+	//{
+	//case TRIANGLES:
+	trIndices = new unsigned int[numTrIndices * 3];
+
+	//Do not interpolate  indices, only use those of the second key frame
+	for (size_t faceId = 0; faceId < keyFrame2.faces.size(); ++faceId)
 	{
-	case TRIANGLES:
-		numIndices = (GLsizei)std::max(keyFrame1.getNumFaces(), keyFrame2.getNumFaces());
-		indices = new unsigned int[numIndices * 3];
-		normals = new float[numIndices * 3 * 3];
+		trIndices[3 * (indicesOffset + faceId) + 0] = (unsigned int)(offset + 3 * faceId + 0u);
+		trIndices[3 * (indicesOffset + faceId) + 1] = (unsigned int)(offset + 3 * faceId + 1u);
+		trIndices[3 * (indicesOffset + faceId) + 2] = (unsigned int)(offset + 3 * faceId + 2u);
 
-		//Do not interpolate  indices, only use those of the second key frame
-		for (size_t faceId = 0; faceId < keyFrame2.faces.size(); ++faceId)
+		positions[3 * offset + 9 * faceId + 0] = interpolatedPositions[3 * keyFrame2.faces[faceId].vert1 + 0];
+		positions[3 * offset + 9 * faceId + 1] = interpolatedPositions[3 * keyFrame2.faces[faceId].vert1 + 1];
+		positions[3 * offset + 9 * faceId + 2] = interpolatedPositions[3 * keyFrame2.faces[faceId].vert1 + 2];
+
+		positions[3 * offset + 9 * faceId + 3] = interpolatedPositions[3 * keyFrame2.faces[faceId].vert2 + 0];
+		positions[3 * offset + 9 * faceId + 4] = interpolatedPositions[3 * keyFrame2.faces[faceId].vert2 + 1];
+		positions[3 * offset + 9 * faceId + 5] = interpolatedPositions[3 * keyFrame2.faces[faceId].vert2 + 2];
+
+		positions[3 * offset + 9 * faceId + 6] = interpolatedPositions[3 * keyFrame2.faces[faceId].vert3 + 0];
+		positions[3 * offset + 9 * faceId + 7] = interpolatedPositions[3 * keyFrame2.faces[faceId].vert3 + 1];
+		positions[3 * offset + 9 * faceId + 8] = interpolatedPositions[3 * keyFrame2.faces[faceId].vert3 + 2];
+
+		colors[3 * offset + 9 * faceId + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159f;
+		colors[3 * offset + 9 * faceId + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159f;
+		colors[3 * offset + 9 * faceId + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159f;
+
+		colors[3 * offset + 9 * faceId + 3] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159f;
+		colors[3 * offset + 9 * faceId + 4] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159f;
+		colors[3 * offset + 9 * faceId + 5] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159f;
+
+		colors[3 * offset + 9 * faceId + 6] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159f;
+		colors[3 * offset + 9 * faceId + 7] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159f;
+		colors[3 * offset + 9 * faceId + 8] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159f;
+
+		float3 normal1, normal2, normal3;
+		if (faceId < keyFrame1.getNumFaces())
 		{
-			indices[3 * (indicesOffset + faceId)] = (GLuint)(offset + keyFrame2.faces[faceId].vert1);
-			indices[3 * (indicesOffset + faceId) + 1] = (GLuint)(offset + keyFrame2.faces[faceId].vert2);
-			indices[3 * (indicesOffset + faceId) + 2] = (GLuint)(offset + keyFrame2.faces[faceId].vert3);
+			normal1 = ~(keyFrame1.normals[keyFrame1.faces[faceId].norm1] * (1.f - coeff) + keyFrame2.normals[keyFrame2.faces[faceId].norm1] * coeff);
+			normal2 = ~(keyFrame1.normals[keyFrame1.faces[faceId].norm2] * (1.f - coeff) + keyFrame2.normals[keyFrame2.faces[faceId].norm2] * coeff);
+			normal3 = ~(keyFrame1.normals[keyFrame1.faces[faceId].norm3] * (1.f - coeff) + keyFrame2.normals[keyFrame2.faces[faceId].norm3] * coeff);
 
-            colors[3 * (keyFrame2.faces[faceId].vert1) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159f;
-            colors[3 * (keyFrame2.faces[faceId].vert1) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159f;
-            colors[3 * (keyFrame2.faces[faceId].vert1) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159f;
-
-            colors[3 * (keyFrame2.faces[faceId].vert2) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159f;
-            colors[3 * (keyFrame2.faces[faceId].vert2) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159f;
-            colors[3 * (keyFrame2.faces[faceId].vert2) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159f;
-
-            colors[3 * (keyFrame2.faces[faceId].vert3) + 0] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.x * 3.14159f;
-            colors[3 * (keyFrame2.faces[faceId].vert3) + 1] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.y * 3.14159f;
-            colors[3 * (keyFrame2.faces[faceId].vert3) + 2] = keyFrame2.materials[keyFrame2.faces[faceId].material].diffuseCoeff.z * 3.14159f;
-
-			float3 normal1, normal2, normal3;
-			if (faceId < keyFrame1.getNumFaces())
-			{
-				normal1 = ~(keyFrame1.normals[keyFrame1.faces[faceId].norm1] * (1.f - coeff) + keyFrame2.normals[keyFrame2.faces[faceId].norm1] * coeff);
-				normal2 = ~(keyFrame1.normals[keyFrame1.faces[faceId].norm2] * (1.f - coeff) + keyFrame2.normals[keyFrame2.faces[faceId].norm2] * coeff);
-				normal3 = ~(keyFrame1.normals[keyFrame1.faces[faceId].norm3] * (1.f - coeff) + keyFrame2.normals[keyFrame2.faces[faceId].norm3] * coeff);
-
-			}
-			else
-			{
-				normal1 = keyFrame2.normals[keyFrame2.faces[faceId].norm1];
-				normal2 = keyFrame2.normals[keyFrame2.faces[faceId].norm2];
-				normal3 = keyFrame2.normals[keyFrame2.faces[faceId].norm3];
-			}
-
-			normals[3 * (keyFrame2.faces[faceId].vert1) + 0] = normal1.x;
-			normals[3 * (keyFrame2.faces[faceId].vert1) + 1] = normal1.y;
-			normals[3 * (keyFrame2.faces[faceId].vert1) + 2] = normal1.z;
-
-			normals[3 * (keyFrame2.faces[faceId].vert2) + 0] = normal2.x;
-			normals[3 * (keyFrame2.faces[faceId].vert2) + 1] = normal2.y;
-			normals[3 * (keyFrame2.faces[faceId].vert2) + 2] = normal2.z;
-
-			normals[3 * (keyFrame2.faces[faceId].vert3) + 0] = normal3.x;
-			normals[3 * (keyFrame2.faces[faceId].vert3) + 1] = normal3.y;
-			normals[3 * (keyFrame2.faces[faceId].vert3) + 2] = normal3.z;
+		}
+		else
+		{
+			normal1 = keyFrame2.normals[keyFrame2.faces[faceId].norm1];
+			normal2 = keyFrame2.normals[keyFrame2.faces[faceId].norm2];
+			normal3 = keyFrame2.normals[keyFrame2.faces[faceId].norm3];
 		}
 
-		break;
-	case LINES:
-		numIndices = (GLsizei)std::max(keyFrame1.getNumLines(), keyFrame2.getNumLines());
-		indices = new unsigned int[numIndices * 2];
-		normals = new float[8];
+		normals[3 * offset + 9 * faceId + 0] = normal1.x;
+		normals[3 * offset + 9 * faceId + 1] = normal1.y;
+		normals[3 * offset + 9 * faceId + 2] = normal1.z;
+
+		normals[3 * offset + 9 * faceId + 3] = normal2.x;
+		normals[3 * offset + 9 * faceId + 4] = normal2.y;
+		normals[3 * offset + 9 * faceId + 5] = normal2.z;
+
+		normals[3 * offset + 9 * faceId + 6] = normal3.x;
+		normals[3 * offset + 9 * faceId + 7] = normal3.y;
+		normals[3 * offset + 9 * faceId + 8] = normal3.z;
+	}
+
+	offset += 3 * numTrIndices;
+	//	break;
+	//case LINES: 		
+	if (numLnIndices > 0)
+	{
+		lnIndices = new unsigned int[numLnIndices * 2];
 
 		//Do not interpolate  indices, only use those of the second key frame
 		for (size_t lineId = 0; lineId < keyFrame2.getNumLines(); ++lineId)
 		{
-			indices[2 * (indicesOffset + lineId)] = (GLuint)(offset + keyFrame2.lines[lineId].vert1);
-			indices[2 * (indicesOffset + lineId) + 1] = (GLuint)(offset + keyFrame2.lines[lineId].vert2);
+			lnIndices[2 * (indicesOffset + lineId) + 0] = (unsigned int)(offset + 2 * lineId + 0u);
+			lnIndices[2 * (indicesOffset + lineId) + 1] = (unsigned int)(offset + 2 * lineId + 1u);
 
-            colors[3 * (keyFrame2.lines[lineId].vert1) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x * 3.14159f;
-            colors[3 * (keyFrame2.lines[lineId].vert1) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y * 3.14159f;
-            colors[3 * (keyFrame2.lines[lineId].vert1) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z * 3.14159f;
-																																			
-            colors[3 * (keyFrame2.lines[lineId].vert2) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x * 3.14159f;
-            colors[3 * (keyFrame2.lines[lineId].vert2) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y * 3.14159f;
-            colors[3 * (keyFrame2.lines[lineId].vert2) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z * 3.14159f;
+			positions[3 * offset + 6 * lineId + 0] = interpolatedPositions[3 * keyFrame2.lines[lineId].vert1 + 0];
+			positions[3 * offset + 6 * lineId + 1] = interpolatedPositions[3 * keyFrame2.lines[lineId].vert1 + 1];
+			positions[3 * offset + 6 * lineId + 2] = interpolatedPositions[3 * keyFrame2.lines[lineId].vert1 + 2];
+
+			positions[3 * offset + 6 * lineId + 3] = interpolatedPositions[3 * keyFrame2.lines[lineId].vert2 + 0];
+			positions[3 * offset + 6 * lineId + 4] = interpolatedPositions[3 * keyFrame2.lines[lineId].vert2 + 1];
+			positions[3 * offset + 6 * lineId + 5] = interpolatedPositions[3 * keyFrame2.lines[lineId].vert2 + 2];
+
+			colors[3 * (keyFrame2.lines[lineId].vert1) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x * 3.14159f;
+			colors[3 * (keyFrame2.lines[lineId].vert1) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y * 3.14159f;
+			colors[3 * (keyFrame2.lines[lineId].vert1) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z * 3.14159f;
+
+			colors[3 * (keyFrame2.lines[lineId].vert2) + 0] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.x * 3.14159f;
+			colors[3 * (keyFrame2.lines[lineId].vert2) + 1] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.y * 3.14159f;
+			colors[3 * (keyFrame2.lines[lineId].vert2) + 2] = keyFrame2.materials[keyFrame2.lines[lineId].material].diffuseCoeff.z * 3.14159f;
 		}
-
-		break;
-	case POINTS:
-		numIndices = (GLsizei)std::max(keyFrame1.getNumPoints(), keyFrame2.getNumPoints());
-		indices = new unsigned int[numIndices * 1];
-		normals = new float[8];
+	}
+	offset += 2 * numLnIndices;
+	//	break;
+	//case POINTS:
+	if (numPtIndices > 0)
+	{
+		ptIndices = new unsigned int[numPtIndices * 1];
 
 		//Do not interpolate  indices, only use those of the second key frame
 		for (size_t pointId = 0; pointId < keyFrame2.getNumPoints(); ++pointId)
 		{
-			indices[(indicesOffset + pointId)] = (GLuint)(offset + keyFrame2.points[pointId].vert1);
+			ptIndices[(indicesOffset + pointId)] = (unsigned int)(offset + pointId);
 
-            colors[3 * (keyFrame2.points[pointId].vert1) + 0] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.x * 3.14159f;
-            colors[3 * (keyFrame2.points[pointId].vert1) + 1] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.y * 3.14159f;
-            colors[3 * (keyFrame2.points[pointId].vert1) + 2] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.z * 3.14159f;
+			positions[3 * offset + 3 * pointId + 0] = interpolatedPositions[3 * keyFrame2.points[pointId].vert1 + 0];
+			positions[3 * offset + 3 * pointId + 1] = interpolatedPositions[3 * keyFrame2.points[pointId].vert1 + 1];
+			positions[3 * offset + 3 * pointId + 2] = interpolatedPositions[3 * keyFrame2.points[pointId].vert1 + 2];
+
+
+			colors[3 * (keyFrame2.points[pointId].vert1) + 0] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.x * 3.14159f;
+			colors[3 * (keyFrame2.points[pointId].vert1) + 1] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.y * 3.14159f;
+			colors[3 * (keyFrame2.points[pointId].vert1) + 2] = keyFrame2.materials[keyFrame2.points[pointId].material].diffuseCoeff.z * 3.14159f;
 		}
-
-		break;
-	default:
-		break;
 	}
+
+	//	break;
+	//default:
+	//	break;
+	//}
 
 }
 
@@ -539,9 +590,10 @@ void RenderBug::initConstantShader()
 
 }
 
-void RenderBug::renderTriangles( const CameraManager& aCamera)
+void RenderBug::renderTriangles(const CameraManager& aCamera)
 {
-
+	if (numTrIndices <= 0)
+		return;
 
 	/* Allocate and assign a Vertex Array Object to our handle */
 	glGenVertexArrays(1, &vao);
@@ -565,7 +617,7 @@ void RenderBug::renderTriangles( const CameraManager& aCamera)
 	/* Create our projection matrix with a 45 degree field of view
 	* a width to height ratio of RESX/RESY and view from .1 to 100 infront of us */
 	const GLfloat aspectRatio = static_cast<float>(aCamera.getResX()) / static_cast<float>(aCamera.getResY());
-    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, 4.f * sceneDiagonalLength);
+	perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, sceneDiagonalLength);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	//Setup Camera and background color
@@ -596,8 +648,8 @@ void RenderBug::renderTriangles( const CameraManager& aCamera)
 	glUniformMatrix4fv(glGetUniformLocation(shaderprogram_cartoon, "mvpmatrix"), 1, GL_FALSE, modelmatrix);
 
 	/* Make our background black */
-	glClearColor(0.0, 0.0, 0.0, 1.0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//glClearColor(0.0, 0.0, 0.0, 1.0);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 	//Setup scene geometry
@@ -637,8 +689,8 @@ void RenderBug::renderTriangles( const CameraManager& aCamera)
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[2]);
 
 	/* Copy the index data from indices to our buffer */
-	/* numIndices * 3 * sizeof(GLfloat) is the size of the indices array, since it contains numIndices*3 GLubyte values */
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices * 3 * sizeof(GLuint), (GLuint*)indices, GL_STATIC_DRAW);
+	/* numTrIndices * 3 * sizeof(GLfloat) is the size of the indices array, since it contains numTrIndices*3 GLubyte values */
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, numTrIndices * 3 * sizeof(GLuint), (GLuint*)trIndices, GL_STATIC_DRAW);
 
 	/* Specify that our index data is going into attribute index 2, and contains three ints per vertex */
 	glVertexAttribPointer(2, 3, GL_UNSIGNED_INT, GL_FALSE, 0, 0);
@@ -651,7 +703,7 @@ void RenderBug::renderTriangles( const CameraManager& aCamera)
 
 	/* Copy the vertex normals to our buffer */
 	/* numPositions * 3 * sizeof(GLfloat) is the size of the normals array, since it contains numPositions * 3 GLfloat values */
-	glBufferData(GL_ARRAY_BUFFER, numIndices * 3 * sizeof(GLfloat), (GLfloat*)normals, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, numPositions * 3 * sizeof(GLfloat), (GLfloat*)normals, GL_STATIC_DRAW);
 
 	/* Specify that our coordinate data is going into attribute index 3, and contains tree floats per vertex */
 	glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 0, 0);
@@ -664,7 +716,7 @@ void RenderBug::renderTriangles( const CameraManager& aCamera)
 	//Render scene
 
 	/* Invoke glDrawElements telling it to draw triangles strip using indicies */
-	glDrawElements(GL_TRIANGLES, numIndices * 3, GL_UNSIGNED_INT, 0);
+	glDrawElements(GL_TRIANGLES, numTrIndices * 3, GL_UNSIGNED_INT, 0);
 
 
 	/* Disable vertex arrays */
@@ -681,6 +733,8 @@ void RenderBug::renderTriangles( const CameraManager& aCamera)
 
 void RenderBug::renderLines(const CameraManager& aCamera)
 {
+	if (numLnIndices <= 0)
+		return;
 
 	/* Allocate and assign a Vertex Array Object to our handle */
 	glGenVertexArrays(1, &vao);
@@ -703,7 +757,7 @@ void RenderBug::renderLines(const CameraManager& aCamera)
 	/* Create our projection matrix with a 45 degree field of view
 	* a width to height ratio of RESX/RESY and view from .1 to 100 infront of us */
 	const GLfloat aspectRatio = static_cast<float>(aCamera.getResX()) / static_cast<float>(aCamera.getResY());
-    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, 4.f * sceneDiagonalLength);
+	perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, sceneDiagonalLength);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	//Setup Camera and background color
@@ -734,8 +788,8 @@ void RenderBug::renderLines(const CameraManager& aCamera)
 	glUniformMatrix4fv(glGetUniformLocation(shaderprogram_constant, "mvpmatrix"), 1, GL_FALSE, modelmatrix);
 
 	/* Make our background black */
-	glClearColor(0.0, 0.0, 0.0, 1.0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//glClearColor(0.0, 0.0, 0.0, 1.0);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 	//Setup OpenGL buffers
@@ -771,7 +825,7 @@ void RenderBug::renderLines(const CameraManager& aCamera)
 
 	/* Copy the index data from indices to our buffer */
 	/* numIndices * 2 * sizeof(GLuint) is the size of the indices array, since it contains numIndices*2 GLubyte values */
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices * 2 * sizeof(GLuint), (GLuint*)indices, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, numLnIndices * 2 * sizeof(GLuint), (GLuint*)lnIndices, GL_STATIC_DRAW);
 
 	/* Specify that our index data is going into attribute index 2, and contains three ints per vertex */
 	glVertexAttribPointer(2, 2, GL_UNSIGNED_INT, GL_FALSE, 0, 0);
@@ -783,7 +837,7 @@ void RenderBug::renderLines(const CameraManager& aCamera)
 	//Render scene
 
 	/* Invoke glDrawElements telling it to draw lines using indicies */
-	glDrawElements(GL_LINES, numIndices * 2, GL_UNSIGNED_INT, 0);
+	glDrawElements(GL_LINES, numLnIndices * 2, GL_UNSIGNED_INT, 0);
 
 
 	/* Disable vertex arrays */
@@ -800,6 +854,9 @@ void RenderBug::renderLines(const CameraManager& aCamera)
 
 void RenderBug::renderPoints(const CameraManager& aCamera)
 {
+	if (numPtIndices <= 0)
+		return;
+
 	/* Allocate and assign a Vertex Array Object to our handle */
 	glGenVertexArrays(1, &vao);
 
@@ -822,7 +879,7 @@ void RenderBug::renderPoints(const CameraManager& aCamera)
 	/* Create our projection matrix with a 45 degree field of view
 	* a width to height ratio of RESX/RESY and view from .1 to 100 infront of us */
 	const GLfloat aspectRatio = static_cast<float>(aCamera.getResX()) / static_cast<float>(aCamera.getResY());
-    perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, 4.f * sceneDiagonalLength);
+	perspective(projectionmatrix, aCamera.getFOV(), aspectRatio, 0.1f, sceneDiagonalLength);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	//Setup Camera and background color
@@ -851,10 +908,6 @@ void RenderBug::renderPoints(const CameraManager& aCamera)
 
 	/* Bind our modelmatrix variable to be a uniform called mvpmatrix in our shaderprogram */
 	glUniformMatrix4fv(glGetUniformLocation(shaderprogram_constant, "mvpmatrix"), 1, GL_FALSE, modelmatrix);
-
-	/* Make our background black */
-	glClearColor(0.0, 0.0, 0.0, 1.0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 	//Setup OpenGL buffers
@@ -890,7 +943,7 @@ void RenderBug::renderPoints(const CameraManager& aCamera)
 
 	/* Copy the index data from indices to our buffer */
 	/* numIndices * 1 * sizeof(GLfloat) is the size of the indices array, since it contains numIndices*1 GLubyte values */
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices * 1 * sizeof(GLuint), (GLuint*)indices, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, numPtIndices * 1 * sizeof(GLuint), (GLuint*)ptIndices, GL_STATIC_DRAW);
 
 	/* Specify that our index data is going into attribute index 2, and contains one int per vertex */
 	glVertexAttribPointer(2, 1, GL_UNSIGNED_INT, GL_FALSE, 0, 0);
@@ -903,7 +956,7 @@ void RenderBug::renderPoints(const CameraManager& aCamera)
 	//Render scene
 
 	/* Invoke glDrawElements telling it to draw triangles strip using indicies */
-	glDrawElements(GL_POINTS, numIndices * 1, GL_UNSIGNED_INT, 0);
+	glDrawElements(GL_POINTS, numPtIndices * 1, GL_UNSIGNED_INT, 0);
 
 	/* Disable vertex arrays */
 	glDisableVertexAttribArray(0);
@@ -1102,8 +1155,8 @@ void RenderBug::renderFBuffer(float*& aFrameBufferFloatPtr, const int aResX, con
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(TEXTURE_TARGET, sFBTextureId);
 	glUniform1i(glGetUniformLocation(shaderprogram, "uTexture"), 0); // texture unit 0
-	//////////////////////////////////////////////////////////////////////////
-	//NVidia
+																	 //////////////////////////////////////////////////////////////////////////
+																	 //NVidia
 	glTexSubImage2D(TEXTURE_TARGET, 0, 0, 0, aResX, aResY, TEXTURE_FORMAT, GL_FLOAT, aFrameBufferFloatPtr);
 	//////////////////////////////////////////////////////////////////////////
 
