@@ -1,6 +1,7 @@
 #include "StdAfx.hpp"
 #include "ObjWriter.h"
 
+//#define DUMP_INSTANCES
 
 void ObjWriter::init(const char * aFilename)
 {
@@ -18,11 +19,13 @@ void ObjWriter::init(const char * aFilename)
 		std::cerr << "Could not open file " << aFileNameStr << ".mtl for writing\n";
 	}
 
+#ifdef DUMP_INSTANCES
 	instancesFileStream.open((aFileNameStr + ".obji").c_str(), std::ios::binary | std::ios::out);
 	if (!instancesFileStream)
 	{
 		std::cerr << "Could not open file " << aFileNameStr << ".obji for writing\n";
 	}
+#endif
 
 	objFileStream << "mtllib ";
 	objFileStream << aFileNameStr;
@@ -89,6 +92,7 @@ void ObjWriter::writeInstance(
 	float aMinX, float aMinY, float aMinZ, /*min bound */
 	float aMaxX, float aMaxY, float aMaxZ /*max bound */)
 {
+#ifdef DUMP_INSTANCES
 	instancesFileStream << "#new instance#\n";
 	instancesFileStream << "obj_id " << aObjectId << "\n";
 	instancesFileStream << "m_row_0 " << aT00 << " " << aT10 << " " << aT20 << " " << aT30 << "\n";
@@ -96,14 +100,15 @@ void ObjWriter::writeInstance(
 	instancesFileStream << "m_row_2 " << aT02 << " " << aT12 << " " << aT22 << " " << aT32 << "\n";
 	instancesFileStream << "AABB_min " << aMinX << " " << aMinY << " " << aMinZ << "\n";
 	instancesFileStream << "AABB_max " << aMaxX << " " << aMaxY << " " << aMaxZ << "\n";
+#endif
 }
 
 void ObjWriter::cleanup()
 {
 	objFileStream.close();
 	materialFileStream.close();
+
+#ifdef DUMP_INSTANCES
 	instancesFileStream.close();
+#endif
 }
-
-
-
