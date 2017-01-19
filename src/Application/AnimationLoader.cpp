@@ -118,11 +118,11 @@ void AnimationManager::dumpFrame()
     filename.append(itoa((uint)frameId1));
     filename.append("_");
     filename.append(ftoa(aCoeff));
-    filename.append(".obj");
+    //filename.append(".obj");
     
-    std::ofstream objFileStream(filename.c_str(), std::ios::binary | std::ios::out);
+	objOut.init(filename.c_str());
 
-    if (!objFileStream)
+    if (!objOut.objFileStream)
     {
         std::cerr << "Could not open file " << filename <<" for writing!\n";
         return;
@@ -143,7 +143,7 @@ void AnimationManager::dumpFrame()
         y = aKeyFrame1.getVertex(it).y * (1.f - aCoeff) + aKeyFrame2.getVertex(it).y * aCoeff;
         z = aKeyFrame1.getVertex(it).z * (1.f - aCoeff) + aKeyFrame2.getVertex(it).z * aCoeff;
         
-        objOut.writeVertex(objFileStream,x,y,z);
+        objOut.writeVertex(x,y,z);
     }
 
     for (; it < numVertices2; ++it)
@@ -153,7 +153,7 @@ void AnimationManager::dumpFrame()
         y = aKeyFrame2.getVertex(it).y;
         z = aKeyFrame2.getVertex(it).z;
 
-        objOut.writeVertex(objFileStream, x, y, z);
+        objOut.writeVertex(x, y, z);
     }
 
 
@@ -171,7 +171,7 @@ void AnimationManager::dumpFrame()
         x = aKeyFrame1.getNormal(it).x * (1.f - aCoeff) + aKeyFrame2.getNormal(it).x * aCoeff;
         y = aKeyFrame1.getNormal(it).y * (1.f - aCoeff) + aKeyFrame2.getNormal(it).y * aCoeff;
         z = aKeyFrame1.getNormal(it).z * (1.f - aCoeff) + aKeyFrame2.getNormal(it).z * aCoeff;
-        objOut.writeVertexNormal(objFileStream, x, y, z);
+        objOut.writeVertexNormal(x, y, z);
     }
 
     for (; it < numNormals2; ++it)
@@ -180,7 +180,7 @@ void AnimationManager::dumpFrame()
         x = aKeyFrame2.getNormal(it).x;
         y = aKeyFrame2.getNormal(it).y;
         z = aKeyFrame2.getNormal(it).z;
-        objOut.writeVertexNormal(objFileStream, x, y, z);
+        objOut.writeVertexNormal(x, y, z);
     }
 
     //////////////////////////////////////////////////////////////////////////
@@ -197,7 +197,7 @@ void AnimationManager::dumpFrame()
         uint id1 = aKeyFrame1.getVertexIndex(it + 1);
         uint id2 = aKeyFrame1.getVertexIndex(it + 2);
 
-        objOut.writeTriangleIndices(objFileStream,
+        objOut.writeTriangleIndices(
             id0,
             id1,
             id2);
@@ -209,12 +209,11 @@ void AnimationManager::dumpFrame()
         uint id1 = aKeyFrame2.getVertexIndex(it + 1);
         uint id2 = aKeyFrame2.getVertexIndex(it + 2);
 
-        objOut.writeTriangleIndices(objFileStream,
+        objOut.writeTriangleIndices(
             id0,
             id1,
             id2);
     }
 
-    objFileStream.close();
-
+	objOut.cleanup();
 }
