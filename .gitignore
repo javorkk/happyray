@@ -12,3 +12,7 @@
 *.trc
 *.db
 *.opendb
+microtile_camera.cfg
+microtile_instances_dump.obji
+microtiles_dump.mtl
+microtiles_dump.obj

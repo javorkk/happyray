@@ -135,7 +135,7 @@
       </AddedDependencies>
     </Cudart_Build_Rule>
     <CudaCompile>
-      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=610</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include;$(CUDA_PATH)/include</Include>
       <Runtime>MTd</Runtime>
       <CodeGeneration>compute_61,sm_61</CodeGeneration>
@@ -171,7 +171,7 @@
     </Cudart_Build_Rule>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=200</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=610</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include;$(CUDA_PATH)/include</Include>
       <Runtime>MTd</Runtime>
       <CodeGeneration>compute_61,sm_61</CodeGeneration>
@@ -208,7 +208,7 @@
       </AddedDependencies>
     </Cudart_Build_Rule>
     <CudaCompile>
-      <Defines>HAPPYRAY__CUDA_ARCH__=120</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=610</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include;$(CUDA_PATH)/include</Include>
       <Runtime>MT</Runtime>
       <CodeGeneration>compute_61,sm_61</CodeGeneration>
@@ -247,7 +247,7 @@
     </Cudart_Build_Rule>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Defines>HAPPYRAY__CUDA_ARCH__=500</Defines>
+      <Defines>HAPPYRAY__CUDA_ARCH__=610</Defines>
       <Include>$(ProjectDir)src;$(ProjectDir)contrib/include;$(CUDA_PATH)/include</Include>
       <Runtime>MT</Runtime>
       <PtxAsOptionV>true</PtxAsOptionV>
@@ -265,12 +265,12 @@
     <ClInclude Include="src\Application\CameraManager.hpp" />
     <ClInclude Include="src\Application\CUDAApplication.h" />
     <ClInclude Include="src\Application\LightSourceLoader.hpp" />
-    <ClInclude Include="src\Application\ObjWriter.h" />
     <ClInclude Include="src\Application\SceneConfiguration.hpp" />
     <ClInclude Include="src\Application\SceneLoader.hpp" />
     <ClInclude Include="src\Application\SDLGLApplication.hpp" />
     <ClInclude Include="src\Application\WFObject.hpp" />
     <ClInclude Include="src\application\wfobjectuploader.h" />
+    <ClInclude Include="src\Application\WFObjWriter.h" />
     <ClInclude Include="src\Core\Algebra.hpp" />
     <ClInclude Include="src\Core\Flags.hpp" />
     <ClInclude Include="src\Core\SSEAlgebra.hpp" />
@@ -331,11 +331,11 @@
     <ClCompile Include="src\Application\AnimationLoader.cpp" />
     <ClCompile Include="src\Application\CameraManager.cpp" />
     <ClCompile Include="src\Application\LightSourceLoader.cpp" />
-    <ClCompile Include="src\Application\ObjWriter.cpp" />
     <ClCompile Include="src\Application\SceneConfigurationReader.cpp" />
     <ClCompile Include="src\Application\SceneLoader.cpp" />
     <ClCompile Include="src\Application\SDLGLApplication.cpp" />
     <ClCompile Include="src\Application\WFObjectReader.cpp" />
+    <ClCompile Include="src\Application\WFObjWriter.cpp" />
     <ClCompile Include="src\Core\SSEAlgebra.cpp" />
     <ClCompile Include="src\gl_core_3_2.cpp" />
     <ClCompile Include="src\Main.cpp" />

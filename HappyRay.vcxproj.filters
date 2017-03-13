@@ -221,9 +221,6 @@
     <ClInclude Include="src\RT\Integrator\AORayExporter.h">
       <Filter>RT\Integrator</Filter>
     </ClInclude>
-    <ClInclude Include="src\Application\ObjWriter.h">
-      <Filter>Application</Filter>
-    </ClInclude>
     <ClInclude Include="src\gl_core_3_2.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -235,6 +232,9 @@
     </ClInclude>
     <ClInclude Include="src\RenderBug\GLUtilities.hpp">
       <Filter>RenderBug</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Application\WFObjWriter.h">
+      <Filter>Headers</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -277,9 +277,6 @@
     <ClCompile Include="src\RT\Primitive\Triangle.cpp">
       <Filter>RT\Primitive</Filter>
     </ClCompile>
-    <ClCompile Include="src\Application\ObjWriter.cpp">
-      <Filter>Application</Filter>
-    </ClCompile>
     <ClCompile Include="src\gl_core_3_2.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -294,6 +291,9 @@
     </ClCompile>
     <ClCompile Include="src\RenderBug\RenderBug.cpp">
       <Filter>RenderBug</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Application\WFObjWriter.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

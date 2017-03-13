@@ -101,7 +101,7 @@ void AnimationManager::read(const char * aFileName)
 }
 
 
-#include "Application/ObjWriter.h"
+#include "Application/WFObjWriter.h"
 
 void AnimationManager::dumpFrame()
 {
