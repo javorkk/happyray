@@ -269,7 +269,7 @@
     <ClInclude Include="src\Application\SceneLoader.hpp" />
     <ClInclude Include="src\Application\SDLGLApplication.hpp" />
     <ClInclude Include="src\Application\WFObject.hpp" />
-    <ClInclude Include="src\application\wfobjectuploader.h" />
+    <ClInclude Include="src\application\WFObjectUploader.h" />
     <ClInclude Include="src\Application\WFObjWriter.h" />
     <ClInclude Include="src\Core\Algebra.hpp" />
     <ClInclude Include="src\Core\Flags.hpp" />

@@ -835,6 +835,9 @@ void RenderBug::renderLines(const CameraManager& aCamera)
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 	//Render scene
+	
+	/* Set the line thicknes */
+	glLineWidth(3.0);
 
 	/* Invoke glDrawElements telling it to draw lines using indicies */
 	glDrawElements(GL_LINES, numLnIndices * 2, GL_UNSIGNED_INT, 0);

@@ -51,8 +51,8 @@ template<
         ImportanceBuffer                                            oImportanceBuffer,
         int*                                                        aGlobalMemoryPtr)
     {
-        //typedef KISSRandomNumberGenerator                           t_RNG;
-        typedef SimpleRandomNumberGenerator                           t_RNG;
+        typedef KISSRandomNumberGenerator                           t_RNG;
+        //typedef SimpleRandomNumberGenerator                           t_RNG;
 
 
         extern SHARED uint sharedMem[];

@@ -76,6 +76,8 @@ public:
         //////////////////////////////////////////////////////////////////////////
         //Copy and transfer vertex data
         //////////////////////////////////////////////////////////////////////////
+		oMinBound = rep(FLT_MAX);
+		oMaxBound = rep(-FLT_MAX);
         size_t it = 0;
         for (; it < cudastd::min(numVertices1, numVertices2); ++it)
         {
@@ -107,11 +109,11 @@ public:
             oMaxBound.z = cudastd::max(verticesHost[it].z, oMaxBound.z);
         }
 
-        oMinBound -= rep(EPS);
-        oMaxBound += rep(EPS);
+		float diagonal = len(oMaxBound - oMinBound);
+		oMinBound -= rep(0.001f * diagonal);
+		oMaxBound += rep(0.001f * diagonal);
 
         MY_CUDA_SAFE_CALL(cudaMemcpy(verticesDevice, verticesHost, verticesNewSize, cudaMemcpyHostToDevice));
-
 
         aArray.bindVerticesTexture(aArray.vertexBufferDevicePtr, aArray.vertexBufferSize);
     }

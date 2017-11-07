@@ -42,7 +42,7 @@
 #include "RT/Algorithm/RayTracingKernels.h"
 #include "Utils/RandomNumberGenerators.hpp"
 
-static const int NUMAMBIENTOCCLUSIONSAMPLES  = 1;
+static const int NUMAMBIENTOCCLUSIONSAMPLES  = 4;
 
 //#define USE_3D_TEXTURE //instead of scene materials
 #ifdef USE_3D_TEXTURE

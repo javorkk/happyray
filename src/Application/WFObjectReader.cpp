@@ -316,6 +316,7 @@ void WFObject::loadWFObj(const char* aFileName)
 
     const size_t _MAX_BUF = 8192;
     const size_t _MAX_IDX = _MAX_BUF / 2;
+	size_t non_consecutive_obj_ids = 0u;
 
     float tmpVert[4];
     tmpVert[3] = 0.f;
@@ -523,7 +524,7 @@ void WFObject::loadWFObj(const char* aFileName)
                 char *objNewCmdString;
                 if (strtol(cmdString, &objNewCmdString, 10) != objects.size())
                 {
-                    std::cerr << "Warning at line " << curLine << ": non-consecutive object index will be ignored!" << std::endl;
+					non_consecutive_obj_ids++;
                 }
             }
             currentObjectBegin = (int)faces.size();
@@ -574,6 +575,10 @@ void WFObject::loadWFObj(const char* aFileName)
         std::cerr << "Error at line " << curLine << std::endl;
     }
 
+	if (non_consecutive_obj_ids > 0u)
+	{
+		std::cerr << "Warning: Ignored " << non_consecutive_obj_ids << " non-consecutive object indices.\n";
+	}
 
     objects.push_back(make_int2(currentObjectBegin, (int)faces.size()));
 
@@ -586,6 +591,13 @@ void WFObject::loadWFObj(const char* aFileName)
         readMtlLib(mtlFileName, materials, materialMap);
     }
 
+	if (normals.size() <= 0u)
+	{
+		for (auto it = faces.begin(); it != faces.end(); it++)
+		{
+			it->norm1 = it->norm2 = it->norm3 = (size_t)-1;
+		}
+	}
 
     for (auto it = faces.begin(); it != faces.end(); it++)
     {

@@ -50,13 +50,13 @@
 template<class tPrimitive>
 class TLGridSortBuilder
 {
-    static const uint   sNUM_COUNTER_THREADS    = 128u;
-    static const uint   sNUM_COUNTER_BLOCKS     = 60u;
+    static const uint   sNUM_COUNTER_THREADS    = 512u;
+    static const uint   sNUM_COUNTER_BLOCKS     = 256u;
     //NOTE: WRITE and COUNTER threads and blocks have to be exactly the same
     static const uint   sNUM_WRITE_THREADS      = sNUM_COUNTER_THREADS;
     static const uint   sNUM_WRITE_BLOCKS       = sNUM_COUNTER_BLOCKS;
-    static const uint   sNUM_CELL_SETUP_THREADS = 256u;
-    static const uint   sNUM_CELL_SETUP_BLOCKS  = 120u;
+    static const uint   sNUM_CELL_SETUP_THREADS = 512u;
+    static const uint   sNUM_CELL_SETUP_BLOCKS  = 256u;
 
     uint mNumPrimitives;
     cudaEvent_t mStart, mDataUpload, mScan;

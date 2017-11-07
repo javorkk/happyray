@@ -155,7 +155,7 @@
     <ClInclude Include="src\RT\Algorithm\UGridTraverser.h">
       <Filter>RT\Algorithm</Filter>
     </ClInclude>
-    <ClInclude Include="src\application\wfobjectuploader.h">
+    <ClInclude Include="src\application\WFObjectUploader.h">
       <Filter>Application</Filter>
     </ClInclude>
     <ClInclude Include="src\Core\Flags.hpp">

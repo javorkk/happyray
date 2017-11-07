@@ -655,34 +655,35 @@ void SDLGLApplication::nextFrame()
 void SDLGLApplication::initVideo()
 {
 #ifdef USE_OPEN_GL
-        mSDLVideoModeFlags = SDL_WINDOW_OPENGL| SDL_WINDOW_SHOWN | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_RESIZABLE;
-        
-        // Request an opengl 3.2 context.
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 
-        // Enable multisampling for a nice antialiased effect
-        //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-        //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+	mSDLVideoModeFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_RESIZABLE;
 
-        //SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
-        //SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
-        //SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+	// Request an opengl 3.2 context.
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 
-        // Turn on double buffering with a 24bit Z buffer.
-        // You may need to change this to 16, 24 or 32 for your system
-        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+	if (SDL_Init(SDL_INIT_VIDEO) < 0) // Initialize SDL's Video subsystem
+	{
+		std::cerr << "Unable to initialize SDL\n";
+		std::cerr << "GL_VENDOR      : " << glGetString(GL_VENDOR) << "\n";
+		std::cerr << "GL_RENDERER    : " << glGetString(GL_RENDERER) << "\n";
+		std::cerr << "GL_VERSION     : " << glGetString(GL_VERSION) << " (required >= 3_2)\n";
+	}
 
-        if (SDL_Init(SDL_INIT_VIDEO) < 0) // Initialize SDL's Video subsystem
-        {
-            std::cerr << "Unable to initialize SDL\n";
-            std::cerr << "GL_VENDOR      : " << glGetString(GL_VENDOR) << "\n";
-            std::cerr << "GL_RENDERER    : " << glGetString(GL_RENDERER) << "\n";
-            std::cerr << "GL_VERSION     : " << glGetString(GL_VERSION) << " (required >= 3_2)\n";
-        }
+	// Enable multisampling for a nice antialiased effect
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 16);
 
-        /* Create our window centered at RESX x RESY resolution */
+	//SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+	//SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+	//SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+
+	// Turn on double buffering with a 24bit Z buffer.
+	// You may need to change this to 16, 24 or 32 for your system
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+	
+	/* Create our window centered at RESX x RESY resolution */
         mainwindow = SDL_CreateWindow(mActiveWindowName,  SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
             mRESX, mRESY, mSDLVideoModeFlags );
         if (!mainwindow) /* Die if creation failed */
@@ -701,6 +702,9 @@ void SDLGLApplication::initVideo()
         //    //problem: glewInit failed, something is seriously wrong
         //    std::cerr << "Error: "<< glewGetErrorString(err) << "\n";
         //}
+
+		/* Enable antialiasing */
+		glEnable(GL_MULTISAMPLE);
 
         /* Enable Z depth testing so objects closest to the viewpoint are in front of objects further away */
         glEnable(GL_DEPTH_TEST);
