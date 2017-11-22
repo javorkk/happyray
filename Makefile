@@ -10,17 +10,7 @@ CUDA_INSTALL_PATH=/usr
 TARGET    := happyray
 
 # Cuda source files (compiled with nvcc)
-CUFILES   := $(SRCDIR)/RT/RTEngine.cu \
-$(SRCDIR)/Application/CUDAApplication.cu \
-$(SRCDIR)/RT/Algorithm/TLGridHierarchySortBuilder.cu \
-$(SRCDIR)/RT/Algorithm/UniformGridBuildKernels.cu \
-$(SRCDIR)/RT/Primitive/LightSource.cu \
-$(SRCDIR)/RT/Structure/3DTextureMemoryManager.cu \
-$(SRCDIR)/RT/Structure/TLGridHierarchyMemoryManager.cu \
-$(SRCDIR)/RT/Structure/TLGridMemManager.cu \
-$(SRCDIR)/RT/Structure/UGridMemoryManager.cu \
-$(SRCDIR)/Utils/Scan.cu \
-$(SRCDIR)/Utils/Sort.cu
+CUFILES   := $(shell find $(SRCDIR) -iname '*.cu')
 
 MACHINE   := $(shell uname -s)
 #Additional libraries
@@ -45,13 +35,15 @@ CC         := ccbin/gcc
 LINK       := ccbin/g++ -fPIC
 
 # Includes
-INCLUDES  += -I$(SRCDIR) -I$(CUDA_INSTALL_PATH)/include -I$(CUDA_SDK_DIR)/common/inc -I/usr/include/SDL -Icontrib/include
+INCLUDES  += -I$(SRCDIR) -I$(CUDA_INSTALL_PATH)/include -I/usr/include/SDL -Icontrib/include
 CXXFLAGS += $(INCLUDES) -std=c++11
 CFLAGS += $(INCLUDES)
 NVCCFLAGS += $(INCLUDES)
 
 
-ifeq ($(sm_50), 1)
+ifeq ($(sm_60), 1)
+	NVCCFLAGS   += -arch sm_60 -D HAPPYRAY__CUDA_ARCH__=600
+else ifeq ($(sm_50), 1)
 	NVCCFLAGS   += -arch sm_50 -D HAPPYRAY__CUDA_ARCH__=500
 else ifeq ($(sm_40), 1)
 	NVCCFLAGS   += -arch sm_40 -D HAPPYRAY__CUDA_ARCH__=400
@@ -94,7 +86,7 @@ endif
 
 
 
-LDFLAGS += -L$(CUDA_INSTALL_PATH)/lib64 -L$(CUDA_SDK_DIR)/lib -L$(CUDA_SDK_DIR)/common/lib/$(OSLOWER) $(LIBS) 
+LDFLAGS += -L$(CUDA_INSTALL_PATH)/lib64 $(LIBS) 
 
 
 
