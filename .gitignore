@@ -23,3 +23,4 @@ HappyRay.files
 HappyRay.includes
 ccbin/g++
 ccbin/gcc
+.vs/*

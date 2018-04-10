@@ -141,13 +141,23 @@ GLOBAL void computeAOIllumination(
                 sharedVec[threadId1D()].y *= diffReflectance.y * M_PI;
                 sharedVec[threadId1D()].z *= diffReflectance.z * M_PI;
 
-                float sinZNormal = fmaxf(0.f,sqrtf(1.f - normal.z));
-                float cosEyeNormal = fabsf(dot(rayDir, normal));
-                sharedVec[threadId1D()].x *= (0.7f * cosEyeNormal + 0.3f * sinZNormal);
-                sharedVec[threadId1D()].y *= (0.7f * cosEyeNormal + 0.2f * sinZNormal);
-                sharedVec[threadId1D()].z *= (0.9f * cosEyeNormal /*+ 0.1f * sinZNormal + 0.1f * (1.f  - sinZNormal)*/);
-                //DEBUG
-                //sharedVec[threadId1D()] = rep(0.01f*rayT);
+				if (diffReflectance.x * M_PI < 0.9f || diffReflectance.y * M_PI < 0.9f || diffReflectance.z * M_PI < 0.9f)
+				{
+					float sinZNormal = fmaxf(0.f, sqrtf(1.f - normal.z));
+					float cosEyeNormal = fabsf(dot(rayDir, normal));
+					sharedVec[threadId1D()].x *= (0.7f * cosEyeNormal + 0.3f * sinZNormal);
+					sharedVec[threadId1D()].y *= (0.7f * cosEyeNormal + 0.2f * sinZNormal);
+					sharedVec[threadId1D()].z *= (0.9f * cosEyeNormal /*+ 0.1f * sinZNormal + 0.1f * (1.f  - sinZNormal)*/);
+				}
+				else
+				{
+					sharedVec[threadId1D()].x = 1.f;
+					sharedVec[threadId1D()].y = 1.f;
+					sharedVec[threadId1D()].z = 1.f;
+				}
+				//DEBUG
+				//sharedVec[threadId1D()] = rep(0.01f*rayT);
+
             }
         }
         else if (myRayIndex < dcNumRays)
