@@ -45,10 +45,10 @@ void SceneLoader::insertLightSourceGeometry(const AreaLightSource& aLightSource,
     {
         if (it->emission.x  + it->emission.y + it->emission.z > 0.f)
         {
-            //sceneHasEmitters = true;
-            it->emission.x = 0.f;
-            it->emission.y = 0.f;
-            it->emission.z = 0.f;
+            sceneHasEmitters = true;
+            //it->emission.x = 0.f;
+            //it->emission.y = 0.f;
+            //it->emission.z = 0.f;
         }
     }
 
@@ -91,7 +91,7 @@ void SceneLoader::insertLightSourceGeometry(const AreaLightSource& aLightSource,
     oScene.insertFace(face2);
 }
 
-void SceneLoader::createLightSources( AreaLightSourceCollection&     oLightSources, const WFObject& aScene)
+void SceneLoader::createLightSources( AreaLightSourceCollection&     oLightSources, WFObject& aScene)
 {
 
     float3 emission = rep(0.f);
@@ -183,6 +183,29 @@ void SceneLoader::createLightSources( AreaLightSourceCollection&     oLightSourc
         }
     }
 
+	if (oLightSources.size() == 0u)
+	{
+		emission = rep(1.f);
+		float3 minBound, maxBound;
+		aScene.getBounds(minBound, maxBound);
+		float3 diagonal = maxBound - minBound;
+		minBound += rep(max(diagonal)) * 0.025f;
+		maxBound -= rep(max(diagonal)) * 0.025f;
+
+		const float3 normal = make_float3(0.f, 0.f, -1.f);
+
+		const float3 v1 = make_float3(minBound.x, minBound.y, max(maxBound));
+		const float3 v2 = make_float3(minBound.x, maxBound.y, max(maxBound));
+		const float3 v3 = make_float3(maxBound.x, minBound.y, max(maxBound));
+		const float3 v4 = make_float3(maxBound.x, maxBound.y, max(maxBound));
+
+		AreaLightSource ls;
+		ls.create(v1, v2, v3, v4, emission, normal);
+
+		oLightSources.upload(ls.getArea()*len(ls.intensity), ls);
+
+		insertLightSourceGeometry(ls, aScene);
+	}
 
 }
 

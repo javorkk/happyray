@@ -147,6 +147,14 @@ PathTracer<
     MollerTrumboreIntersectionTest
 >                           sPathTracer;
 
+PathTracer<
+	Triangle,
+	t_AccStruct,
+	Traverser_t,
+	MollerTrumboreIntersectionTest,
+	MollerTrumboreIntersectionTest,
+	true>					sSingleKernelPathTracer;
+
 AOIntegrator<
     Triangle,
     t_AccStruct,
@@ -412,14 +420,17 @@ void RTEngine::renderFrame(FrameBuffer& aFrameBuffer, const int aImageId, const 
         {
             sRandomRayGen.sampleId = aImageId;
             sSimpleIntegratorRnd.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, grid, sRandomRayGen, aFrameBuffer, aImageId);
-
         }
         break;
     case 1:
         sRandomRayGen.sampleId = aImageId;
         sPathTracer.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, sLights, grid, sRandomRayGen, aFrameBuffer, aImageId);
         break;
-    case 2:
+	case 2:
+		sRandomRayGen.sampleId = aImageId;
+		sSingleKernelPathTracer.integrate(sTriangleArray, sTriangleNormalArray, sMaterialArray, sLights, grid, sRandomRayGen, aFrameBuffer, aImageId);
+		break;
+    case 3:
         sRandomRayGen.sampleId = aImageId;
 #ifdef USE_3D_TEXTURE
         sAOIntegrator.integrate(sTriangleArray, sTriangleNormalArray, sTexMaterialArray, grid, sRandomRayGen, aFrameBuffer, aImageId);

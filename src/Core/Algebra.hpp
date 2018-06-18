@@ -190,7 +190,7 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
         return retval;
     }
 
-    //A component-wise maximum between two float3s
+    //A component-wise minimum between two float3s
     DEVICE HOST float3 min(const float3 & aVec1, const float3 & aVec2)
     {
 #ifdef __CUDA_ARCH__
@@ -207,7 +207,7 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
         return retval;
 #endif
     }
-
+	//A component-wise maximum between two float3s
     DEVICE HOST float3 max(const float3 & aVec1, const float3 & aVec2)
     {
 #ifdef __CUDA_ARCH__
@@ -225,6 +225,24 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
 #endif
     }
 
+	//An inter-component minimum
+	DEVICE HOST float min(const float3 & aVec1)
+	{
+#ifdef __CUDA_ARCH__
+		return fminf(aVec1.x, fminf(aVec1.y, aVec1.z));
+#else
+		return cudastd::min(aVec1.x, cudastd::min(aVec1.y, aVec1.z));
+#endif
+	}
+	//An inter-component maximum
+	DEVICE HOST float max(const float3 & aVec1)
+	{
+#ifdef __CUDA_ARCH__
+		return fmaxf(aVec1.x, fmaxf(aVec1.y, aVec1.z));
+#else
+		return cudastd::max(aVec1.x, cudastd::max(aVec1.y, aVec1.z));
+#endif
+	}
 
     //Length of the vector
     DEVICE HOST float len(const float3& aVec)

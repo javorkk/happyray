@@ -81,7 +81,7 @@ class SDLGLApplication
     int mPixelSamplesPerDumpedFrame;
     bool mDumpFrames;
     bool mPauseAnimation;
-    enum RenderMode { DEFAULT = 0, PATH_TRACE = 1, AMBIENT_OCCLUSION = 2, OPEN_GL = 3 };
+    enum RenderMode { DEFAULT = 0, PATH_TRACE = 1, PATH_TRACE_SIMPLE = 2, AMBIENT_OCCLUSION = 3, OPEN_GL = 4 };
     RenderMode mRenderMode;
     //////////////////////////////////////////////////////////////////////////
     //IO

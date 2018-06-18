@@ -154,39 +154,52 @@ public:
     }
 };
 
+class XorShift32Plus
+{
+public:
+	/* The state must be seeded so that it is not all zero */
+	uint s_0;
+	uint s_1;
+
+	__host__ __device__ XorShift32Plus(
+		const uint aS0,
+		const uint aS1)
+	{
+		s_0 = aS0 == 0u ? 362436069u : aS0;
+		s_1 = aS1 == 0u ? 416191069u : aS1;
+	}
+
+	__host__ __device__ uint xorshift32plus(void) {
+		uint x = s_0;
+		uint const y = s_1;
+		s_0 = y;
+		x ^= x << 13; // a
+		s_1 = x ^ y ^ (x >> 17) ^ (y >> 16); // b, c
+		return s_1 + y;
+	}
+	__host__ __device__ float operator()()
+	{
+		return (float)(xorshift32plus() % 1073741824) * 9.313226E-10f;
+	}
+};
+
+
 template<int taResX, int taResY>
 class StratifiedSampleGenerator
 {
     const float mStrataSizeX; 
     const float mStrataSizeY;
 public:
-    uint data[4];
-    DEVICE StratifiedSampleGenerator(        
-        const uint aX = 123456789u,
-        const uint aY = 362436069u,
-        const uint aZ = 521288629u,
-        const uint aW = 416191069u):
+    DEVICE StratifiedSampleGenerator():
         mStrataSizeX(1.f / static_cast<float>(taResX)),
         mStrataSizeY(1.f / static_cast<float>(taResY))
-    {
-         data[0] = (aX); data[1] = (aY); data[2] = (aZ); data[3] = (aW);
-    }
+    {}
 
-
-    DEVICE void operator()(float& oSampleX, float& oSampleY)
+	template<typename tRNG>
+    DEVICE void operator()(tRNG& aRNG, float& oSampleX, float& oSampleY)
     {
-        data[2] = (36969 * (data[2] & 65535) + (data[2] >> 16)) << 16;
-        data[3] = 18000 * (data[3] & 65535) + (data[3] >> 16) & 65535;
-        data[0] = 69069 * data[0] + 1234567;
-        data[1] = (data[1] = (data[1] = data[1] ^ (data[1] << 17)) ^ (data[1] >> 13)) ^ (data[1] << 5);
-        float randX = ((data[2] + data[3]) ^ data[0] + data[1]) * 2.328306E-10f;
-        data[2] = (36969 * (data[2] & 65535) + (data[2] >> 16)) << 16;
-        data[3] = 18000 * (data[3] & 65535) + (data[3] >> 16) & 65535;
-        data[0] = 69069 * data[0] + 1234567;
-        data[1] = (data[1] = (data[1] = data[1] ^ (data[1] << 17)) ^ (data[1] >> 13)) ^ (data[1] << 5);
-        float randY = ((data[2] + data[3]) ^ data[0] + data[1]) * 2.328306E-10f;
-        oSampleX = mStrataSizeX * randX + oSampleX * mStrataSizeX;
-        oSampleY = mStrataSizeY * randY + oSampleY * mStrataSizeY;
+        oSampleX = mStrataSizeX * aRNG() + oSampleX * mStrataSizeX;
+        oSampleY = mStrataSizeY * aRNG() + oSampleY * mStrataSizeY;
     }
 
 };

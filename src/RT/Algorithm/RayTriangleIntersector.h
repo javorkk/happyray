@@ -59,9 +59,7 @@ public:
             edge1 = edge1 - org;
             edge2 = edge2 - org;
 
-            float3 rayDir =
-            rayDir = fastDivide(rep(1.f), aRayDirRCP);
-
+            float3 rayDir = fastDivide(rep(1.f), aRayDirRCP);
 
             float3 pvec      = rayDir % edge2;
             float detRCP    = 1.f / dot(edge1, pvec);

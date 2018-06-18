@@ -600,8 +600,11 @@ void SDLGLApplication::nextRenderMode()
         mRenderMode = PATH_TRACE;
         break;
     case PATH_TRACE:
-        mRenderMode = AMBIENT_OCCLUSION;
+        mRenderMode = PATH_TRACE_SIMPLE;
         break;
+	case PATH_TRACE_SIMPLE:
+		mRenderMode = AMBIENT_OCCLUSION;
+		break;
     case AMBIENT_OCCLUSION:
         mRenderMode = OPEN_GL;
         gOpenGLRenderer.setupSceneGeometry(CUDAApplication::sAnimationManager);
@@ -789,8 +792,11 @@ void SDLGLApplication::displayFrame()
             case PATH_TRACE:
                 renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 1);
                 break;
+			case PATH_TRACE_SIMPLE:
+				renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 2);
+				break;
             case AMBIENT_OCCLUSION:
-                renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 2);
+                renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 3);
             case OPEN_GL:
             default:            
                 break;
@@ -817,6 +823,7 @@ void SDLGLApplication::displayFrame()
         {
         case DEFAULT:
         case PATH_TRACE:
+		case PATH_TRACE_SIMPLE:
         case AMBIENT_OCCLUSION:
             if (fps < 10.f)
                 windowName += " ";
@@ -858,8 +865,8 @@ void SDLGLApplication::displayFrame()
             /* Swap our buffers to make our changes visible */
             SDL_GL_SwapWindow(mainwindow);
 
-            /* Sleep for roughly 33 milliseconds between frames */
-            SDL_Delay(33);
+            /* Sleep for roughly 5 milliseconds between frames */
+            SDL_Delay(5);
 #endif
             break;
         default:

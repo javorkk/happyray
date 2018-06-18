@@ -282,6 +282,21 @@ public:
         return instances[aInstanceId];
     }
 
+	void getBounds(float3& oMinBound, float3& oMaxBound) const
+	{
+		oMinBound = rep(FLT_MAX);
+		oMaxBound = rep(-FLT_MAX);
+
+		if (getNumVertices() <= 0u)
+			return;
+
+		for (auto it = vertices.begin(); it != vertices.end(); ++it)
+		{
+			oMinBound = min(*it, oMinBound);
+			oMaxBound = max(*it, oMaxBound);
+		}
+	}
+
     size_t insertVertex(const float3& aVertex);
 
     size_t insertNormal(const float3& aNormal);

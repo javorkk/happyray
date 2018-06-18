@@ -39,7 +39,7 @@ class SceneLoader
 public:
 void insertLightSourceGeometry(const AreaLightSource& aLightSource, WFObject& oScene);
 
-void createLightSources( AreaLightSourceCollection&     oLightSources, const WFObject& aScene);
+void createLightSources( AreaLightSourceCollection&     oLightSources, WFObject& aScene);
 
 bool loadScene( const char*          CONFIGURATION,
                 AnimationManager&    oAnimation,

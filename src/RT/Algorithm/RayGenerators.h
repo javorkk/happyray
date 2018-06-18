@@ -171,16 +171,12 @@ public:
         }
         else
         {
-            StratifiedSampleGenerator<taResX,taResY> 
-                sampleGenerator( 3643u + aRayId * 4154207u * sampleId + aRayId,
-                1761919u + aRayId * 2746753u + sampleId /*+ globalThreadId1D(8116093u)*/,
-                331801u + aRayId * sampleId  + sampleId/*+ globalThreadId1D(91438197u)*/,
-                10499029u );
+            StratifiedSampleGenerator<taResX,taResY> sampleGenerator;
 
             float r1 = (float)(aRayId % taResX); 
             float r2 = (float)((aRayId / taResX) % taResY);
 
-            sampleGenerator(r1, r2);
+            sampleGenerator(genRand, r1, r2);
 
             oRayDir = lightSource.getPoint(r1, r2);
             oRayDir = oRayDir - oRayOrg;

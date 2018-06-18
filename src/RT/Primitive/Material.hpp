@@ -39,7 +39,7 @@ class PhongMaterial
 public:
     float4 diffuseReflectance; //.xyz -> diffuse reflectance .w -> index of refraction
     float4 specularReflectance; //.xyz -> specular reflectance .w -> specular exponent
-    //float4 emission; //.xyz -> emission .w-> unused
+    float4 emission; //.xyz -> emission .w-> unused
 
     DEVICE HOST float3 getDiffuseReflectance(float xCoord = 0.f, float yCoord = 0.f, float zCoord = 0.f) const
     {
@@ -59,14 +59,14 @@ public:
         return retval;
     }
 
-    //DEVICE HOST float3 getEmission() const
-    //{
-    //    float3 retval;
-    //    retval.x = emission.x;
-    //    retval.y = emission.y;
-    //    retval.z = emission.z;
-    //    return retval;
-    //}
+    DEVICE HOST float3 getEmission() const
+    {
+        float3 retval;
+        retval.x = emission.x;
+        retval.y = emission.y;
+        retval.z = emission.z;
+        return retval;
+    }
 
     DEVICE HOST float getSpecularExponent(float xCoord = 0.f, float yCoord = 0.f, float zCoord = 0.f) const
     {

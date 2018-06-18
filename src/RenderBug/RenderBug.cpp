@@ -108,8 +108,8 @@ GLuint RenderBug::sFBOId;
 
 void RenderBug::renderScene(const CameraManager& aCamera)
 {
-	/* Make our background black */
-	glClearColor(0.0, 0.0, 0.0, 1.0);
+	/* Make our background white */
+	glClearColor(1.0, 1.0, 1.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	renderTriangles(aCamera);
