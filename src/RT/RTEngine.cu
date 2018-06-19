@@ -460,6 +460,7 @@ void RTEngine::cleanup()
     sSimpleIntegratorReg.cleanup();
     sSimpleIntegratorRnd.cleanup();
     sPathTracer.cleanup();
+	sSingleKernelPathTracer.cleanup();
 #ifdef TLGRIDHIERARCHY
 	sTLGHAOIntegrator.cleanup();
 #endif

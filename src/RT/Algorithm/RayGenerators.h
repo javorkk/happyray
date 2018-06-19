@@ -164,8 +164,8 @@ public:
         bool isOnLS = lightSource.isOnLS(oRayOrg);
         if (isOnLS)
         {
-            oRayDir = - mBuffer.loadDirection(myPixelIndex, numPixels);
-            float cosLightNormal = dot(oRayDir,lightSource.normal);
+            oRayDir = mBuffer.loadDirection(myPixelIndex, numPixels);
+            float cosLightNormal = -dot(oRayDir,lightSource.normal);
             float receivesEnergy = (cosLightNormal > 0.f) ? .5f : 0.f; //0.5f is power heuristic n = 0
             lsRadiance = lightSource.intensity * receivesEnergy;
         }

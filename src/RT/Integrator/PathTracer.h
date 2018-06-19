@@ -188,12 +188,18 @@ next_bounce:
 				rayDir = n_r * rayDir + normalScale * normal;
 			}			
 		}
-		else if(cosNormalEyeDir > 0.f) //opaque
+		else //opaque
 		{
+			if (cosNormalEyeDir < 0.f)
+			{
+				normal = -normal;
+				cosNormalEyeDir = -cosNormalEyeDir;
+			}
+
 			if(lastHitWasSpecular)
 				radiance += attenuation * material.getEmission();
 
-			radiance += attenuation * material.getEmission();
+			//radiance += 0.5f * attenuation * material.getEmission();
 
 			lastHitWasSpecular = false;
 
@@ -215,7 +221,7 @@ next_bounce:
 			const float3 shadowRayDirN = shadowRayDir * sqrtf(distanceSQR_RCP);
 
 			const float cosNormalLightDir = dot(normal, shadowRayDirN);
-			const float cosHalfVecLightDir = fmaxf(0.f, dot((~(shadowRayDirN - rayDir)), normal));
+			const float cosHalfVecLightDir = fmaxf(0.f, dot(~(shadowRayDirN - rayDir), normal));
 			const float cosLightNormal = dot(-lightSource.normal, shadowRayDirN);
 			if (cosNormalLightDir > 0.f && cosLightNormal > 0.f)
 			{
@@ -271,7 +277,7 @@ next_bounce:
 
 				rayDir = tangent * randDir.x + binormal * randDir.y + normal * randDir.z;
 
-				rayOrg = rayOrg + 5.f * EPS * normal;
+				rayOrg = rayOrg + 10.f * EPS * normal;
 					
 				//goto end_path;
 
@@ -296,7 +302,7 @@ next_bounce:
 
 				rayDir = right * randDir.x + forward * randDir.y + up * randDir.z;
 
-				rayOrg = rayOrg + 5.f * EPS * normal;
+				rayOrg = rayOrg + 10.f * EPS * normal;
 				
 				if(dot(rayDir, normal) < 0.f)
 					goto end_path;
@@ -307,10 +313,6 @@ next_bounce:
 			}
 
 		}//end if transparent/opaque
-		else
-		{
-			goto end_path;
-		}
 
 		rayT = FLT_MAX;
 
@@ -383,8 +385,19 @@ template<
         ImportanceBuffer                                            oImportanceBuffer,
         int*                                                        aGlobalMemoryPtr)
     {
-        typedef KISSRandomNumberGenerator                           t_RNG;
-        //typedef SimpleRandomNumberGenerator                           t_RNG;
+	
+		uint seed = aImageId + globalThreadId1D() + globalThreadId1D() * globalThreadId1D() * aImageId * aImageId * dcNumPixels;
+		XorShift32Plus genRand(seed, globalThreadId1D() + seed * seed * seed);
+		
+		//t_RNG genRand(3643u + myRayIndex * 4154207u * dcSeed + myRayIndex,
+		//    1761919u + myRayIndex * 2746753u * dcSeed /*+ globalThreadId1D(8116093u)*/,
+		//    331801u + myRayIndex + dcSeed /*+ globalThreadId1D(91438197u)*/,
+		//    10499029u);
+		//t_RNG genRand(globalThreadId1D() * globalThreadId1D() * globalThreadId1D() + 
+		//    1761919u + myRayIndex * 2746753u * aImageId +
+		//    (myRayIndex + aImageId * dcNumPixels) * 
+		//    (myRayIndex + aImageId * dcNumPixels) *
+		//    (myRayIndex + aImageId * dcNumPixels) );
 
 
         extern SHARED uint sharedMem[];
@@ -467,16 +480,6 @@ template<
                 myFlags.setFlag3To0();
             }
 
-            //t_RNG genRand(3643u + myRayIndex * 4154207u * dcSeed + myRayIndex,
-            //    1761919u + myRayIndex * 2746753u * dcSeed /*+ globalThreadId1D(8116093u)*/,
-            //    331801u + myRayIndex + dcSeed /*+ globalThreadId1D(91438197u)*/,
-            //    10499029u);
-            t_RNG genRand(globalThreadId1D() * globalThreadId1D() * globalThreadId1D() + 
-                1761919u + myRayIndex * 2746753u * aImageId +
-                (myRayIndex + aImageId * dcNumPixels) * 
-                (myRayIndex + aImageId * dcNumPixels) *
-                (myRayIndex + aImageId * dcNumPixels) );
-
             float3 attenuation = rep(1.f);
 
             float indexOfRefraction;
@@ -491,33 +494,23 @@ template<
                 if (!myFlags.getFlag3())
                 {
                     float3 diffReflectance = material.getDiffuseReflectance();
-                    float albedoD = (diffReflectance.x * 0.222f +
-                        diffReflectance.y * 0.7067f +
-                        diffReflectance.z * 0.0713f) * M_PI;
+                    float albedoD = max(diffReflectance) * M_PI;
                     float3 specReflectance = material.getSpecularReflectance();
                     float specExponent = material.getSpecularExponent();
-                    float albedoS = (specReflectance.x * 0.222f +
-                        specReflectance.y * 0.7067f +
-                        specReflectance.z * 0.0713f) * 2.f * M_PI / (specExponent + 2);
+                    float albedoS = max(specReflectance) * 2.f * M_PI / (specExponent + 2);
                     
                     float rnum = genRand();
                     if (rnum < albedoD)
                     {
                         myFlags.setFlag4(true);
-                        attenuation *= rep(1.f / albedoD);
-                        //pi is to account for cosine weighted hemisphere sampling
-                        attenuation.x = attenuation.x * diffReflectance.x * M_PI;
-                        attenuation.y = attenuation.y * diffReflectance.y * M_PI;
-                        attenuation.z = attenuation.z * diffReflectance.z * M_PI;
+						//pi is to account for cosine weighted hemisphere sampling
+						attenuation = attenuation * diffReflectance * M_PI / albedoD;
                     }
                     else if (rnum < albedoD + albedoS)
                     {
                         myFlags.setFlag4To0();
-                        attenuation *= rep(1.f / albedoS);
-                        //(specExp + 1)/(2 * Pi) is to account for power-cosine weighted hemisphere sampling
-                        attenuation.x = attenuation.x * specReflectance.x / ((specExponent + 1.f) * 0.5f * M_PI_RCP);
-                        attenuation.y = attenuation.y * specReflectance.y / ((specExponent + 1.f) * 0.5f * M_PI_RCP);
-                        attenuation.z = attenuation.z * specReflectance.z / ((specExponent + 1.f) * 0.5f * M_PI_RCP);
+						//(specExp + 1)/(2 * Pi) is to account for power-cosine weighted hemisphere sampling
+						attenuation = attenuation * specReflectance * M_PI / ((specExponent + 1.f) * 0.5f * albedoS);
                     }
                     else
                     {
@@ -559,11 +552,10 @@ template<
                     float3& normal2 = normals.data[2];
 
                     float3 normal = ~(u * normal0 + v * normal1 + (1.f - u - v) * normal2);
-
-                    if (myFlags.getFlag3()) //transparent
-                    {
-                        float dotNormalRayDir = -dot(normal, rayDir);
-
+					float dotNormalRayDir = -dot(normal, rayDir);
+                    
+					if (myFlags.getFlag3()) //transparent
+                    {                        						
                         float n1 = 1.000293f, n2 = indexOfRefraction;
                         if(dotNormalRayDir < 0.f)
                         {
@@ -597,6 +589,9 @@ template<
                             rayOrg = rayOrg - 5.f * EPS * rayDir;
                             rayDir = rayDir + 2 * dotNormalRayDir * normal;
 							
+							if (n2 == 1.000293f && myFlags.getData() < 1) //on entry: compensate for lack of next event estimation on glass surfaces
+								attenuation *= 2.f;
+
 							//take care of infinite total internal reflection paths via Russian Roulette
 							if (sinNormalRefrDirSQR >= 1.f)
 							{
@@ -614,33 +609,42 @@ template<
                         else
                         {
                             //refract
-                            const float normalFactor = n_i * fabsf(dotNormalRayDir) - sqrtf(1.f - n_i * n_i * sinNormalRefrDirSQR);
+                            const float normalFactor = n_i * dotNormalRayDir - sqrtf(1.f - sinNormalRefrDirSQR);
 
                             rayOrg = rayOrg - 5.f * EPS * normal;
-
                             rayDir = n_i * rayDir + normalFactor * normal;
+							
+							if(n1 == 1.000293f && myFlags.getData() < 1) //on entry: compensate for lack of next event estimation on glass surfaces
+								attenuation *= 2.f;
 
                         }
 
                     }
                     else if (myFlags.getFlag4())
                     {
+						if (dotNormalRayDir < 0.f)
+						{
+							normal = -normal;							
+						}
                         //bounce diffuse
                         CosineHemisphereSampler genDir;
-
                         float3 randDir = genDir(genRand(), genRand());
-                        if(dot(normal,rayDir) > 0.f) normal = -normal;
+                        
                         //transform coordinates
                         float3 tangent, binormal;
                         getLocalCoordinates(normal, tangent, binormal);
 
-                        rayDir = tangent * randDir.x +
-                            binormal * randDir.y + normal * randDir.z;                        
+                        rayDir = tangent * randDir.x + binormal * randDir.y + normal * randDir.z;                        
 
                         rayOrg = rayOrg + normal * 5.f * EPS;
                     }
                     else if(bestHit < aStorage.numPrimitives)
                     {
+						if (dotNormalRayDir < 0.f)
+						{
+							normal = -normal;
+							dotNormalRayDir = -dotNormalRayDir;
+						}
                         //bounce specular
                         PowerCosineHemisphereSampler genDir;
                         
@@ -648,17 +652,17 @@ template<
 
                         //transform coordinates
                         float3 up, right, forward;
-                        up = rayDir - 2.f * dot(normal,rayDir) * normal;
+                        up = rayDir + 2.f * dotNormalRayDir * normal;
 
                         getLocalCoordinates(up, right, forward);
 
-                        rayDir = right * randDir.x +
-                            forward * randDir.y + up * randDir.z;                        
+                        rayDir = right * randDir.x + forward * randDir.y + up * randDir.z;                        
 
-                        rayOrg = rayOrg + rayDir * 1E-3f;
-
-                        attenuation *= dot(normal,rayDir);
-
+                        rayOrg = rayOrg + normal * 5.f * EPS;
+						
+						if (dot(rayDir, normal) < 0.f)
+							attenuation *= 0.f;
+						
                     }
 
                     rayT = FLT_MAX;
@@ -701,14 +705,10 @@ template<
                         if (!myFlags.getFlag3())
                         {
                             float3 diffReflectance = material.getDiffuseReflectance();
-                            float albedoD = (diffReflectance.x * 0.222f +
-                                diffReflectance.y * 0.7067f +
-                                diffReflectance.z * 0.0713f) * M_PI;
+                            float albedoD = max(diffReflectance) * M_PI;
                             float3 specReflectance = material.getSpecularReflectance();
                             float specExponent = material.getSpecularExponent();
-                            float albedoS = (specReflectance.x * 0.222f +
-                                specReflectance.y * 0.7067f +
-                                specReflectance.z * 0.0713f) * 2.f * M_PI / (specExponent + 2.f);
+                            float albedoS = max(specReflectance) * 2.f * M_PI / (specExponent + 2.f);
 
                             //albedoS = (albedoS > 0.f)  ? fminf(1.f - albedoD, 0.25f): 0.f;//TODO: remove
 
@@ -716,20 +716,14 @@ template<
                             if (rnum < albedoD)
                             {
                                 myFlags.setFlag4(true);
-                                attenuation = attenuation / albedoD;
-                                //Pi is to account for cosine weighted hemisphere sampling
-                                attenuation.x = attenuation.x * diffReflectance.x * M_PI;
-                                attenuation.y = attenuation.y * diffReflectance.y * M_PI;
-                                attenuation.z = attenuation.z * diffReflectance.z * M_PI;
-                            }
+								//Pi is to account for cosine weighted hemisphere sampling
+                                attenuation = attenuation * diffReflectance * M_PI / albedoD;
+                                                           }
                             else if (rnum < albedoD + albedoS)
                             {
                                 myFlags.setFlag4To0();
-                                attenuation = attenuation / albedoS;
-                                //(specExp + 1)/(2 * Pi) is to account for power-cosine weighted hemisphere sampling
-                                attenuation.x = attenuation.x * specReflectance.x / ((specExponent + 1.f) * 0.5f * M_PI_RCP);
-                                attenuation.y = attenuation.y * specReflectance.y / ((specExponent + 1.f) * 0.5f * M_PI_RCP);
-                                attenuation.z = attenuation.z * specReflectance.z / ((specExponent + 1.f) * 0.5f * M_PI_RCP);
+								//(specExp + 1)/(2 * Pi) is to account for power-cosine weighted hemisphere sampling
+                                attenuation = attenuation * specReflectance * M_PI / ((specExponent + 1.f) * 0.5f * albedoS);
                             }
                             else
                             {
@@ -834,34 +828,20 @@ GLOBAL void computeDirectIllumination(
                 PhongMaterial material = dcMaterialStorage[bestHit];
                 float3 diffReflectance = material.getDiffuseReflectance();
                 float3 specReflectance = material.getSpecularReflectance();
-                float  specExp = material.getSpecularExponent();
-
                 float3 dirToLS = aOcclusionBuffer.loadDirToLS(myRayIndex, dcNumRays);
 
-                float cosNormalEyeDir = dot(normal,dirToLS);
+                float cosNormalLightDir = dot(normal,dirToLS);
+				float cosNormalEyeDir = -dot(normal, rayDir);
+                float cosHalfVecLightDir = fmaxf(0.f, dot(~(dirToLS - rayDir), normal));
 
-                float cosHalfVecLightDir = fmaxf(0.f,
-                    dot((~(dirToLS - rayDir)), normal));
-
-                if (fabsf(dirToLS.x) +fabsf(dirToLS.y) + fabsf(dirToLS.z) > 0.f)
+                if (fabsf(dirToLS.x) + fabsf(dirToLS.y) + fabsf(dirToLS.z) > 0.f &&
+					cosNormalEyeDir > 0.f && cosNormalLightDir > 0.f)
                 {
-                    float3 lsRadiance = sharedVec[threadId1D()];
-                    
-                    sharedVec[threadId1D()] = lsRadiance * fmaxf(0.f, cosNormalEyeDir);
-
-                    sharedVec[threadId1D()].x *= diffReflectance.x;
-                    sharedVec[threadId1D()].y *= diffReflectance.y;
-                    sharedVec[threadId1D()].z *= diffReflectance.z;
-
-                    float3 tmp = lsRadiance * fmaxf(0.f, cosNormalEyeDir) *
-                            cosHalfVecLightDir *
-                           fmaxf(0.f, fastPow(cosHalfVecLightDir, specExp));
-
-                    tmp.x *= specReflectance.x;
-                    tmp.y *= specReflectance.y;
-                    tmp.z *= specReflectance.z;
-
-                    sharedVec[threadId1D()] += tmp;
+                    float3 lsRadiance = sharedVec[threadId1D()] * cosNormalLightDir;
+					float  specExp = material.getSpecularExponent();
+                    sharedVec[threadId1D()] = diffReflectance * lsRadiance * cosNormalEyeDir;
+					if(cosHalfVecLightDir > 0.f)
+						sharedVec[threadId1D()] += specReflectance * fmaxf(0.f, fastPow(cosHalfVecLightDir, specExp))* lsRadiance * cosNormalEyeDir;
                 }
             }
         }
@@ -994,14 +974,14 @@ GLOBAL void addIndirectIllumination(
         variance *= variance;
 
 
-        if (variance < fmaxf(0.1f / static_cast<float>(dcImageId), 0.00005f))
+        if (variance < fmaxf(0.25f / static_cast<float>(dcImageId), 0.0005f))
         {
             oFrameBuffer[threadOffset1D] = pixelValue * oldSampleWeight + newContribution * newSampleWeight;
             oResidue[threadOffset1D] = rep(0.f);
         }
         else
         {
-            float3 val = min(blurredIntensity, newContribution); 
+            float3 val = min(blurredIntensity + 0.125f * newContribution, newContribution); 
             oFrameBuffer[threadOffset1D] = pixelValue * oldSampleWeight + val * newSampleWeight;
             oResidue[threadOffset1D] = newContribution - val;
         }
@@ -1243,8 +1223,11 @@ GLOBAL void addIndirectIllumination(
                 mGlobalMemoryPtr = NULL;
                 mGlobalMemorySize = 0u;
             }
-            mNewRadianceBuffer.cleanup();
-            mResidueBuffer.cleanup();
+			if (!taSingleKernel)
+			{
+				mNewRadianceBuffer.cleanup();
+				mResidueBuffer.cleanup();
+			}
         }
 
     };
