@@ -244,6 +244,24 @@ DEVICE HOST  float3 operator _OP (float aVal, const float3& aVec)               
 #endif
 	}
 
+	//An inter-component abs
+	DEVICE HOST float3 abs(const float3 & aVec1)
+	{
+#ifdef __CUDA_ARCH__
+		float3 retval;
+		retval.x = fabsf(aVec1.x);
+		retval.y = fabsf(aVec1.y);
+		retval.z = fabsf(aVec1.z);
+		return retval;
+#else
+		float3 retval;
+		retval.x = fabsf(aVec1.x);
+		retval.y = fabsf(aVec1.y);
+		retval.z = fabsf(aVec1.z);
+		return retval;
+#endif
+	}
+
     //Length of the vector
     DEVICE HOST float len(const float3& aVec)
     {

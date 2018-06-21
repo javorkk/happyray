@@ -49,7 +49,9 @@ struct AreaLightSource
 
     DEVICE HOST bool isOnLS(float3 aPt) const
     {
-        bool onPlane = dot(aPt - position, normal) < 0.00001f;
+		const float eps = 0.001f * fmaxf(max(abs(edge1)), max(abs(edge2)));
+
+        bool onPlane = fabsf(dot(aPt - position, normal)) < eps;
 
         if(!onPlane) return false;
 
@@ -58,19 +60,18 @@ struct AreaLightSource
         const int e2MaxDimension = MAX_DIMENSION(fabsf(edge2.x), fabsf(edge2.y), fabsf(edge2.z));
 
 
-        float e1x = toPtr(edge1)[e1MaxDimension];
-        float e1y = toPtr(edge1)[e2MaxDimension];
-        float e2x = toPtr(edge2)[e1MaxDimension];
-        float e2y = toPtr(edge2)[e2MaxDimension];
-        float px = toPtr(position)[e1MaxDimension];
-        float py = toPtr(position)[e2MaxDimension];
-        float xx = toPtr(aPt)[e1MaxDimension];
-        float xy = toPtr(aPt)[e2MaxDimension]; 
-
+		const float e1x = toPtr(edge1)[e1MaxDimension];
+		const float e1y = toPtr(edge1)[e2MaxDimension];
+		const float e2x = toPtr(edge2)[e1MaxDimension];
+		const float e2y = toPtr(edge2)[e2MaxDimension];
+		const float px = toPtr(position)[e1MaxDimension];
+		const float py = toPtr(position)[e2MaxDimension];
+		const float xx = toPtr(aPt)[e1MaxDimension];
+		const float xy = toPtr(aPt)[e2MaxDimension];
         float beta = (xy - py) - (e1y / e1x) * (xx - px);
         beta /= e2y - e2x * (e1y / e1x);
         float alpha = ((xx - px) - beta * e2x) / e1x;
-        bool inside = alpha > -0.00001f && alpha < 1.00001f && beta > -0.00001f && beta < 1.00001f; 
+        bool inside = alpha > -eps && alpha < 1.f + eps && beta > -eps && beta < 1.f + eps; 
         return inside;
     }
 

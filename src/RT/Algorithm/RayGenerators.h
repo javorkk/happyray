@@ -148,10 +148,12 @@ public:
 
         typedef KISSRandomNumberGenerator       t_RNG;
 
-        t_RNG genRand(  3643u + aRayId * 4154207u * sampleId + aRayId,
-            1761919u + aRayId * 2746753u + globalThreadId1D(8116093u),
-            331801u + aRayId + sampleId + globalThreadId1D(91438197u),
-            10499029u );
+        //t_RNG genRand(  3643u + aRayId * 4154207u * sampleId + aRayId,
+        //    1761919u + aRayId * 2746753u + globalThreadId1D(8116093u),
+        //    331801u + aRayId + sampleId + globalThreadId1D(91438197u),
+        //    10499029u );
+		uint seed = 91438197u + globalThreadId1D(91438197u) + globalThreadId1D(10499029u) * sampleId * sampleId * aNumShadowRays;
+		XorShift32Plus genRand(seed, globalThreadId1D(8116093u) + seed * seed * seed);
 
         int lightSourceId = 0;
         AreaLightSource lightSource = lightSources.getLight(genRand(), lightSourceId);
@@ -184,9 +186,9 @@ public:
             float attenuation = 1.f / dot(oRayDir,oRayDir);
 
             //normalize
-            float3 DirN = oRayDir * sqrtf(attenuation);
+            float3 lightDirN = oRayDir * sqrtf(attenuation);
 
-            float cosLightNormal = dot(-lightSource.normal, DirN);
+            float cosLightNormal = dot(lightSource.normal, -lightDirN);
 
             lsRadiance = lightSource.intensity *
                 lightSource.getArea() *
