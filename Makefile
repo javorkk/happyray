@@ -36,17 +36,17 @@ LINK       := ccbin/g++ -fPIC
 
 # Includes
 INCLUDES  += -I$(SRCDIR) -I$(CUDA_INSTALL_PATH)/include -I/usr/include/SDL -Icontrib/include
-CXXFLAGS += $(INCLUDES) -std=c++11
+CXXFLAGS += $(INCLUDES) -std=c++11 -fPIC
 CFLAGS += $(INCLUDES)
-NVCCFLAGS += $(INCLUDES)
+NVCCFLAGS += $(INCLUDES) -Xcompiler -fPIC
 
 
 ifeq ($(sm_60), 1)
 	NVCCFLAGS   += -arch sm_60 -D HAPPYRAY__CUDA_ARCH__=600
 else ifeq ($(sm_50), 1)
 	NVCCFLAGS   += -arch sm_50 -D HAPPYRAY__CUDA_ARCH__=500
-else ifeq ($(sm_40), 1)
-	NVCCFLAGS   += -arch sm_40 -D HAPPYRAY__CUDA_ARCH__=400
+else ifeq ($(sm_30), 1)
+	NVCCFLAGS   += -arch sm_30 -D HAPPYRAY__CUDA_ARCH__=300
 else ifeq ($(sm_20), 1)
 	NVCCFLAGS   += -arch sm_20 -D HAPPYRAY__CUDA_ARCH__=200
 else ifeq ($(sm_13), 1)

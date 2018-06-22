@@ -290,7 +290,7 @@ public:
 		if (getNumVertices() <= 0u)
 			return;
 
-		for (auto it = vertices.begin(); it != vertices.end(); ++it)
+		for (t_vecVector::const_iterator it = vertices.begin(); it != vertices.end(); ++it)
 		{
 			oMinBound = min(*it, oMinBound);
 			oMaxBound = max(*it, oMaxBound);
