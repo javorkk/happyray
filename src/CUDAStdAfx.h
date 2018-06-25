@@ -36,6 +36,8 @@
 //#endif // !_WIN32
 
 #include <float.h>
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 //////////////////////////////////////////////////////////////////////////
 //CUDA specific includes
