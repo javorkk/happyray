@@ -270,6 +270,71 @@ void Image::writePNG(const char* aFileName)
 
 	fclose(fp);
 #endif
+
+	std::vector<png_byte> byteData (m_bits.size() * 3);
+	std::vector<png_byte>::iterator ptr = byteData.begin();
+	for(std::vector<float3>::const_iterator it = m_bits.begin(); it != m_bits.end(); it++)
+	{
+		float3 v = *it;
+        v = max(min(v, rep(1)), rep(0));
+        *ptr++ = (byte)(v.x * 255);
+		*ptr++ = (byte)(v.y * 255);
+        *ptr++ = (byte)(v.z * 255);
+	}
+
+	std::vector<png_byte*> rowData(m_height);
+	for(int i = 0; i < m_height; i++)
+		rowData[i] = i * m_width * 3 + &byteData.front();
+
+	/* create file */
+	FILE *fp = fopen(_fileName.c_str(), "wb");
+	if (!fp)
+	  abort_("[write_png_file] File %s could not be opened for writing", _fileName.c_str());
+
+
+	/* initialize stuff */
+	png_structp png_ptr;
+	png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+
+	if (!png_ptr)
+		abort_("[write_png_file] png_create_write_struct failed");
+
+	png_infop info_ptr;
+	info_ptr = png_create_info_struct(png_ptr);
+	if (!info_ptr)
+		abort_("[write_png_file] png_create_info_struct failed");
+
+	if (setjmp(png_jmpbuf(png_ptr)))
+		abort_("[write_png_file] Error during init_io");
+
+
+	png_init_io(png_ptr, fp);
+
+	/* write header */
+	if (setjmp(png_jmpbuf(png_ptr)))
+		abort_("[write_png_file] Error during writing header");
+
+	png_set_IHDR(png_ptr, info_ptr, m_width, m_height,
+		8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+		PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+
+	png_write_info(png_ptr, info_ptr);
+
+	/* write bytes */
+	if (setjmp(png_jmpbuf(png_ptr)))
+		abort_("[write_png_file] Error during writing bytes");
+
+	png_write_image(png_ptr, (png_byte**)&rowData.front());
+
+
+	/* end write */
+	if (setjmp(png_jmpbuf(png_ptr)))
+		abort_("[write_png_file] Error during end of write");
+
+	png_write_end(png_ptr, NULL);
+
+	fclose(fp);
+
 #endif //_WIN32
 }
 
@@ -380,6 +445,73 @@ void Image::readPNG(const char* aFileName)
 		}
 	}
 #endif
+png_byte header[8];	// 8 is the maximum size that can be checked
+
+	/* open file and test for it being a png */
+	FILE *fp = fopen(_fileName.c_str(), "rb");
+	if (!fp)
+		abort_("[read_png_file] File %s could not be opened for reading", _fileName.c_str());
+	fread(header, 1, 8, fp);
+	if (png_sig_cmp(header, 0, 8))
+		abort_("[read_png_file] File %s is not recognized as a PNG file", _fileName.c_str());
+
+
+	/* initialize stuff */
+	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+
+	if (!png_ptr)
+		abort_("[read_png_file] png_create_read_struct failed");
+
+	png_infop info_ptr = png_create_info_struct(png_ptr);
+	if (!info_ptr)
+		abort_("[read_png_file] png_create_info_struct failed");
+
+	if (setjmp(png_jmpbuf(png_ptr)))
+		abort_("[read_png_file] Error during init_io");
+
+	png_init_io(png_ptr, fp);
+	png_set_sig_bytes(png_ptr, 8);
+
+	png_read_info(png_ptr, info_ptr);
+
+
+    m_width = png_get_image_width( png_ptr,  info_ptr);
+    m_height = png_get_image_height( png_ptr,  info_ptr);
+	/*color_type = info_ptr->color_type;
+	bit_depth = info_ptr->bit_depth;*/
+
+	int number_of_passes = png_set_interlace_handling(png_ptr);
+	png_read_update_info(png_ptr, info_ptr);
+
+    std::vector<png_byte> byteData (png_get_rowbytes( png_ptr,  info_ptr) * m_height);
+	std::vector<png_byte*> rowData(m_height);
+	for(int i = 0; i < m_height; i++)
+        rowData[i] = i * png_get_rowbytes(png_ptr,  info_ptr) + &byteData.front();
+
+	/* read file */
+	if (setjmp(png_jmpbuf(png_ptr)))
+		abort_("[read_png_file] Error during read_image");
+
+	png_read_image(png_ptr, &rowData.front());
+
+	fclose(fp);
+
+	m_bits.resize(m_width * m_height);
+	std::vector<float3>::iterator it = m_bits.begin();
+	for(size_t y = 0; y < m_height; y++)
+	{
+		png_byte *b = rowData[y];
+		for(size_t x = 0; x < m_width; x++)
+		{
+			float3 &v = *it++;
+            v.x = (float)(*b++) / 255.f;
+			v.y = (float)(*b++) / 255.f;
+            v.z = (float)(*b++) / 255.f;
+            if(png_get_channels(png_ptr,  info_ptr) == 4)
+				b++;
+		}
+	}
+
 #endif //_WIN32
 
 }
