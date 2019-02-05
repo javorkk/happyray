@@ -1,9 +1,0 @@
-src
-src/Application
-src/RT
-src/RT/Algorithm
-src/RT/Integrator
-src/RT/Primitive
-src/RT/Structure
-src/Test
-src/Utils
