@@ -414,7 +414,7 @@ GLOBAL void writeKeysAndValuesMultiUniformGrid(
 
         /////////////////////////////////////////////////////////////////////////
         //DEBUG
-        //cudaThreadSynchronize();
+        //cudaDeviceSynchronize();
         //cudastd::logger::out << "Initial counts:";
         //for(size_t i = 0; i <= numCounters; ++i)
         //{

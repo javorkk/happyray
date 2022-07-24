@@ -78,7 +78,7 @@ void cudastd::getBestCUDADevice(int argc, char* argv[])
         }
     }
 
-    MY_CUDA_SAFE_CALL( cudaThreadExit() );
+    MY_CUDA_SAFE_CALL(  cudaDeviceReset() );
 
     cudastd::logger::out << "Will use device " << bestDevice 
         << " with capability " << bestDeviceProp.major << "." 

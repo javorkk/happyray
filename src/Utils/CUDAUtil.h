@@ -201,7 +201,7 @@ namespace cudastd
     if( cudaSuccess != err) {                                                  \
     cudastd::logger::out << "CUDA error in " << __FILE__ << " line "           \
     << __LINE__ <<" : " << cudaGetErrorString( err) << "\n";                   \
-            /*exit(1);*/                                                       \
+            exit(1);                                                       \
     } }                                                                        \
     /* End Macro */
 
@@ -215,7 +215,7 @@ namespace cudastd
                 cudaGetErrorString( err) << "\n";                              \
         /*exit(EXIT_FAILURE);*/                                                \
     }                                                                          \
-    err = cudaThreadSynchronize();                                             \
+    err = cudaDeviceSynchronize();                                             \
     if( cudaSuccess != err) {                                                  \
         cudastd::logger::out << "Cuda error: "<< errorMessage  <<              \
         " in file " << __FILE__ << " line "<<  __LINE__ << ": "<<              \
