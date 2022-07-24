@@ -577,7 +577,7 @@ void WFObject::loadWFObj(const char* aFileName)
 
 	if (non_consecutive_obj_ids > 0u)
 	{
-		std::cerr << "Warning: Ignored " << non_consecutive_obj_ids << " non-consecutive object indices.\n";
+		std::cerr << "Warning: Ignored " << non_consecutive_obj_ids << " non-consecutive object indices in "<< aFileName <<"\n";
 	}
 
     objects.push_back(make_int2(currentObjectBegin, (int)faces.size()));
