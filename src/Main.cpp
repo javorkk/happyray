@@ -54,8 +54,24 @@ int main(int argc, char* argv[])
     //std::cerr << "UGrid size: " << sizeof(UniformGrid) << "\n";
     //std::cerr << "CompactUGrid size: " << sizeof(CompactUGrid) << "\n";
 
+    if(argc > 3)
+    {
+        std::cerr << "Invalid arguments. Use no argumets, <scene.cfg>, or -nw.\n";
+        return 1;
+    }
+
     SDLGLApplication app;
     app.init(argc, argv);
+    
+    if(argc > 1 && std::string(argv[1]) == std::string("-nw") || argc > 2 && std::string(argv[2]) == std::string("-nw"))
+    {
+        app.setRenderMode();
+        app.dumpFrames();
+        app.renderFrame();
+        app.writeScreenShot();
+        return 0;
+    }
+
     app.initVideo();
 
     while(!app.dead())

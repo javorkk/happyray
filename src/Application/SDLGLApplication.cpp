@@ -66,9 +66,15 @@ void SDLGLApplication::init(int argc, char** argv)
 //    }
 //#endif
 
-    if (argc > 1)
+    if (argc > 1 && std::string(argv[1]) != std::string("-nw"))
     {
         std::string fileName = argv[1];
+        CONFIGURATION = fileName;
+    }
+
+    if (argc > 2 && std::string(argv[2]) != std::string("-nw"))
+    {
+        std::string fileName = argv[2];
         CONFIGURATION = fileName;
     }
 
@@ -597,9 +603,9 @@ void SDLGLApplication::nextRenderMode()
     switch (mRenderMode)
     {
     case DEFAULT:
-        mRenderMode = PATH_TRACE;
+        mRenderMode = PATH_TRACE_FAST;
         break;
-    case PATH_TRACE:
+    case PATH_TRACE_FAST:
         mRenderMode = PATH_TRACE_SIMPLE;
         break;
 	case PATH_TRACE_SIMPLE:
@@ -622,10 +628,25 @@ void SDLGLApplication::dumpFrames()
 {
     mDumpFrames = !mDumpFrames;
 
-    std::cout << "AA samples per pixel: ";
+    std::cout << "samples per pixel: ";
     std::cin >> mPixelSamplesPerDumpedFrame;
     mPixelSamplesPerDumpedFrame = std::max(1, mPixelSamplesPerDumpedFrame);
 
+}
+
+void SDLGLApplication::setRenderMode()
+{
+    std::cout << "available render modes:\n ";
+    std::cout << "DEFAULT          : 0\n ";
+    std::cout << "PATH_TRACE_FAST  : 1\n ";
+    std::cout << "PATH_TRACE_SIMPLE: 2\n ";
+    std::cout << "AMBIENT_OCCLUSION: 3\n ";
+    std::cout << "select render mode: ";
+
+    int inputMode;
+    std::cin >> inputMode;
+    mRenderMode = static_cast<RenderMode>(inputMode);
+    mRenderMode = std::max(DEFAULT, std::min(AMBIENT_OCCLUSION, mRenderMode));
 }
 
 void SDLGLApplication::pauseAnimation()
@@ -667,10 +688,10 @@ void SDLGLApplication::initVideo()
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) // Initialize SDL's Video subsystem
 	{
-		std::cerr << "Unable to initialize SDL\n";
-		std::cerr << "GL_VENDOR      : " << glGetString(GL_VENDOR) << "\n";
-		std::cerr << "GL_RENDERER    : " << glGetString(GL_RENDERER) << "\n";
-		std::cerr << "GL_VERSION     : " << glGetString(GL_VERSION) << " (required >= 3_2)\n";
+		std::cerr << "Unable to initialize SDL: " << SDL_GetError() <<"\n";
+		// std::cerr << "GL_VENDOR      : " << glGetString(GL_VENDOR) << "\n";
+		// std::cerr << "GL_RENDERER    : " << glGetString(GL_RENDERER) << "\n";
+		// std::cerr << "GL_VERSION     : " << glGetString(GL_VERSION) << " (required >= 3_2)\n";
 	}
 
 	// Enable multisampling for a nice antialiased effect
@@ -740,7 +761,7 @@ void SDLGLApplication::initVideo()
     mSDLVideoModeFlags = SDL_SWSURFACE;
     if (SDL_Init(SDL_INIT_VIDEO) < 0) // Initialize SDL's Video subsystem
     {
-        std::cerr << "Unable to initialize SDL\n";
+        std::cerr << "Unable to initialize SDL: " << SDL_GetError() <<"\n";
     }
 
     /* Create our window centered at RESX x RESY resolution */
@@ -751,6 +772,38 @@ void SDLGLApplication::initVideo()
 
 #endif
 }
+
+float SDLGLApplication::renderFrame()
+{
+    float renderTime = 0.f;
+    for (int i = 0; i < mPixelSamplesPerDumpedFrame; ++i)
+    {
+        switch ( mRenderMode ) 
+        {
+        case DEFAULT:
+            renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 0);
+            break;
+        case PATH_TRACE_FAST:
+            renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 1);
+            break;
+        case PATH_TRACE_SIMPLE:
+            renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 2);
+            break;
+        case AMBIENT_OCCLUSION:
+            renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 3);
+        case OPEN_GL:
+        default:            
+            break;
+        }//switch ( mRenderMode )
+
+        if (mPauseAnimation || !mDumpFrames)
+            break;
+
+        ++mNumImages;
+    }
+    return renderTime;
+}
+
 
 void SDLGLApplication::displayFrame()
 {
@@ -767,7 +820,7 @@ void SDLGLApplication::displayFrame()
             switch (mRenderMode)
             {
             case DEFAULT:
-            case PATH_TRACE:
+            case PATH_TRACE_FAST:
             case AMBIENT_OCCLUSION:
                 buildTime = CUDAApplication::nextFrame();
                 break;
@@ -782,31 +835,7 @@ void SDLGLApplication::displayFrame()
             }//switch ( mRenderMode )
         }
 
-        for (int i = 0; i < mPixelSamplesPerDumpedFrame; ++i)
-        {
-            switch ( mRenderMode ) 
-            {
-            case DEFAULT:
-                renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 0);
-                break;
-            case PATH_TRACE:
-                renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 1);
-                break;
-			case PATH_TRACE_SIMPLE:
-				renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 2);
-				break;
-            case AMBIENT_OCCLUSION:
-                renderTime = CUDAApplication::generateFrame(mCamera, mNumImages, 3);
-            case OPEN_GL:
-            default:            
-                break;
-            }//switch ( mRenderMode )
-
-            if (mPauseAnimation || !mDumpFrames)
-                break;
-
-            ++mNumImages;
-        }
+        renderTime = renderFrame();
 
         //display frame rate in window title
         std::string windowName(mActiveWindowName);
@@ -822,7 +851,7 @@ void SDLGLApplication::displayFrame()
         switch (mRenderMode)
         {
         case DEFAULT:
-        case PATH_TRACE:
+        case PATH_TRACE_FAST:
 		case PATH_TRACE_SIMPLE:
         case AMBIENT_OCCLUSION:
             if (fps < 10.f)
