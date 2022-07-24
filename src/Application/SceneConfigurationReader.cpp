@@ -57,6 +57,10 @@ SceneConfiguration loadSceneConfiguration(const char* aFileName)
         ++lineNumber;
         buff = "";
         std::getline(input, line);
+        if(line.find_first_not_of(" \r\n\t") == std::string::npos)
+        {
+            continue;
+        }
 
         std::replace(line.begin(), line.end(), '\r', '\0');
         line = cutComments(line, COMMENTTOKEN);
