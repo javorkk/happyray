@@ -3,8 +3,8 @@ SRCDIR    := src
 INTERMDIR := obj
 
 #default install location, use env var if invalid
-#CUDA_INSTALL_PATH=/usr/local/cuda
-CUDA_INSTALL_PATH=/usr
+CUDA_INSTALL_PATH=/usr/local/cuda
+#CUDA_INSTALL_PATH=/usr
 
 # Name of the execuatable to build
 TARGET    := happyray
@@ -31,11 +31,10 @@ OSLOWER = $(shell uname -s 2>/dev/nullcuda | tr [:upper:] [:lower:])
 # Compilers
 NVCC       := nvcc
 CXX        := ccbin/g++
-CC         := ccbin/gcc
 LINK       := ccbin/g++ -fPIC
 
 # Includes
-INCLUDES  += -I$(SRCDIR) -I$(CUDA_INSTALL_PATH)/include -I/usr/include/SDL -Icontrib/include
+INCLUDES  += -I$(SRCDIR) -I$(CUDA_INSTALL_PATH)/include -I/usr/include/SDL2 -Icontrib/include
 CXXFLAGS += $(INCLUDES) -std=c++11 -fPIC
 CFLAGS += $(INCLUDES)
 NVCCFLAGS += $(INCLUDES) -Xcompiler -fPIC
@@ -106,8 +105,7 @@ $(TARGET): $(OBJS)
 
 ccbin :
 	mkdir ccbin
-	ln -sf /usr/bin/g++-4.9 ccbin/g++
-	ln -sf /usr/bin/gcc-4.9 ccbin/gcc
+	ln -sf /usr/bin/g++ ccbin/g++
 	
 clean :
 	rm -f $(OBJS)
