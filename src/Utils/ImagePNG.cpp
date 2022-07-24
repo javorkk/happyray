@@ -451,7 +451,7 @@ png_byte header[8];	// 8 is the maximum size that can be checked
 	FILE *fp = fopen(_fileName.c_str(), "rb");
 	if (!fp)
 		abort_("[read_png_file] File %s could not be opened for reading", _fileName.c_str());
-	fread(header, 1, 8, fp);
+	size_t unused = fread(header, 1, 8, fp);
 	if (png_sig_cmp(header, 0, 8))
 		abort_("[read_png_file] File %s is not recognized as a PNG file", _fileName.c_str());
 
