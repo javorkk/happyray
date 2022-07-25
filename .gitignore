@@ -24,3 +24,4 @@ HappyRay.includes
 ccbin/g++
 ccbin/gcc
 .vs/*
+.vscode/settings.json
