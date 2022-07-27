@@ -695,8 +695,8 @@ void SDLGLApplication::initVideo()
 	}
 
 	// Enable multisampling for a nice antialiased effect
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 16);
+	// SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+	// SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 16);
 
 	//SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
 	//SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
@@ -711,7 +711,7 @@ void SDLGLApplication::initVideo()
         mainwindow = SDL_CreateWindow(mActiveWindowName,  SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
             mRESX, mRESY, mSDLVideoModeFlags );
         if (!mainwindow) /* Die if creation failed */
-            std::cerr << "Unable to create window\n";
+            std::cerr << "Unable to create window\n" << SDL_GetError() <<"\n";
 
 
         /* Create our opengl context and attach it to our window */

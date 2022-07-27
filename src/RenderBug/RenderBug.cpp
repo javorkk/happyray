@@ -7,7 +7,7 @@ GLuint RenderBug::vao;
 GLuint RenderBug::vbo[4];
 
 /* Read our shaders into the appropriate buffers */
-const GLchar *vertexsource_mvp = "#version 150 core\n\
+const GLchar *vertexsource_mvp = "#version 130\n\
                         precision highp float;\n\
                         in  vec3 in_Position; \n\
                         in  vec3 in_Color; \n\
@@ -24,7 +24,7 @@ const GLchar *vertexsource_mvp = "#version 150 core\n\
                             ex_Color = in_Color;\n\
                         }";
 
-const GLchar *fragment_source_cartoon_shader = "#version 150 core\n\
+const GLchar *fragment_source_cartoon_shader = "#version 130\n\
                         // It was expressed that some drivers required this next line to function properly \n\
                         precision highp float; \n\
                         uniform vec3 lightDir;\n\
@@ -49,7 +49,7 @@ const GLchar *fragment_source_cartoon_shader = "#version 150 core\n\
                             fragColor = color; \n\
                         }";
 
-const GLchar *fragment_source_constant_color = "#version 150 core\n\
+const GLchar *fragment_source_constant_color = "#version 130\n\
                         // It was expressed that some drivers required this next line to function properly \n\
                         precision highp float; \n\
                         in  vec3 normal;\n\
@@ -73,7 +73,7 @@ GLuint RenderBug::shaderprogram_cartoon;
 GLuint RenderBug::shaderprogram_constant;
 
 
-const GLchar *vertexsource = "#version 150 \n               \
+const GLchar *vertexsource = "#version 130\n               \
                         precision highp float;\n                               \
                         in  vec2 in_Position; \n                               \
                         in  vec2 in_TexCoord; \n                               \
@@ -82,11 +82,11 @@ const GLchar *vertexsource = "#version 150 \n               \
                             gl_Position = vec4(in_Position, 0.0, 1.0);\n       \
                             aTexCoord = in_TexCoord;\n                         \
                         }";
-const GLchar *fragmentsource = "#version 150 \n              \
+const GLchar *fragmentsource = "#version 130\n              \
                         precision highp float; \n                              \
                         uniform sampler2D uTexture; \n                         \
                         in  vec2 aTexCoord; \n                                 \
-                        out vec4 gl_FragColor; \n                              \
+                        out vec4 fragColor; \n                              \
                                                                                \
                         vec4 gammaCorrection(float aGamma)                     \
                         {                                                      \
@@ -96,7 +96,7 @@ const GLchar *fragmentsource = "#version 150 \n              \
                         }                                                      \
                                                                                \
                         void main(void) { \n                                   \
-                        gl_FragColor = gammaCorrection(2.2); \n                \
+                        fragColor = gammaCorrection(2.2); \n                \
                         }";
 
 GLuint RenderBug::vertexshader;
