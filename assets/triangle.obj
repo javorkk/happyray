@@ -1,0 +1,5 @@
+# A single triangle with no vertex normals, used to test LoadObj's smooth-normal fallback.
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+f 1 2 3

@@ -1,0 +1,8 @@
+# Companion material library for cube.obj: flat Lambertian diffuse colors only (Kd), to test
+# LoadObj's mtllib/Kd parsing. Ka/Ks/Ns/illum are intentionally omitted -- unsupported, and
+# should be silently ignored by the parser.
+newmtl red
+Kd 0.8 0.1 0.1
+
+newmtl blue
+Kd 0.1 0.1 0.8

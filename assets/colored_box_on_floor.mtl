@@ -1,0 +1,8 @@
+# Companion material library for colored_box_on_floor.obj: a light gray floor and a
+# reddish-orange box, to visually demonstrate mtllib-driven Lambert diffuse tinting of the AO
+# render.
+newmtl floor
+Kd 0.75 0.75 0.78
+
+newmtl box
+Kd 0.85 0.35 0.15
