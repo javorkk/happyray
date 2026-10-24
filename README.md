@@ -44,7 +44,7 @@ xauth add ${DISPLAY} MIT-MAGIC-COOKIE-1  9e6238034158c72ba4b08487c0ff0cd0
 ## Running the viewer
 
 ```sh
-./build/src/app/happyray assets/box_on_floor.obj [width] [height]
+./build/happyray assets/box_on_floor.obj [width] [height]
 ```
 
 The window starts at an explicit `[width] [height]` if given; otherwise at the scene's sibling

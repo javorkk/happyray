@@ -11,6 +11,8 @@ target_include_directories(happyray_screenshot PUBLIC ${CMAKE_CURRENT_SOURCE_DIR
 target_link_libraries(happyray_screenshot PUBLIC PNG::PNG)
 
 add_executable(happyray main.cpp)
+set_target_properties(happyray PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 target_link_libraries(happyray PRIVATE happyray_core happyray_render happyray_obj_loader
     happyray_screenshot PkgConfig::SDL2)
 
