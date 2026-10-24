@@ -32,9 +32,7 @@ namespace happyray {
 // is derived from the owning top-level cell, so each entry needs only its
 // resolution and offset.
 struct SecondLevelGridInfo {
-  int resolution_x = 1;
-  int resolution_y = 1;
-  int resolution_z = 1;
+  int resolution = 1;
   uint32_t cell_start_offset = 0;
 };
 
@@ -66,18 +64,16 @@ HAPPYRAY_HD inline UniformGridView SecondLevelView(const TwoLevelGridView &grid,
   const Vec3 bounds_min(top.bounds_min.x + cx * top.cell_size.x,
                         top.bounds_min.y + cy * top.cell_size.y,
                         top.bounds_min.z + cz * top.cell_size.z);
-  const Vec3 cell_size(top.cell_size.x / info.resolution_x,
-                       top.cell_size.y / info.resolution_y,
-                       top.cell_size.z / info.resolution_z);
+  const Vec3 cell_size(top.cell_size.x / info.resolution,
+                       top.cell_size.y / info.resolution,
+                       top.cell_size.z / info.resolution);
   UniformGridView view;
   view.bounds_min = bounds_min;
   view.bounds_max = bounds_min + top.cell_size;
   view.cell_size = cell_size;
   view.inv_cell_size = Vec3(1.0f / cell_size.x, 1.0f / cell_size.y,
                             1.0f / cell_size.z);
-  view.resolution_x = info.resolution_x;
-  view.resolution_y = info.resolution_y;
-  view.resolution_z = info.resolution_z;
+  view.resolution_x = view.resolution_y = view.resolution_z = info.resolution;
   view.cell_start = grid.second_level_cell_start + info.cell_start_offset;
   view.triangle_indices = grid.second_level_triangle_indices;
   return view;
@@ -145,9 +141,9 @@ HAPPYRAY_HD inline bool TraverseTwoLevelGrid(const TwoLevelGridView &grid,
 
     if (top.cell_start[top_index] != top.cell_start[top_index + 1]) {
       const SecondLevelGridInfo &info = grid.second_level_infos[top_index];
-      const int res_x = info.resolution_x;
-      const int res_y = info.resolution_y;
-      const int res_z = info.resolution_z;
+      const int res_x = info.resolution;
+      const int res_y = info.resolution;
+      const int res_z = info.resolution;
       const Vec3 cell_min(top.bounds_min.x + cx * top.cell_size.x,
                           top.bounds_min.y + cy * top.cell_size.y,
                           top.bounds_min.z + cz * top.cell_size.z);

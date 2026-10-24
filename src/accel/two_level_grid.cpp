@@ -60,9 +60,8 @@ struct ComputeSecondLevelInfoFunctor {
                                        second_level_density);
 
         SecondLevelGridInfo info;
-        info.resolution_x = res.x;
-        info.resolution_y = res.y;
-        info.resolution_z = res.z;
+        info.resolution = res.x > res.y ? res.x : res.y;
+        if (res.z > info.resolution) info.resolution = res.z;
         info.cell_start_offset = 0;
         return info;
     }
@@ -70,7 +69,7 @@ struct ComputeSecondLevelInfoFunctor {
 
 struct ExtractNumCellsFunctor {
     HAPPYRAY_HD uint32_t operator()(const SecondLevelGridInfo& info) const {
-        return static_cast<uint32_t>(info.resolution_x) * info.resolution_y * info.resolution_z;
+        return static_cast<uint32_t>(info.resolution) * info.resolution * info.resolution;
     }
 };
 
@@ -119,18 +118,18 @@ struct FragmentCounter {
         const Vec3 cell_min(top_level.bounds_min.x + cx * top_level.cell_size.x,
                             top_level.bounds_min.y + cy * top_level.cell_size.y,
                             top_level.bounds_min.z + cz * top_level.cell_size.z);
-        const Vec3 cell_size(top_level.cell_size.x / info.resolution_x,
-                             top_level.cell_size.y / info.resolution_y,
-                             top_level.cell_size.z / info.resolution_z);
-        const Vec3 inv_cell_size(top_level.inv_cell_size.x * info.resolution_x,
-                                 top_level.inv_cell_size.y * info.resolution_y,
-                                 top_level.inv_cell_size.z * info.resolution_z);
+        const Vec3 cell_size(top_level.cell_size.x / info.resolution,
+                     top_level.cell_size.y / info.resolution,
+                     top_level.cell_size.z / info.resolution);
+        const Vec3 inv_cell_size(top_level.inv_cell_size.x * info.resolution,
+                     top_level.inv_cell_size.y * info.resolution,
+                     top_level.inv_cell_size.z * info.resolution);
         const uint32_t tri = top_triangle_indices[i];
         const BBox box = ComputeTriangleBBox(scene, tri);
         uint32_t count = 0;
         detail::ForEachIntersectedCell(scene, tri, box, cell_min, inv_cell_size,
-                                       cell_size, info.resolution_x, info.resolution_y,
-                                       info.resolution_z,
+                                       cell_size, info.resolution, info.resolution,
+                                       info.resolution,
                                        [&](int, int, int) { ++count; });
         return count;
     }
@@ -160,22 +159,22 @@ struct FragmentWriter {
         const Vec3 cell_min(top_level.bounds_min.x + cx * top_level.cell_size.x,
                             top_level.bounds_min.y + cy * top_level.cell_size.y,
                             top_level.bounds_min.z + cz * top_level.cell_size.z);
-        const Vec3 cell_size(top_level.cell_size.x / info.resolution_x,
-                             top_level.cell_size.y / info.resolution_y,
-                             top_level.cell_size.z / info.resolution_z);
-        const Vec3 inv_cell_size(top_level.inv_cell_size.x * info.resolution_x,
-                                 top_level.inv_cell_size.y * info.resolution_y,
-                                 top_level.inv_cell_size.z * info.resolution_z);
+        const Vec3 cell_size(top_level.cell_size.x / info.resolution,
+                     top_level.cell_size.y / info.resolution,
+                     top_level.cell_size.z / info.resolution);
+        const Vec3 inv_cell_size(top_level.inv_cell_size.x * info.resolution,
+                     top_level.inv_cell_size.y * info.resolution,
+                     top_level.inv_cell_size.z * info.resolution);
         const uint32_t tri = top_triangle_indices[i];
         const BBox box = ComputeTriangleBBox(scene, tri);
         uint32_t offset = write_offsets[i];
         detail::ForEachIntersectedCell(
             scene, tri, box, cell_min, inv_cell_size, cell_size,
-            info.resolution_x, info.resolution_y, info.resolution_z,
+            info.resolution, info.resolution, info.resolution,
             [&](int cx, int cy, int cz) {
                 out_cell_indices[offset] =
                     info.cell_start_offset +
-                    FlattenCellIndex(cx, cy, cz, info.resolution_x, info.resolution_y);
+                    FlattenCellIndex(cx, cy, cz, info.resolution, info.resolution);
                 out_triangle_indices[offset] = tri;
                 ++offset;
             });
@@ -192,14 +191,14 @@ struct TwoLevelGridSahFunctor {
 
     HAPPYRAY_HD float operator()(uint32_t t) const {
         const SecondLevelGridInfo& info = grid.second_level_infos[t];
-        const auto num_local =
-            static_cast<uint32_t>(info.resolution_x) * info.resolution_y * info.resolution_z;
+        const auto num_local = static_cast<uint32_t>(info.resolution) * info.resolution *
+                               info.resolution;
         const uint32_t ref_count =
             grid.second_level_cell_start[info.cell_start_offset + num_local] -
             grid.second_level_cell_start[info.cell_start_offset];
-        const Vec3 cell_size(grid.top_level.cell_size.x / info.resolution_x,
-                     grid.top_level.cell_size.y / info.resolution_y,
-                     grid.top_level.cell_size.z / info.resolution_z);
+        const Vec3 cell_size(grid.top_level.cell_size.x / info.resolution,
+                 grid.top_level.cell_size.y / info.resolution,
+                 grid.top_level.cell_size.z / info.resolution);
         return HalfSurfaceArea(cell_size) *
               (static_cast<float>(num_local) * costs.traversal +
                static_cast<float>(ref_count) * costs.intersection);

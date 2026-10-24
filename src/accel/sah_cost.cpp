@@ -135,8 +135,7 @@ struct MakeMockSecondLevelInfoFunctor {
 
   HAPPYRAY_HD SecondLevelGridInfo operator()(uint32_t t) const {
     SecondLevelGridInfo info;
-    info.resolution_x = info.resolution_y = info.resolution_z =
-        second_resolution;
+    info.resolution = second_resolution;
     const auto num_local = static_cast<uint32_t>(second_resolution) *
                            second_resolution * second_resolution;
     info.cell_start_offset = t * num_local;

@@ -150,7 +150,11 @@ void CheckFragmentWriters() {
     auto two_view = two_level.View();
     const auto infos = Download(two_view.second_level_infos, 1);
     two_view.second_level_infos = infos.data();
-    CheckFilteredFragments(host_scene, happyray::SecondLevelView(two_view, 0));
+    const auto second_level_view = happyray::SecondLevelView(two_view, 0);
+    Check(second_level_view.resolution_x == second_level_view.resolution_y &&
+              second_level_view.resolution_y == second_level_view.resolution_z,
+          "two-level second grid has equal axis resolutions");
+    CheckFilteredFragments(host_scene, second_level_view);
 
     const happyray::IrregularGrid irregular(scene, 0.12f, 128, 0, 0, 0);
     const auto irregular_view = irregular.View();
