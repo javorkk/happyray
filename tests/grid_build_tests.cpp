@@ -126,6 +126,46 @@ void CheckFilteredFragments(const happyray::SceneView& scene, const happyray::Un
     for (uint32_t tri : refs) Check(tri == 0, "filtered triangle ID");
 }
 
+void CheckSatCellRanges(const happyray::SceneView& scene,
+                        const happyray::GridRangeView& grid,
+                        uint32_t reference_count) {
+    const uint32_t num_cells = grid.resolution_x * grid.resolution_y * grid.resolution_z;
+    const auto starts = Download(grid.cell_range_start, num_cells);
+    const auto ends = Download(grid.cell_range_end, num_cells);
+    const auto refs = Download(grid.triangle_indices, reference_count);
+    const happyray::BBox box = happyray::ComputeTriangleBBox(scene, 0);
+    int x0, x1, y0, y1, z0, z1;
+    happyray::ComputeCellRange(box, grid.bounds_min, grid.inv_cell_size,
+                               grid.resolution_x, grid.resolution_y,
+                               grid.resolution_z, &x0, &x1, &y0, &y1, &z0, &z1);
+    const happyray::detail::TriangleCellIntersection intersects(scene, 0);
+    uint32_t expected_refs = 0;
+    uint32_t aabb_candidates = 0;
+    for (int z = 0; z < grid.resolution_z; ++z) {
+        for (int y = 0; y < grid.resolution_y; ++y) {
+            for (int x = 0; x < grid.resolution_x; ++x) {
+                const uint32_t cell = happyray::FlattenCellIndex(
+                    x, y, z, grid.resolution_x, grid.resolution_y);
+                const bool in_aabb_range = x >= x0 && x <= x1 && y >= y0 && y <= y1 &&
+                                           z >= z0 && z <= z1;
+                aabb_candidates += in_aabb_range;
+                const bool expected =
+                    in_aabb_range && intersects(
+                        grid.bounds_min +
+                            happyray::Vec3(x + 0.5f, y + 0.5f, z + 0.5f) *
+                                grid.cell_size,
+                        grid.cell_size);
+                Check(ends[cell] - starts[cell] == static_cast<uint32_t>(expected),
+                      "two-level ranges must retain exactly SAT-intersecting cells");
+                expected_refs += expected;
+            }
+        }
+    }
+    Check(expected_refs == reference_count, "two-level range endpoints cover SAT references");
+    Check(expected_refs < aabb_candidates, "SAT rejects AABB-only cell candidates");
+    for (uint32_t tri : refs) Check(tri == 0, "two-level range triangle ID");
+}
+
 void CheckFragmentWriters() {
     using happyray::Vec3;
     const std::vector<Vec3> positions = {Vec3(0, 0, 0), Vec3(1, 1, 0), Vec3(0, 1, 1)};
@@ -146,15 +186,20 @@ void CheckFragmentWriters() {
         uniform.View().resolution_x * uniform.View().resolution_y * uniform.View().resolution_z + 1);
     Check(uniform.TriangleIndexCount() == uniform_starts.back(), "rejected pairs excluded from count");
 
-    const happyray::TwoLevelGrid two_level(scene, 0.0625f, 128, 0);
+    const happyray::TwoLevelGrid two_level(scene, 128, 128, 0);
     auto two_view = two_level.View();
-    const auto infos = Download(two_view.second_level_infos, 1);
+    CheckSatCellRanges(host_scene, two_view.top_level,
+                       two_level.TopLevelTriangleIndexCount());
+    const uint32_t num_top_cells = two_view.top_level.resolution_x *
+                                   two_view.top_level.resolution_y *
+                                   two_view.top_level.resolution_z;
+    const auto infos = Download(two_view.second_level_infos, num_top_cells);
     two_view.second_level_infos = infos.data();
     const auto second_level_view = happyray::SecondLevelView(two_view, 0);
     Check(second_level_view.resolution_x == second_level_view.resolution_y &&
               second_level_view.resolution_y == second_level_view.resolution_z,
           "two-level second grid has equal axis resolutions");
-    CheckFilteredFragments(host_scene, second_level_view);
+    CheckSatCellRanges(host_scene, second_level_view, infos[0].triangle_ref_count);
 
     const happyray::IrregularGrid irregular(scene, 0.12f, 128, 0, 0, 0);
     const auto irregular_view = irregular.View();

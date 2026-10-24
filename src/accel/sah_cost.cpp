@@ -135,10 +135,9 @@ struct MakeMockSecondLevelInfoFunctor {
 
   HAPPYRAY_HD SecondLevelGridInfo operator()(uint32_t t) const {
     SecondLevelGridInfo info;
-    info.resolution = second_resolution;
-    const auto num_local = static_cast<uint32_t>(second_resolution) *
-                           second_resolution * second_resolution;
-    info.cell_start_offset = t * num_local;
+    info.resolution = {second_resolution, second_resolution, second_resolution};
+    info.cell_range_offset = t * static_cast<uint32_t>(second_resolution) *
+                 second_resolution * second_resolution;
     return info;
   }
 };
@@ -149,8 +148,10 @@ struct MakeMockSecondLevelInfoFunctor {
 // SecondLevelGridInfo entries instead of ones chosen by density.
 struct MockTwoLevelGrid {
   thrust::device_vector<SecondLevelGridInfo> infos;
-  thrust::device_vector<uint32_t> top_cell_start;
-  thrust::device_vector<uint32_t> cell_start;
+  thrust::device_vector<uint32_t> top_cell_range_start;
+  thrust::device_vector<uint32_t> top_cell_range_end;
+  thrust::device_vector<uint32_t> cell_range_start;
+  thrust::device_vector<uint32_t> cell_range_end;
   TwoLevelGridView view;
 
   MockTwoLevelGrid(const BBox &bounds, int top_resolution,
@@ -174,9 +175,14 @@ struct MockTwoLevelGrid {
     // One (never-read) triangle per top-level cell, so traversal descends into
     // every one instead of skipping it as empty -- the second-level CSR below
     // stays empty.
-    top_cell_start.resize(num_top_cells + 1);
-    thrust::sequence(top_cell_start.begin(), top_cell_start.end());
-    view.top_level.cell_start = thrust::raw_pointer_cast(top_cell_start.data());
+    top_cell_range_start.resize(num_top_cells);
+    top_cell_range_end.resize(num_top_cells);
+    thrust::sequence(top_cell_range_start.begin(), top_cell_range_start.end(), 0u);
+    thrust::sequence(top_cell_range_end.begin(), top_cell_range_end.end(), 1u);
+    view.top_level.cell_range_start =
+      thrust::raw_pointer_cast(top_cell_range_start.data());
+    view.top_level.cell_range_end =
+      thrust::raw_pointer_cast(top_cell_range_end.data());
     view.top_level.triangle_indices = nullptr;
 
     infos.resize(num_top_cells);
@@ -185,10 +191,14 @@ struct MockTwoLevelGrid {
         thrust::counting_iterator<uint32_t>(num_top_cells), infos.begin(),
         MakeMockSecondLevelInfoFunctor{second_resolution});
 
-    cell_start.assign(num_top_cells * num_local + 1, 0u);
+    cell_range_start.assign(num_top_cells * num_local, 0u);
+    cell_range_end.assign(num_top_cells * num_local, 0u);
 
     view.second_level_infos = thrust::raw_pointer_cast(infos.data());
-    view.second_level_cell_start = thrust::raw_pointer_cast(cell_start.data());
+    view.second_level_cell_range_start =
+      thrust::raw_pointer_cast(cell_range_start.data());
+    view.second_level_cell_range_end =
+      thrust::raw_pointer_cast(cell_range_end.data());
     view.second_level_triangle_indices = nullptr;
   }
 };

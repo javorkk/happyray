@@ -169,28 +169,28 @@ backends; it carries the `performance` label and runs serially.
 - `src/accel/`: the uniform grid, the two-level grid, and the irregular grid.
   Each acceleration structure has one header and one implementation file.
   `uniform_grid.h` has shared `HAPPYRAY_HD` build helpers (resolution heuristic, cell-range math,
-  triangle/box intersection and occupied-cell extraction)
-  used by all three, the `UniformGridView` CSR data view, its `HAPPYRAY_HD`
+  `uniform_grid.h` has shared `HAPPYRAY_HD` build helpers (resolution heuristic and cell-range
+  math; triangle/box intersection for the uniform and irregular grids), the `UniformGridView` CSR data view, its `HAPPYRAY_HD`
   3D-DDA traversal (`IntersectSceneGrid`/`IsOccludedGrid`), and the `UniformGrid` builder class
   that produces one; `uniform_grid.cpp` is its sort-based (happyray/HAGrid-style) construction
-  algorithm. All three builders keep the final stage inline beside counting, writing and
-  sorting fragments: compare adjacent
-  sorted cell keys to extract occupied-cell starts, then fill empty-cell CSR offsets with a
-  reverse minimum scan (linear work in pairs plus cells, without per-cell binary searches).
-  `FragmentCounter` reserves AABB candidates and `FragmentWriter` tests
+  algorithm. The uniform and irregular builders keep the final stage inline beside counting,
+  writing and sorting fragments: compare adjacent sorted cell keys to extract occupied-cell
+  starts, then fill empty-cell CSR offsets with a reverse minimum scan. `FragmentCounter` reserves
+  AABB candidates and `FragmentWriter` tests
   triangle/cell overlap using the separating-axis theorem, marking rejects with a sentinel
   key that sorts after all valid cells. A single sentinel lookup determines the valid pair
   count; rejected triangle references and their allocation capacity are released.
   Intersection tests conservatively enlarge cell half-extents by 1% and allow a `1e-5`
   projection tolerance. Unlike the reference's normalized plane test, unnormalized axes
   avoid division by zero for degenerate triangles, and centers remain at true cell centers.
-  Candidate ranges and default density parameters are unchanged. Filtering also applies to
-  nested grids' top-level construction and initial leaf voxels, before irregular merging.
-  `two_level_grid.h`/`.cpp` builds on top of it: a coarse top-level `UniformGrid`
-  where *every* cell always recurses into its own nested second-level `UniformGridView` (sparse
-  cells just get a degenerate 1x1x1 second-level grid, equivalent to a direct triangle list) --
-  this unifies "leaf" and "refined" cells into one traversal with no branching, matching
-  happyray's actual `TwoLevelGrid`/`TLGridSortBuilder` design.
+  Candidate ranges and default density parameters are unchanged. Filtering also applies before
+  irregular-grid merging. `two_level_grid.h`/`.cpp` builds both levels directly rather than
+  constructing a `UniformGrid`: it emits AABB-overlap `(cell, triangle)` pairs, sorts by cell,
+  and stores explicit begin/end indices for each cell at both levels. Each top-level cell owns a
+  cubic second-level grid; sparse cells use 1x1x1 resolution. The two-level builder avoids the
+  cubic second-level grid; sparse cells use 1x1x1 resolution. The builder applies the shared
+  triangle/cell SAT test at both levels and avoids the CSR gap-filling scans used by the other builders, matching the legacy
+  `TLGridSortBuilder`/`TLGridBuildKernels` construction model.
   `irregular_grid.h`/`.cpp` build an irregular grid the HAGrid way: each top-level cell gets a
   flat, dense, power-of-2-resolution local grid, then two passes ported from HAGrid's
   `merge.cu`/`expand.cu` refine it bottom-up -- SAH-gated neighbor merging (collapsing empty/

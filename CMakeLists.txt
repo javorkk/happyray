@@ -25,10 +25,8 @@ if(HAPPYRAY_THRUST_BACKEND STREQUAL "CUDA")
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    # NVIDIA L4 (Ada Lovelace, SM 8.9) is the primary target GPU in the dev environment;
-    # override with -DCMAKE_CUDA_ARCHITECTURES=... for other hardware.
     if(NOT CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES 89)
+        set(CMAKE_CUDA_ARCHITECTURES 86)  # NVIDIA A4000
     endif()
     # Needed for uniform_grid_view.h's grid-traversal lambdas to compile as device code.
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)
