@@ -33,6 +33,7 @@ if(HAPPYRAY_THRUST_BACKEND STREQUAL "CUDA")
     # Needed for uniform_grid_view.h's grid-traversal lambdas to compile as device code.
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+    add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--Wno-deprecated-gpu-targets>)
 elseif(NOT HAPPYRAY_THRUST_BACKEND STREQUAL "TBB")
     message(FATAL_ERROR "HAPPYRAY_THRUST_BACKEND must be CUDA or TBB (got '${HAPPYRAY_THRUST_BACKEND}')")
 endif()

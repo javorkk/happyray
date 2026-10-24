@@ -131,30 +131,10 @@ struct MockUniformGrid {
 // top-level cell, used by MockTwoLevelGrid below so its top-level 3D-DDA
 // genuinely steps across multiple top-level cells.
 struct MakeMockSecondLevelInfoFunctor {
-  Vec3 top_bounds_min;
-  Vec3 top_cell_size;
-  int top_resolution_x, top_resolution_y;
   int second_resolution;
 
   HAPPYRAY_HD SecondLevelGridInfo operator()(uint32_t t) const {
-    const int res_xy = top_resolution_x * top_resolution_y;
-    const int tz = static_cast<int>(t) / res_xy;
-    const int rem = static_cast<int>(t) % res_xy;
-    const int ty = rem / top_resolution_x;
-    const int tx = rem % top_resolution_x;
-    const Vec3 cell_min(top_bounds_min.x + tx * top_cell_size.x,
-                        top_bounds_min.y + ty * top_cell_size.y,
-                        top_bounds_min.z + tz * top_cell_size.z);
-    const Vec3 cell_max = cell_min + top_cell_size;
-
     SecondLevelGridInfo info;
-    info.bounds_min = cell_min;
-    info.bounds_max = cell_max;
-    info.cell_size = Vec3(top_cell_size.x / second_resolution,
-                          top_cell_size.y / second_resolution,
-                          top_cell_size.z / second_resolution);
-    info.inv_cell_size = Vec3(1.0f / info.cell_size.x, 1.0f / info.cell_size.y,
-                              1.0f / info.cell_size.z);
     info.resolution_x = info.resolution_y = info.resolution_z =
         second_resolution;
     const auto num_local = static_cast<uint32_t>(second_resolution) *
@@ -204,9 +184,7 @@ struct MockTwoLevelGrid {
     thrust::transform(
         thrust::counting_iterator<uint32_t>(0),
         thrust::counting_iterator<uint32_t>(num_top_cells), infos.begin(),
-        MakeMockSecondLevelInfoFunctor{bounds.min_bound, top_cell_size,
-                                       top_resolution, top_resolution,
-                                       second_resolution});
+        MakeMockSecondLevelInfoFunctor{second_resolution});
 
     cell_start.assign(num_top_cells * num_local + 1, 0u);
 

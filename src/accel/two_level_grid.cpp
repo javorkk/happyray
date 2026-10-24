@@ -60,12 +60,6 @@ struct ComputeSecondLevelInfoFunctor {
                                        second_level_density);
 
         SecondLevelGridInfo info;
-        info.bounds_min = cell_min;
-        info.bounds_max = cell_max;
-        info.cell_size = Vec3((cell_max.x - cell_min.x) / res.x, (cell_max.y - cell_min.y) / res.y,
-                              (cell_max.z - cell_min.z) / res.z);
-        info.inv_cell_size =
-            Vec3(1.0f / info.cell_size.x, 1.0f / info.cell_size.y, 1.0f / info.cell_size.z);
         info.resolution_x = res.x;
         info.resolution_y = res.y;
         info.resolution_z = res.z;
@@ -109,17 +103,33 @@ struct ScatterOwningCellFunctor {
 // helper's comment for why the distinction matters for hair-strand-like geometry).
 struct FragmentCounter {
     SceneView scene;
+    UniformGridView top_level;
     const uint32_t* owning_cell;
     const uint32_t* top_triangle_indices;
     const SecondLevelGridInfo* infos;
 
     HAPPYRAY_HD uint32_t operator()(uint32_t i) const {
-        const SecondLevelGridInfo& info = infos[owning_cell[i]];
+        const uint32_t owner = owning_cell[i];
+        const SecondLevelGridInfo& info = infos[owner];
+        const int cx = static_cast<int>(owner % top_level.resolution_x);
+        const int cy = static_cast<int>((owner / top_level.resolution_x) %
+                                        top_level.resolution_y);
+        const int cz = static_cast<int>(owner / (top_level.resolution_x *
+                                                 top_level.resolution_y));
+        const Vec3 cell_min(top_level.bounds_min.x + cx * top_level.cell_size.x,
+                            top_level.bounds_min.y + cy * top_level.cell_size.y,
+                            top_level.bounds_min.z + cz * top_level.cell_size.z);
+        const Vec3 cell_size(top_level.cell_size.x / info.resolution_x,
+                             top_level.cell_size.y / info.resolution_y,
+                             top_level.cell_size.z / info.resolution_z);
+        const Vec3 inv_cell_size(top_level.inv_cell_size.x * info.resolution_x,
+                                 top_level.inv_cell_size.y * info.resolution_y,
+                                 top_level.inv_cell_size.z * info.resolution_z);
         const uint32_t tri = top_triangle_indices[i];
         const BBox box = ComputeTriangleBBox(scene, tri);
         uint32_t count = 0;
-        detail::ForEachIntersectedCell(scene, tri, box, info.bounds_min, info.inv_cell_size,
-                                       info.cell_size, info.resolution_x, info.resolution_y,
+        detail::ForEachIntersectedCell(scene, tri, box, cell_min, inv_cell_size,
+                                       cell_size, info.resolution_x, info.resolution_y,
                                        info.resolution_z,
                                        [&](int, int, int) { ++count; });
         return count;
@@ -131,6 +141,7 @@ struct FragmentCounter {
 // invalid/sentinel entries to filter out afterwards).
 struct FragmentWriter {
     SceneView scene;
+    UniformGridView top_level;
     const uint32_t* owning_cell;
     const uint32_t* top_triangle_indices;
     const SecondLevelGridInfo* infos;
@@ -139,12 +150,27 @@ struct FragmentWriter {
     uint32_t* out_triangle_indices;
 
     HAPPYRAY_HD void operator()(uint32_t i) const {
-        const SecondLevelGridInfo& info = infos[owning_cell[i]];
+        const uint32_t owner = owning_cell[i];
+        const SecondLevelGridInfo& info = infos[owner];
+        const int cx = static_cast<int>(owner % top_level.resolution_x);
+        const int cy = static_cast<int>((owner / top_level.resolution_x) %
+                                        top_level.resolution_y);
+        const int cz = static_cast<int>(owner / (top_level.resolution_x *
+                                                 top_level.resolution_y));
+        const Vec3 cell_min(top_level.bounds_min.x + cx * top_level.cell_size.x,
+                            top_level.bounds_min.y + cy * top_level.cell_size.y,
+                            top_level.bounds_min.z + cz * top_level.cell_size.z);
+        const Vec3 cell_size(top_level.cell_size.x / info.resolution_x,
+                             top_level.cell_size.y / info.resolution_y,
+                             top_level.cell_size.z / info.resolution_z);
+        const Vec3 inv_cell_size(top_level.inv_cell_size.x * info.resolution_x,
+                                 top_level.inv_cell_size.y * info.resolution_y,
+                                 top_level.inv_cell_size.z * info.resolution_z);
         const uint32_t tri = top_triangle_indices[i];
         const BBox box = ComputeTriangleBBox(scene, tri);
         uint32_t offset = write_offsets[i];
         detail::ForEachIntersectedCell(
-            scene, tri, box, info.bounds_min, info.inv_cell_size, info.cell_size,
+            scene, tri, box, cell_min, inv_cell_size, cell_size,
             info.resolution_x, info.resolution_y, info.resolution_z,
             [&](int cx, int cy, int cz) {
                 out_cell_indices[offset] =
@@ -171,7 +197,10 @@ struct TwoLevelGridSahFunctor {
         const uint32_t ref_count =
             grid.second_level_cell_start[info.cell_start_offset + num_local] -
             grid.second_level_cell_start[info.cell_start_offset];
-        return HalfSurfaceArea(info.cell_size) *
+        const Vec3 cell_size(grid.top_level.cell_size.x / info.resolution_x,
+                     grid.top_level.cell_size.y / info.resolution_y,
+                     grid.top_level.cell_size.z / info.resolution_z);
+        return HalfSurfaceArea(cell_size) *
               (static_cast<float>(num_local) * costs.traversal +
                static_cast<float>(ref_count) * costs.intersection);
     }
@@ -248,7 +277,8 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
     thrust::device_vector<uint32_t> counts(total_top_level_pairs);
     thrust::transform(thrust::counting_iterator<uint32_t>(0),
                       thrust::counting_iterator<uint32_t>(total_top_level_pairs), counts.begin(),
-                      FragmentCounter{scene, thrust::raw_pointer_cast(owning_cell.data()),
+                      FragmentCounter{scene, top_view,
+                                      thrust::raw_pointer_cast(owning_cell.data()),
                                       top_view.triangle_indices,
                                       thrust::raw_pointer_cast(infos.data())});
 
@@ -263,7 +293,7 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
     thrust::for_each(
         thrust::counting_iterator<uint32_t>(0),
         thrust::counting_iterator<uint32_t>(total_top_level_pairs),
-        FragmentWriter{scene, thrust::raw_pointer_cast(owning_cell.data()),
+        FragmentWriter{scene, top_view, thrust::raw_pointer_cast(owning_cell.data()),
                        top_view.triangle_indices, thrust::raw_pointer_cast(infos.data()),
                        thrust::raw_pointer_cast(write_offsets.data()),
                        thrust::raw_pointer_cast(pair_cell_indices.data()),
