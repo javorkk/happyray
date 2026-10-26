@@ -27,6 +27,10 @@ void RenderGradient(std::vector<uint32_t>* out_pixels) {
 }
 
 bool DisplayPixelsWithSdl(const std::vector<uint32_t>& pixels) {
+    if (std::getenv("WSL_DISTRO_NAME") && !std::getenv("SDL_VIDEODRIVER")) {
+        setenv("SDL_VIDEODRIVER", "dummy", /*overwrite=*/0);
+    }
+
     // Prefer a real display; fall back to the headless "dummy" driver so the smoke test still
     // exercises the SDL2 rendering path when no X server is reachable (e.g. in CI).
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {

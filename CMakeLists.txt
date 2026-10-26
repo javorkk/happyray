@@ -22,12 +22,12 @@ set(HAPPYRAY_THRUST_BACKEND "CUDA" CACHE STRING "Thrust backend: CUDA or TBB")
 set_property(CACHE HAPPYRAY_THRUST_BACKEND PROPERTY STRINGS CUDA TBB)
 
 if(HAPPYRAY_THRUST_BACKEND STREQUAL "CUDA")
-    enable_language(CUDA)
-    set(CMAKE_CUDA_STANDARD 17)
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
     if(NOT CMAKE_CUDA_ARCHITECTURES)
         set(CMAKE_CUDA_ARCHITECTURES 86)  # NVIDIA A4000
     endif()
+    enable_language(CUDA)
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
     # Needed for uniform_grid_view.h's grid-traversal lambdas to compile as device code.
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)

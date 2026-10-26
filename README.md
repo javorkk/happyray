@@ -15,10 +15,9 @@ CUDA toolkit required for thrust headers even if building for CPU.
 
 ```sh
 cd HappyRay
-mkdir -p build && cd build
-cmake -S .. -B .                              # -DHAPPYRAY_THRUST_BACKEND=CUDA|TBB
-cmake --build . -j"$(nproc)"
-ctest --output-on-failure
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release # -DHAPPYRAY_THRUST_BACKEND=TBB
+cmake --build build --parallel "$(nproc)"
+ctest --test-dir build --output-on-failure
 ```
 
 Switch between GPU and CPU backends using `HAPPYRAY_THRUST_BACKEND=CUDA|TBB` (default `CUDA`).
