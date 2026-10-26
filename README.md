@@ -168,29 +168,20 @@ backends; it carries the `performance` label and runs serially.
   the renderer, whose host/device layout is unchanged.
 - `src/accel/`: the uniform grid, the two-level grid, and the irregular grid.
   Each acceleration structure has one header and one implementation file.
-  `uniform_grid.h` has shared `HAPPYRAY_HD` build helpers (resolution heuristic, cell-range math,
-  `uniform_grid.h` has shared `HAPPYRAY_HD` build helpers (resolution heuristic and cell-range
-  math; triangle/box intersection for the uniform and irregular grids), the `UniformGridView` CSR data view, its `HAPPYRAY_HD`
-  3D-DDA traversal (`IntersectSceneGrid`/`IsOccludedGrid`), and the `UniformGrid` builder class
-  that produces one; `uniform_grid.cpp` is its sort-based (happyray/HAGrid-style) construction
-  algorithm. The uniform and irregular builders keep the final stage inline beside counting,
-  writing and sorting fragments: compare adjacent sorted cell keys to extract occupied-cell
-  starts, then fill empty-cell CSR offsets with a reverse minimum scan. `FragmentCounter` reserves
-  AABB candidates and `FragmentWriter` tests
-  triangle/cell overlap using the separating-axis theorem, marking rejects with a sentinel
-  key that sorts after all valid cells. A single sentinel lookup determines the valid pair
-  count; rejected triangle references and their allocation capacity are released.
-  Intersection tests conservatively enlarge cell half-extents by 1% and allow a `1e-5`
-  projection tolerance. Unlike the reference's normalized plane test, unnormalized axes
-  avoid division by zero for degenerate triangles, and centers remain at true cell centers.
-  Candidate ranges and default density parameters are unchanged. Filtering also applies before
-  irregular-grid merging. `two_level_grid.h`/`.cpp` builds both levels directly rather than
-  constructing a `UniformGrid`: it emits AABB-overlap `(cell, triangle)` pairs, sorts by cell,
-  and stores explicit begin/end indices for each cell at both levels. Each top-level cell owns a
-  cubic second-level grid; sparse cells use 1x1x1 resolution. The two-level builder avoids the
-  cubic second-level grid; sparse cells use 1x1x1 resolution. The builder applies the shared
-  triangle/cell SAT test at both levels and avoids the CSR gap-filling scans used by the other builders, matching the legacy
-  `TLGridSortBuilder`/`TLGridBuildKernels` construction model.
+  `uniform_grid.h` provides shared resolution, cell-range, and triangle/cell SAT helpers.
+  `UniformGridView` stores one begin/end pair per cell, and its `HAPPYRAY_HD` 3D-DDA traversal
+  (`IntersectSceneGrid`/`IsOccludedGrid`) tests the references in that interval.
+  `uniform_grid.cpp` counts exact SAT-overlapped cells, emits and sorts `(cell, triangle)` pairs,
+  then extracts each occupied cell's begin/end directly from adjacent sorted keys; empty cells
+  keep equal zero indices, with no CSR gap-fill scan. `irregular_grid.cpp` uses UniformGrid for
+  its top-level layout, then builds a separate local voxel CSR, which its merge/expand passes
+  refine. `two_level_grid.cpp` builds both levels directly rather than constructing a
+  `UniformGrid`; it uses the same exact SAT test and explicit begin/end ranges at both levels,
+  with cubic per-top-cell resolutions and 1x1x1 grids for sparse cells, following the legacy
+  `TLGridSortBuilder`/`TLGridBuildKernels` model. The SAT test conservatively enlarges cell
+  half-extents by 1% and uses a `1e-5` projection tolerance; unnormalized axes handle degenerate
+  triangles without division by zero. These builders use Thrust algorithms and compile for the
+  CUDA and TBB backends selected by `HAPPYRAY_THRUST_BACKEND`.
   `irregular_grid.h`/`.cpp` build an irregular grid the HAGrid way: each top-level cell gets a
   flat, dense, power-of-2-resolution local grid, then two passes ported from HAGrid's
   `merge.cu`/`expand.cu` refine it bottom-up -- SAH-gated neighbor merging (collapsing empty/
@@ -198,11 +189,9 @@ backends; it carries the `performance` label and runs serially.
   cell into neighbors whose triangle references are already a subset of its own) -- both scoped
   to stay within one top-level cell's own local grid rather than HAGrid's global scope, which
   sidesteps HAGrid's cross-cell alignment bookkeeping entirely. All three accel structures are expressed purely as
-  Thrust functors/algorithm calls (`thrust::transform`, `thrust::for_each`,
-  `thrust::exclusive_scan`, `thrust::sort_by_key`, `thrust::lower_bound`, `thrust::scatter`-style
-  conditional writes) -- there's one implementation of each, and `HAPPYRAY_THRUST_BACKEND` picks
-  whether they get compiled by nvcc (CUDA backend) or plain g++ with
-  `THRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_TBB` (TBB backend).
+  All three builders use Thrust functors and algorithms; the uniform and two-level grids extract
+  cell ranges directly from sorted keys, while the irregular builder retains CSR for its local
+  voxels. `HAPPYRAY_THRUST_BACKEND` selects CUDA (nvcc) or TBB (plain g++) execution.
 - `src/render/`: following happyray's engine/integrator separation, `ao_integrator.h` defines
   `AOIntegrator`: AO configuration and host/device `Integrate()` evaluation of a camera ray.
   It owns the AO visibility estimator, material tinting, and Halton hemisphere sampling, but

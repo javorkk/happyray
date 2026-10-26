@@ -98,8 +98,11 @@ thrust::host_vector<T> Download(const T* data, uint32_t count) {
 
 void CheckFilteredFragments(const happyray::SceneView& scene, const happyray::UniformGridView& grid) {
     const uint32_t num_cells = grid.resolution_x * grid.resolution_y * grid.resolution_z;
-    const auto starts = Download(grid.cell_start, num_cells + 1);
-    const auto refs = Download(grid.triangle_indices, starts.back());
+    const auto starts = Download(grid.cell_range_start, num_cells);
+    const auto ends = Download(grid.cell_range_end, num_cells);
+    const uint32_t reference_count =
+        *std::max_element(ends.begin(), ends.end());
+    const auto refs = Download(grid.triangle_indices, reference_count);
     const happyray::BBox box = happyray::ComputeTriangleBBox(scene, 0);
     int x0, x1, y0, y1, z0, z1;
     happyray::ComputeCellRange(box, grid.bounds_min, grid.inv_cell_size, grid.resolution_x,
@@ -115,13 +118,13 @@ void CheckFilteredFragments(const happyray::SceneView& scene, const happyray::Un
                     z >= z0 && z <= z1 &&
                     intersects(grid.bounds_min + happyray::Vec3(x + 0.5f, y + 0.5f, z + 0.5f) *
                                    grid.cell_size, grid.cell_size);
-                Check(starts[cell + 1] - starts[cell] == static_cast<uint32_t>(expected),
+                Check(ends[cell] - starts[cell] == static_cast<uint32_t>(expected),
                       "writer/extractor must retain exactly the intersecting candidates");
                 expected_refs += expected;
             }
         }
     }
-    Check(starts.front() == 0 && starts.back() == expected_refs, "CSR endpoints");
+    Check(reference_count == expected_refs, "uniform ranges cover SAT references");
     Check(expected_refs > 0 && expected_refs < num_cells, "BBox false positives removed");
     for (uint32_t tri : refs) Check(tri == 0, "filtered triangle ID");
 }
@@ -182,9 +185,13 @@ void CheckFragmentWriters() {
 
     const happyray::UniformGrid uniform(scene, 128);
     CheckFilteredFragments(host_scene, uniform.View());
-    const auto uniform_starts = Download(uniform.View().cell_start,
-        uniform.View().resolution_x * uniform.View().resolution_y * uniform.View().resolution_z + 1);
-    Check(uniform.TriangleIndexCount() == uniform_starts.back(), "rejected pairs excluded from count");
+    const auto uniform_starts = Download(uniform.View().cell_range_start,
+        uniform.View().resolution_x * uniform.View().resolution_y * uniform.View().resolution_z);
+    const auto uniform_ends = Download(uniform.View().cell_range_end,
+        uniform.View().resolution_x * uniform.View().resolution_y * uniform.View().resolution_z);
+    Check(uniform.TriangleIndexCount() == *std::max_element(uniform_ends.begin(),
+                                                            uniform_ends.end()),
+          "uniform ranges cover only accepted references");
 
     const happyray::TwoLevelGrid two_level(scene, 128, 128, 0);
     auto two_view = two_level.View();
@@ -206,10 +213,13 @@ void CheckFragmentWriters() {
     const auto info = Download(irregular_view.cell_infos, 1).front();
     const uint32_t num_cells = info.resolution_x * info.resolution_y * info.resolution_z;
     const auto cells = Download(irregular_view.local_cells, num_cells);
-    std::vector<uint32_t> starts;
-    for (const auto& cell : cells) starts.push_back(cell.ref_start);
-    starts.push_back(cells.back().ref_end);
+    std::vector<uint32_t> starts, ends;
+    for (const auto& cell : cells) {
+        starts.push_back(cell.ref_start);
+        ends.push_back(cell.ref_end);
+    }
     const thrust::device_vector<uint32_t> device_starts(starts.begin(), starts.end());
+    const thrust::device_vector<uint32_t> device_ends(ends.begin(), ends.end());
     happyray::UniformGridView finest;
     finest.bounds_min = info.bounds_min;
     finest.cell_size = info.cell_size;
@@ -217,14 +227,17 @@ void CheckFragmentWriters() {
     finest.resolution_x = info.resolution_x;
     finest.resolution_y = info.resolution_y;
     finest.resolution_z = info.resolution_z;
-    finest.cell_start = thrust::raw_pointer_cast(device_starts.data());
+    finest.cell_range_start = thrust::raw_pointer_cast(device_starts.data());
+    finest.cell_range_end = thrust::raw_pointer_cast(device_ends.data());
     finest.triangle_indices = irregular_view.triangle_indices;
     CheckFilteredFragments(host_scene, finest);
 
     const happyray::UniformGrid single_cell(scene, 1);
     Check(single_cell.TriangleIndexCount() == 1, "no rejected sentinel required for final cell");
-    const auto single_starts = Download(single_cell.View().cell_start, 2);
-    Check(single_starts[0] == 0 && single_starts[1] == 1, "final occupied-cell endpoint");
+        const auto single_starts = Download(single_cell.View().cell_range_start, 1);
+        const auto single_ends = Download(single_cell.View().cell_range_end, 1);
+        Check(single_starts[0] == 0 && single_ends[0] == 1,
+            "single occupied-cell range endpoints");
 }
 
 void CheckCellStarts(const std::vector<uint32_t>& keys, uint32_t num_cells) {

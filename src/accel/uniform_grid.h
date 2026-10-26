@@ -1,4 +1,4 @@
-// The uniform grid: a flat, non-owning CSR (compressed sparse row) view used
+// The uniform grid: a flat, non-owning view with one explicit start/end range
 // for traversal (UniformGridView, FlattenCellIndex,
 // IntersectSceneGrid/IsOccludedGrid -- all HAPPYRAY_HD, so this exact traversal
 // code runs on whichever hardware the active Renderer, src/render/renderer.h,
@@ -108,9 +108,9 @@ struct UniformGridView {
   int resolution_x = 1;
   int resolution_y = 1;
   int resolution_z = 1;
-  // CSR offsets: resolution_x*resolution_y*resolution_z + 1 entries. Cell c's
-  // triangles are triangle_indices[cell_start[c] .. cell_start[c+1]).
-  const uint32_t *cell_start = nullptr;
+  // One begin/end pair per cell; empty cells have equal indices.
+  const uint32_t *cell_range_start = nullptr;
+  const uint32_t *cell_range_end = nullptr;
   const uint32_t *triangle_indices =
       nullptr; // Sorted by cell; indexes into SceneView.
 };
@@ -180,6 +180,19 @@ struct CellExtractor {
   HAPPYRAY_HD void operator()(uint32_t i) const {
     if (i == 0 || keys[i - 1] != keys[i])
       cell_start[keys[i]] = i;
+  }
+};
+
+struct CellRangeExtractor {
+  const uint32_t *keys;
+  uint32_t *range_start;
+  uint32_t *range_end;
+  uint32_t pair_count;
+
+  HAPPYRAY_HD void operator()(uint32_t i) const {
+    const uint32_t cell = keys[i];
+    if (i == 0 || keys[i - 1] != cell) range_start[cell] = i;
+    if (i + 1 == pair_count || keys[i + 1] != cell) range_end[cell] = i + 1;
   }
 };
 
@@ -373,7 +386,7 @@ struct ClosestTriangleHit {
   float t = 0.0f, u = 0.0f, v = 0.0f;
 };
 
-// Tests every triangle in the CSR range [begin, end) of `triangle_indices`
+// Tests every triangle in the contiguous range [begin, end) of `triangle_indices`
 // against `ray`, clipped to `*ray_t_max`, which shrinks (and `*hit` updates) on
 // every closer hit. Returns true if any triangle in the range was hit. Shared
 // by all three grids' closest-hit queries.
@@ -424,7 +437,7 @@ HAPPYRAY_HD inline bool ResolveClosestHit(const SceneView &scene, const Ray &ray
   return true;
 }
 
-// Returns true as soon as any triangle in the CSR range [begin, end) occludes
+// Returns true as soon as any triangle in the contiguous range [begin, end) occludes
 // `ray`.
 HAPPYRAY_HD inline bool
 TestTrianglesInRangeOccluded(const SceneView &scene,
@@ -452,8 +465,8 @@ HAPPYRAY_HD inline bool IntersectSceneGrid(const SceneView &scene,
   detail::TraverseGrid(
       grid, ray, [&](uint32_t cell_index, float *ray_t_max) -> bool {
         IntersectTrianglesClosest(
-            scene, grid.triangle_indices, grid.cell_start[cell_index],
-            grid.cell_start[cell_index + 1], ray, ray_t_max, &hit);
+            scene, grid.triangle_indices, grid.cell_range_start[cell_index],
+            grid.cell_range_end[cell_index], ray, ray_t_max, &hit);
         return false; // The walk itself stops once a hit lies before the next
                       // cell boundary.
       });
@@ -468,8 +481,8 @@ HAPPYRAY_HD inline bool IsOccludedGrid(const SceneView &scene,
   return detail::TraverseGrid(
       grid, ray, [&](uint32_t cell_index, float *) -> bool {
         return TestTrianglesInRangeOccluded(
-            scene, grid.triangle_indices, grid.cell_start[cell_index],
-            grid.cell_start[cell_index + 1], ray);
+            scene, grid.triangle_indices, grid.cell_range_start[cell_index],
+            grid.cell_range_end[cell_index], ray);
       });
 }
 
@@ -487,10 +500,7 @@ public:
 
   UniformGridView View() const;
 
-  // Total number of (cell, triangle) CSR entries, i.e.
-  // View().cell_start[num_cells]. Used by the two-level grid
-  // (src/accel/two_level_grid.h), which needs to iterate every top-level
-  // triangle reference while building its second-level grids.
+  // Total number of (cell, triangle) references stored by this grid.
   uint32_t TriangleIndexCount() const;
 
   // Structural SAH cost estimate for this grid as currently built (see

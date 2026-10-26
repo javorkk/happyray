@@ -93,9 +93,11 @@ void Synchronize(const T* device_data) {
     static_cast<void>(static_cast<T>(*thrust::device_pointer_cast(device_data)));
 }
 
-void SyncGrid(const UniformGridView& view) { Synchronize(view.cell_start); }
+void SyncGrid(const UniformGridView& view) { Synchronize(view.cell_range_start); }
 void SyncGrid(const TwoLevelGridView& view) { Synchronize(view.top_level.cell_range_start); }
-void SyncGrid(const IrregularGridView& view) { Synchronize(view.top_level.cell_start); }
+void SyncGrid(const IrregularGridView& view) {
+    Synchronize(view.top_level.cell_range_start);
+}
 
 // Analytic per-grid-type memory-footprint estimate: count * sizeof(element), summed over every
 // device buffer that grid type actually holds, using only its own plain public element-count
@@ -109,7 +111,7 @@ size_t GridMemoryBytes(const UniformGrid& grid) {
     const UniformGridView view = grid.View();
     const auto num_cells =
         static_cast<size_t>(view.resolution_x) * view.resolution_y * view.resolution_z;
-    return (num_cells + 1) * sizeof(uint32_t) +
+    return 2 * num_cells * sizeof(uint32_t) +
           static_cast<size_t>(grid.TriangleIndexCount()) * sizeof(uint32_t);
 }
 
@@ -129,7 +131,7 @@ size_t GridMemoryBytes(const IrregularGrid& grid) {
     const IrregularGridView view = grid.View();
     const auto num_top_cells = static_cast<size_t>(view.top_level.resolution_x) *
                                view.top_level.resolution_y * view.top_level.resolution_z;
-    size_t bytes = (num_top_cells + 1) * sizeof(uint32_t);  // top_level.cell_start
+    size_t bytes = 2 * num_top_cells * sizeof(uint32_t);
     bytes += static_cast<size_t>(grid.TopLevelTriangleIndexCount()) * sizeof(uint32_t);
     bytes += num_top_cells * sizeof(IrregularCellInfo);
     bytes += num_top_cells * sizeof(IrregularTopCell);

@@ -105,7 +105,8 @@ std::vector<Ray> GenerateUnitCubeRays(uint64_t seed, uint32_t count) {
 // UniformGrid's own density-based constructor, since that always collapses an
 // empty scene straight to a trivial 1x1x1 grid.
 struct MockUniformGrid {
-  thrust::device_vector<uint32_t> cell_start;
+  thrust::device_vector<uint32_t> cell_range_start;
+  thrust::device_vector<uint32_t> cell_range_end;
   UniformGridView view;
 
   MockUniformGrid(const BBox &bounds, int resolution) {
@@ -119,8 +120,10 @@ struct MockUniformGrid {
     view.inv_cell_size = Vec3(1.0f / view.cell_size.x, 1.0f / view.cell_size.y,
                               1.0f / view.cell_size.z);
     view.resolution_x = view.resolution_y = view.resolution_z = resolution;
-    cell_start.assign(num_cells + 1, 0u);
-    view.cell_start = thrust::raw_pointer_cast(cell_start.data());
+    cell_range_start.assign(num_cells, 0u);
+    cell_range_end.assign(num_cells, 0u);
+    view.cell_range_start = thrust::raw_pointer_cast(cell_range_start.data());
+    view.cell_range_end = thrust::raw_pointer_cast(cell_range_end.data());
     view.triangle_indices = nullptr;
   }
 };
@@ -325,7 +328,8 @@ struct MockIrregularGrid {
         1.0f / top_cell_size.x, 1.0f / top_cell_size.y, 1.0f / top_cell_size.z);
     view.top_level.resolution_x = view.top_level.resolution_y =
         view.top_level.resolution_z = top_resolution;
-    view.top_level.cell_start = nullptr;
+    view.top_level.cell_range_start = nullptr;
+    view.top_level.cell_range_end = nullptr;
     view.top_level.triangle_indices = nullptr;
 
     infos.resize(num_top_cells);

@@ -1,7 +1,6 @@
-// Thrust implementation of UniformGrid (see uniform_grid.h): the sort-based (happyray/
-// HAGrid-style) construction algorithm -- per-triangle BBoxes -> per-triangle overlapped-cell
-// counts -> exclusive scan for write offsets -> filtered (cell, triangle) pairs -> sort by
-// cell -> adjacent-key boundary extraction -> CSR gap filling -- expressed purely as Thrust
+// Thrust implementation of UniformGrid (see uniform_grid.h): count exact SAT-overlapped cells,
+// write (cell, triangle) pairs, sort by cell, and extract each cell's explicit range from
+// adjacent keys. The builder is expressed purely as Thrust
 // functors/algorithm calls, with no CUDA-specific launch syntax. That is what lets this exact
 // file compile either under Thrust's CUDA backend (nvcc, builds the grid on the GPU) or its TBB
 // backend (plain g++, builds it in parallel on the CPU); see CMakeLists.txt's
@@ -13,11 +12,9 @@
 
 #include "uniform_grid.h"
 
-#include <thrust/binary_search.h>
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
@@ -93,7 +90,8 @@ struct UniformGrid::Impl {
     int resolution_x = 1;
     int resolution_y = 1;
     int resolution_z = 1;
-    thrust::device_vector<uint32_t> cell_start;
+    thrust::device_vector<uint32_t> cell_range_start;
+    thrust::device_vector<uint32_t> cell_range_end;
     thrust::device_vector<uint32_t> triangle_indices;
 
     UniformGridView View() const {
@@ -108,7 +106,8 @@ struct UniformGrid::Impl {
         view.resolution_x = resolution_x;
         view.resolution_y = resolution_y;
         view.resolution_z = resolution_z;
-        view.cell_start = thrust::raw_pointer_cast(cell_start.data());
+        view.cell_range_start = thrust::raw_pointer_cast(cell_range_start.data());
+        view.cell_range_end = thrust::raw_pointer_cast(cell_range_end.data());
         view.triangle_indices = thrust::raw_pointer_cast(triangle_indices.data());
         return view;
     }
@@ -183,22 +182,18 @@ UniformGrid::UniformGrid(const SceneView& scene, float target_triangles_per_cell
     thrust::sort_by_key(pair_cell_indices.begin(), pair_cell_indices.end(),
                        pair_triangle_indices.begin());
 
-    // 5. Extract occupied-cell starts from adjacent sorted keys, then fill empty-cell offsets.
+    // 5. Extract start/end ranges directly from adjacent sorted cell keys.
     const uint32_t num_cells =
         static_cast<uint32_t>(resolution.x) * resolution.y * resolution.z;
-    const uint32_t valid_pairs = static_cast<uint32_t>(
-        thrust::lower_bound(pair_cell_indices.begin(), pair_cell_indices.end(), num_cells) -
-        pair_cell_indices.begin());
-    pair_triangle_indices.resize(valid_pairs);
-    if (valid_pairs < total_pairs) pair_triangle_indices.shrink_to_fit();
-    impl_->cell_start.assign(num_cells + 1, valid_pairs);
+    impl_->cell_range_start.assign(num_cells, 0u);
+    impl_->cell_range_end.assign(num_cells, 0u);
     thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-                     thrust::counting_iterator<uint32_t>(valid_pairs),
-                     detail::CellExtractor{thrust::raw_pointer_cast(pair_cell_indices.data()),
-                                           thrust::raw_pointer_cast(impl_->cell_start.data())});
-    // CSR needs valid offsets for empty cells as well as occupied cells.
-    thrust::inclusive_scan(impl_->cell_start.rbegin(), impl_->cell_start.rend(),
-                           impl_->cell_start.rbegin(), thrust::minimum<uint32_t>());
+                     thrust::counting_iterator<uint32_t>(total_pairs),
+                     detail::CellRangeExtractor{
+                         thrust::raw_pointer_cast(pair_cell_indices.data()),
+                         thrust::raw_pointer_cast(impl_->cell_range_start.data()),
+                         thrust::raw_pointer_cast(impl_->cell_range_end.data()),
+                         total_pairs});
 
     impl_->triangle_indices = std::move(pair_triangle_indices);
 }

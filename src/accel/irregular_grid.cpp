@@ -155,7 +155,8 @@ struct ComputeCellInfoFunctor {
     Vec3 top_cell_size;
     int top_resolution_x;
     int top_resolution_y;
-    const uint32_t* top_cell_start;
+    const uint32_t* top_cell_range_start;
+    const uint32_t* top_cell_range_end;
     float second_level_density;
     uint32_t dense_cell_threshold;
 
@@ -168,7 +169,8 @@ struct ComputeCellInfoFunctor {
                             top_bounds_min.y + cy * top_cell_size.y,
                             top_bounds_min.z + cz * top_cell_size.z);
         const Vec3 cell_max = cell_min + top_cell_size;
-        const uint32_t triangle_count = top_cell_start[c + 1] - top_cell_start[c];
+        const uint32_t triangle_count =
+            top_cell_range_end[c] - top_cell_range_start[c];
 
         GridResolution res = (triangle_count <= dense_cell_threshold)
                                  ? GridResolution{1, 1, 1}
@@ -235,15 +237,16 @@ struct SetEntriesOffsetFunctor {
 };
 
 // Writes top-level cell id `c` into every position `owner` that `c`'s own range covers -- used
-// both for top-level (cell, triangle) pairs (range = top_cell_start) and for finest voxels
+// both for top-level (cell, triangle) pairs and for finest voxels
 // (range = entries_offset bounds), just with a different `range_start` array.
 struct ScatterOwnerFunctor {
     const uint32_t* range_start;
+    const uint32_t* range_end;
     uint32_t* owner;
 
     HAPPYRAY_HD void operator()(uint32_t c) const {
         const uint32_t begin = range_start[c];
-        const uint32_t end = range_start[c + 1];
+        const uint32_t end = range_end[c];
         for (uint32_t i = begin; i < end; ++i) {
             owner[i] = c;
         }
@@ -818,7 +821,8 @@ IrregularGrid::IrregularGrid(const SceneView& scene, float top_level_density,
                       thrust::counting_iterator<uint32_t>(num_top_cells), infos.begin(),
                       ComputeCellInfoFunctor{top_view.bounds_min, top_view.cell_size,
                                              top_view.resolution_x, top_view.resolution_y,
-                                             top_view.cell_start, second_level_density,
+                                             top_view.cell_range_start,
+                                             top_view.cell_range_end, second_level_density,
                                              dense_cell_threshold});
 
     // Every top-level cell is the same world-space size, so the per-axis maximum over every
@@ -872,13 +876,15 @@ IrregularGrid::IrregularGrid(const SceneView& scene, float top_level_density,
     thrust::device_vector<uint32_t> owning_top_cell(total_top_level_pairs);
     thrust::for_each(thrust::counting_iterator<uint32_t>(0),
                      thrust::counting_iterator<uint32_t>(num_top_cells),
-                     ScatterOwnerFunctor{top_view.cell_start,
+                     ScatterOwnerFunctor{top_view.cell_range_start,
+                                        top_view.cell_range_end,
                                         thrust::raw_pointer_cast(owning_top_cell.data())});
 
     thrust::device_vector<uint32_t> voxel_owner(total_entries);
     thrust::for_each(thrust::counting_iterator<uint32_t>(0),
                      thrust::counting_iterator<uint32_t>(num_top_cells),
                      ScatterOwnerFunctor{thrust::raw_pointer_cast(entries_offset_bounds.data()),
+                                        thrust::raw_pointer_cast(entries_offset_bounds.data()) + 1,
                                         thrust::raw_pointer_cast(voxel_owner.data())});
 
     // --- Per-pair overlapped-finest-voxel counts, exclusive-scanned into write offsets. ---
