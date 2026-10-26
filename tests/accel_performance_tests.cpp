@@ -1,4 +1,4 @@
-// One construction and one random-ray batch per grid. Ordering is diagnostic;
+// One warmup construction, one timed construction, and one random-ray batch per grid. Ordering is diagnostic;
 // only correctness and allocation-tracking errors fail the test.
 // Pure Thrust (no raw CUDA runtime API, no CUDA-specific launch syntax), so this file compiles
 // either under Thrust's CUDA backend (nvcc, runs on the GPU) or its TBB backend (plain g++, runs
@@ -156,6 +156,11 @@ template <typename MakeGrid>
 Measurement Measure(const std::string& name, MakeGrid make_grid, const SceneView& scene,
                      const BBox& scene_bounds, const SahCostConstants& costs,
                      thrust::device_vector<Ray>& rays) {
+    {
+        auto warmup_grid = make_grid();
+        SyncGrid(warmup_grid->View());
+    }
+
     const auto start = std::chrono::steady_clock::now();
     auto grid = make_grid();
     SyncGrid(grid->View());
