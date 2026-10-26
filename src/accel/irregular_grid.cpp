@@ -266,9 +266,10 @@ struct FragmentCounter {
     HAPPYRAY_HD uint32_t operator()(uint32_t i) const {
         const IrregularCellInfo& info = infos[owning_top_cell[i]];
         const uint32_t tri = top_triangle_indices[i];
-        const BBox box = ComputeTriangleBBox(scene, tri);
+        const Triangle triangle = FetchTriangle(scene, tri);
+        const BBox box = BBoxExtractor<Triangle>::Get(triangle);
         uint32_t count = 0;
-        detail::ForEachIntersectedCell(scene, tri, box, info.bounds_min, info.inv_cell_size,
+        detail::ForEachIntersectedCell(triangle, box, info.bounds_min, info.inv_cell_size,
                                        info.cell_size, info.resolution_x, info.resolution_y,
                                        info.resolution_z,
                                        [&](int, int, int) { ++count; });
@@ -291,10 +292,11 @@ struct FragmentWriter {
     HAPPYRAY_HD void operator()(uint32_t i) const {
         const IrregularCellInfo& info = infos[owning_top_cell[i]];
         const uint32_t tri = top_triangle_indices[i];
-        const BBox box = ComputeTriangleBBox(scene, tri);
+        const Triangle triangle = FetchTriangle(scene, tri);
+        const BBox box = BBoxExtractor<Triangle>::Get(triangle);
         uint32_t offset = write_offsets[i];
         detail::ForEachIntersectedCell(
-            scene, tri, box, info.bounds_min, info.inv_cell_size, info.cell_size,
+            triangle, box, info.bounds_min, info.inv_cell_size, info.cell_size,
             info.resolution_x, info.resolution_y, info.resolution_z,
             [&](int cx, int cy, int cz) {
                 out_voxel_indices[offset] =

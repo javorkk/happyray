@@ -189,17 +189,18 @@ void CheckFragmentWriters() {
         uniform.View().resolution_x * uniform.View().resolution_y * uniform.View().resolution_z);
     const auto uniform_ends = Download(uniform.View().cell_range_end,
         uniform.View().resolution_x * uniform.View().resolution_y * uniform.View().resolution_z);
-    Check(uniform.TriangleIndexCount() == *std::max_element(uniform_ends.begin(),
-                                                            uniform_ends.end()),
-          "uniform ranges cover only accepted references");
+        Check(uniform.TriangleIndexCount() >= *std::max_element(uniform_ends.begin(),
+                                            uniform_ends.end()),
+            "uniform ranges fit in pair storage including padding");
 
     const happyray::TwoLevelGrid two_level(scene, 128, 128, 0);
     auto two_view = two_level.View();
-    CheckSatCellRanges(host_scene, two_view.top_level,
-                       two_level.TopLevelTriangleIndexCount());
     const uint32_t num_top_cells = two_view.top_level.resolution_x *
                                    two_view.top_level.resolution_y *
                                    two_view.top_level.resolution_z;
+        const auto top_ends = Download(two_view.top_level.cell_range_end, num_top_cells);
+        CheckSatCellRanges(host_scene, two_view.top_level,
+                     *std::max_element(top_ends.begin(), top_ends.end()));
     const auto infos = Download(two_view.second_level_infos, num_top_cells);
     two_view.second_level_infos = infos.data();
     const auto second_level_view = happyray::SecondLevelView(two_view, 0);

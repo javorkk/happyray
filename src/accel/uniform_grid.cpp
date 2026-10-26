@@ -37,32 +37,31 @@ struct BBoxUnionFunctor {
     }
 };
 
-// Counts how many cells a triangle *actually* intersects (full SAT test via
-// ForEachIntersectedCell in uniform_grid.h, not just its AABB-derived cell range -- see that
-// helper's comment for why the distinction matters for hair-strand-like geometry).
+// Counts the cells in the triangle's clamped AABB-derived range; the writer
+// filters this capacity down to exact SAT intersections.
 struct FragmentCounter {
     SceneView scene;
-    const BBox* triangle_bboxes;
     Vec3 bounds_min;
     Vec3 inv_cell_size;
     Vec3 cell_size;
     int resolution_x, resolution_y, resolution_z;
 
     HAPPYRAY_HD uint32_t operator()(uint32_t tri) const {
-        uint32_t count = 0;
-        detail::ForEachIntersectedCell(scene, tri, triangle_bboxes[tri], bounds_min, inv_cell_size,
-                                       cell_size, resolution_x, resolution_y, resolution_z,
-                                       [&](int, int, int) { ++count; });
-        return count;
+        const Triangle triangle = FetchTriangle(scene, tri);
+        const BBox box = BBoxExtractor<Triangle>::Get(triangle);
+        return detail::CountTriangleCellIntersections(
+            triangle, box, bounds_min, inv_cell_size, cell_size, resolution_x,
+            resolution_y, resolution_z);
     }
 };
 
-// Writes fragments -- exactly `FragmentCounter`'s count for this triangle, packed contiguously
-// from `write_offsets[tri]` (no invalid/sentinel entries to filter out afterwards).
+// Writes exact fragments within the reserved AABB range and sentinel-pads its unused slots.
 struct FragmentWriter {
     SceneView scene;
     const BBox* triangle_bboxes;
     const uint32_t* write_offsets;
+    uint32_t* candidate_counts;
+    uint32_t invalid_cell_index;
     Vec3 bounds_min;
     Vec3 inv_cell_size;
     Vec3 cell_size;
@@ -72,13 +71,21 @@ struct FragmentWriter {
 
     HAPPYRAY_HD void operator()(uint32_t tri) const {
         uint32_t offset = write_offsets[tri];
+        const Triangle triangle = FetchTriangle(scene, tri);
+        const uint32_t write_end = offset + candidate_counts[tri];
         detail::ForEachIntersectedCell(
-            scene, tri, triangle_bboxes[tri], bounds_min, inv_cell_size, cell_size, resolution_x,
+            triangle, triangle_bboxes[tri], bounds_min, inv_cell_size, cell_size, resolution_x,
             resolution_y, resolution_z, [&](int cx, int cy, int cz) {
                 out_cell_indices[offset] = FlattenCellIndex(cx, cy, cz, resolution_x, resolution_y);
                 out_triangle_indices[offset] = tri;
                 ++offset;
             });
+        candidate_counts[tri] = offset - write_offsets[tri];
+        while (offset < write_end) {
+            out_cell_indices[offset] = invalid_cell_index;
+            out_triangle_indices[offset] = tri;
+            ++offset;
+        }
     }
 };
 
@@ -90,6 +97,7 @@ struct UniformGrid::Impl {
     int resolution_x = 1;
     int resolution_y = 1;
     int resolution_z = 1;
+    uint32_t triangle_reference_count = 0;
     thrust::device_vector<uint32_t> cell_range_start;
     thrust::device_vector<uint32_t> cell_range_end;
     thrust::device_vector<uint32_t> triangle_indices;
@@ -146,27 +154,29 @@ UniformGrid::UniformGrid(const SceneView& scene, float target_triangles_per_cell
                         (bounds.max_bound.y - bounds.min_bound.y) / resolution.y,
                         (bounds.max_bound.z - bounds.min_bound.z) / resolution.z);
     const Vec3 inv_cell_size(1.0f / cell_size.x, 1.0f / cell_size.y, 1.0f / cell_size.z);
+    const uint32_t num_cells = static_cast<uint32_t>(resolution.x) * resolution.y * resolution.z;
 
-    // 2. Per-triangle overlapped-cell counts, exclusive-scanned into write offsets.
+    // 2. Per-triangle AABB cell counts, exclusive-scanned into write offsets.
     thrust::device_vector<uint32_t> counts(triangle_count);
     thrust::transform(thrust::counting_iterator<uint32_t>(0),
                       thrust::counting_iterator<uint32_t>(triangle_count), counts.begin(),
-                      FragmentCounter{scene, thrust::raw_pointer_cast(triangle_bboxes.data()),
-                                      bounds.min_bound, inv_cell_size, cell_size, resolution.x,
-                                      resolution.y, resolution.z});
+                      FragmentCounter{scene, bounds.min_bound, inv_cell_size,
+                                      cell_size, resolution.x, resolution.y,
+                                      resolution.z});
 
     thrust::device_vector<uint32_t> write_offsets(triangle_count);
     thrust::exclusive_scan(counts.begin(), counts.end(), write_offsets.begin());
     const uint32_t total_pairs =
         (triangle_count > 0) ? (write_offsets.back() + counts.back()) : 0u;
 
-    // 3. Write fragments (exactly `counts[tri]` of them per triangle, no sentinel filtering
-    //    needed).
+    // 3. Write exact intersections and sentinel-pad unused fast-counted candidates.
     thrust::device_vector<uint32_t> pair_cell_indices(total_pairs);
     thrust::device_vector<uint32_t> pair_triangle_indices(total_pairs);
     FragmentWriter write_fragments{scene,
                                   thrust::raw_pointer_cast(triangle_bboxes.data()),
                                   thrust::raw_pointer_cast(write_offsets.data()),
+                                  thrust::raw_pointer_cast(counts.data()),
+                                  num_cells,
                                   bounds.min_bound,
                                   inv_cell_size,
                                   cell_size,
@@ -177,14 +187,13 @@ UniformGrid::UniformGrid(const SceneView& scene, float target_triangles_per_cell
                                   thrust::raw_pointer_cast(pair_triangle_indices.data())};
     thrust::for_each(thrust::counting_iterator<uint32_t>(0),
                      thrust::counting_iterator<uint32_t>(triangle_count), write_fragments);
+    impl_->triangle_reference_count = thrust::reduce(counts.begin(), counts.end(), 0u);
 
     // 4. Sort by cell index -- the defining "sort-based" step.
     thrust::sort_by_key(pair_cell_indices.begin(), pair_cell_indices.end(),
                        pair_triangle_indices.begin());
 
     // 5. Extract start/end ranges directly from adjacent sorted cell keys.
-    const uint32_t num_cells =
-        static_cast<uint32_t>(resolution.x) * resolution.y * resolution.z;
     impl_->cell_range_start.assign(num_cells, 0u);
     impl_->cell_range_end.assign(num_cells, 0u);
     thrust::for_each(thrust::counting_iterator<uint32_t>(0),
@@ -193,7 +202,8 @@ UniformGrid::UniformGrid(const SceneView& scene, float target_triangles_per_cell
                          thrust::raw_pointer_cast(pair_cell_indices.data()),
                          thrust::raw_pointer_cast(impl_->cell_range_start.data()),
                          thrust::raw_pointer_cast(impl_->cell_range_end.data()),
-                         total_pairs});
+                         total_pairs,
+                         num_cells});
 
     impl_->triangle_indices = std::move(pair_triangle_indices);
 }
@@ -211,7 +221,7 @@ float UniformGrid::ComputeSahCost(const BBox& scene_bounds, const SahCostConstan
     const float cell_area = HalfSurfaceArea(view.cell_size);
     const float total =
         cell_area * (static_cast<float>(num_cells) * costs.traversal +
-                    static_cast<float>(TriangleIndexCount()) * costs.intersection);
+                    static_cast<float>(impl_->triangle_reference_count) * costs.intersection);
     return total / HalfSurfaceArea(scene_bounds.Extent());
 }
 

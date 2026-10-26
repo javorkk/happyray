@@ -123,6 +123,18 @@ HAPPYRAY_HD inline uint32_t FlattenCellIndex(int cx, int cy, int cz,
 
 namespace detail {
 
+// Number of grid cells overlapped by the triangle AABB's clamped cell range.
+HAPPYRAY_HD inline uint32_t CountCandidateCells(
+    const BBox &box, const Vec3 &bounds_min, const Vec3 &inv_cell_size,
+    int resolution_x, int resolution_y, int resolution_z) {
+  int cx0, cx1, cy0, cy1, cz0, cz1;
+  ComputeCellRange(box, bounds_min, inv_cell_size, resolution_x, resolution_y,
+                   resolution_z, &cx0, &cx1, &cy0, &cy1, &cz0, &cz1);
+  return static_cast<uint32_t>(cx1 - cx0 + 1) *
+         static_cast<uint32_t>(cy1 - cy0 + 1) *
+         static_cast<uint32_t>(cz1 - cz0 + 1);
+}
+
 // Full triangle/box SAT: box axes, triangle plane, and nine edge/box axes.
 // Like obj2string, enlarge the half cell by 1% and tolerate projection
 // roundoff. Unnormalized axes also handle degenerate triangles without dividing
@@ -188,9 +200,11 @@ struct CellRangeExtractor {
   uint32_t *range_start;
   uint32_t *range_end;
   uint32_t pair_count;
+  uint32_t cell_count;
 
   HAPPYRAY_HD void operator()(uint32_t i) const {
     const uint32_t cell = keys[i];
+    if (cell >= cell_count) return;
     if (i == 0 || keys[i - 1] != cell) range_start[cell] = i;
     if (i + 1 == pair_count || keys[i + 1] != cell) range_end[cell] = i + 1;
   }
@@ -205,19 +219,18 @@ struct CellRangeExtractor {
 // thin, diagonally-oriented triangles (e.g. hair-strand geometry) -- a single
 // such triangle's bbox can span a cube-shaped range spanning tens of thousands
 // of cells even though the triangle only actually threads through a sliver of
-// them -- so counting/writing must both filter through the real SAT test rather
-// than reserving (and potentially allocating) space for the raw, unfiltered
-// range product.
+// them. Builders may reserve the full AABB range and pad unused output slots;
+// this helper emits only the exact SAT intersections.
 template <typename EmitFn>
 HAPPYRAY_HD inline void
-ForEachIntersectedCell(const SceneView &scene, uint32_t tri, const BBox &box,
+ForEachIntersectedCell(const Triangle &triangle, const BBox &box,
                        const Vec3 &bounds_min, const Vec3 &inv_cell_size,
                        const Vec3 &cell_size, int resolution_x,
                        int resolution_y, int resolution_z, EmitFn &&emit) {
   int cx0, cx1, cy0, cy1, cz0, cz1;
   ComputeCellRange(box, bounds_min, inv_cell_size, resolution_x, resolution_y,
                    resolution_z, &cx0, &cx1, &cy0, &cy1, &cz0, &cz1);
-  const TriangleCellIntersection intersects(scene, tri);
+  const TriangleCellIntersection intersects(triangle);
   for (int cz = cz0; cz <= cz1; ++cz) {
     for (int cy = cy0; cy <= cy1; ++cy) {
       for (int cx = cx0; cx <= cx1; ++cx) {
@@ -229,6 +242,31 @@ ForEachIntersectedCell(const SceneView &scene, uint32_t tri, const BBox &box,
       }
     }
   }
+}
+
+HAPPYRAY_HD inline uint32_t CountExactIntersectedCells(
+    const Triangle &triangle, const BBox &box, const Vec3 &bounds_min,
+    const Vec3 &inv_cell_size, const Vec3 &cell_size, int resolution_x,
+    int resolution_y, int resolution_z) {
+  uint32_t count = 0;
+  ForEachIntersectedCell(triangle, box, bounds_min, inv_cell_size, cell_size,
+                         resolution_x, resolution_y, resolution_z,
+                         [&](int, int, int) { ++count; });
+  return count;
+}
+
+HAPPYRAY_HD inline uint32_t CountTriangleCellIntersections(
+    const Triangle &triangle, const BBox &box, const Vec3 &bounds_min,
+    const Vec3 &inv_cell_size, const Vec3 &cell_size, int resolution_x,
+    int resolution_y, int resolution_z) {
+#if HAPPYRAY_FAST_CELL_COUNT
+  return CountCandidateCells(box, bounds_min, inv_cell_size, resolution_x,
+                             resolution_y, resolution_z);
+#else
+  return CountExactIntersectedCells(triangle, box, bounds_min, inv_cell_size,
+                                    cell_size, resolution_x, resolution_y,
+                                    resolution_z);
+#endif
 }
 
 // Reciprocal of a ray direction component, +/-infinity for zero (HAGrid's

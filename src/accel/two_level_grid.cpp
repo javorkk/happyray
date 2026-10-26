@@ -35,26 +35,16 @@ struct BBoxUnionFunctor {
     }
 };
 
-HAPPYRAY_HD uint32_t CountIntersectedCells(const SceneView& scene, uint32_t tri,
-                                           const BBox& box, const Vec3& bounds_min,
-                                           const Vec3& inv_cell_size,
-                                           const Vec3& cell_size, int res_x,
-                                           int res_y, int res_z) {
-    uint32_t count = 0;
-    detail::ForEachIntersectedCell(
-        scene, tri, box, bounds_min, inv_cell_size, cell_size, res_x, res_y,
-        res_z, [&](int, int, int) { ++count; });
-    return count;
-}
-
 struct TopPairCounter {
     SceneView scene;
-    const BBox* triangle_bboxes;
     Vec3 bounds_min, inv_cell_size, cell_size;
     int res_x, res_y, res_z;
     HAPPYRAY_HD uint32_t operator()(uint32_t tri) const {
-        return CountIntersectedCells(scene, tri, triangle_bboxes[tri], bounds_min,
-                         inv_cell_size, cell_size, res_x, res_y, res_z);
+        const Triangle triangle = FetchTriangle(scene, tri);
+        const BBox box = BBoxExtractor<Triangle>::Get(triangle);
+        return detail::CountTriangleCellIntersections(
+            triangle, box, bounds_min, inv_cell_size, cell_size, res_x, res_y,
+            res_z);
     }
 };
 
@@ -64,18 +54,26 @@ struct TopPairWriter {
     const uint32_t* inclusive_offsets;
     Vec3 bounds_min, inv_cell_size, cell_size;
     int res_x, res_y, res_z;
+    uint32_t invalid_cell_index;
     uint32_t* cell_keys;
     uint32_t* triangle_indices;
 
     HAPPYRAY_HD void operator()(uint32_t tri) const {
         uint32_t offset = tri == 0 ? 0u : inclusive_offsets[tri - 1];
+        const Triangle triangle = FetchTriangle(scene, tri);
         detail::ForEachIntersectedCell(
-            scene, tri, triangle_bboxes[tri], bounds_min, inv_cell_size,
+            triangle, triangle_bboxes[tri], bounds_min, inv_cell_size,
             cell_size, res_x, res_y, res_z, [&](int x, int y, int z) {
                 cell_keys[offset] = FlattenCellIndex(x, y, z, res_x, res_y);
                 triangle_indices[offset] = tri;
                 ++offset;
             });
+        const uint32_t write_end = inclusive_offsets[tri];
+        while (offset < write_end) {
+            cell_keys[offset] = invalid_cell_index;
+            triangle_indices[offset] = tri;
+            ++offset;
+        }
     }
 };
 
@@ -84,9 +82,11 @@ struct CellRangeExtractor {
     uint32_t* starts;
     uint32_t* ends;
     uint32_t pair_count;
+    uint32_t cell_count;
 
     HAPPYRAY_HD void operator()(uint32_t i) const {
         const uint32_t cell = keys[i];
+        if (cell >= cell_count) return;
         if (i == 0 || keys[i - 1] != cell) starts[cell] = i;
         if (i + 1 == pair_count || keys[i + 1] != cell) ends[cell] = i + 1;
     }
@@ -148,15 +148,16 @@ struct SetCellRangeOffsetFunctor {
 
 struct FragmentCounter {
     SceneView scene;
-    const BBox* triangle_bboxes;
     const uint32_t* top_cell_keys;
     const uint32_t* top_triangle_indices;
     const SecondLevelGridInfo* infos;
     Vec3 top_bounds_min, top_cell_size, top_inv_cell_size;
     int top_resolution_x, top_resolution_y;
+    uint32_t top_cell_count;
 
     HAPPYRAY_HD uint32_t operator()(uint32_t i) const {
         const uint32_t owner = top_cell_keys[i];
+        if (owner >= top_cell_count) return 0;
         const SecondLevelGridInfo& info = infos[owner];
         const int cx = static_cast<int>(owner % top_resolution_x);
         const int cy = static_cast<int>((owner / top_resolution_x) % top_resolution_y);
@@ -168,12 +169,14 @@ struct FragmentCounter {
                            top_inv_cell_size.y * info.resolution.y,
                            top_inv_cell_size.z * info.resolution.z);
         const Vec3 sub_cell_size(top_cell_size.x / info.resolution.x,
-                     top_cell_size.y / info.resolution.y,
-                     top_cell_size.z / info.resolution.z);
+                                 top_cell_size.y / info.resolution.y,
+                                 top_cell_size.z / info.resolution.z);
         const uint32_t tri = top_triangle_indices[i];
-        return CountIntersectedCells(scene, tri, triangle_bboxes[tri], cell_min,
-                         sub_inv, sub_cell_size, info.resolution.x,
-                         info.resolution.y, info.resolution.z);
+        const Triangle triangle = FetchTriangle(scene, tri);
+        const BBox box = BBoxExtractor<Triangle>::Get(triangle);
+        return detail::CountTriangleCellIntersections(
+            triangle, box, cell_min, sub_inv, sub_cell_size, info.resolution.x,
+            info.resolution.y, info.resolution.z);
     }
 };
 
@@ -184,13 +187,20 @@ struct FragmentWriter {
     const uint32_t* top_triangle_indices;
     const SecondLevelGridInfo* infos;
     const uint32_t* inclusive_offsets;
+    uint32_t* exact_counts;
+    uint32_t invalid_cell_index;
     uint32_t* out_cell_indices;
     uint32_t* out_triangle_indices;
     Vec3 top_bounds_min, top_cell_size, top_inv_cell_size;
     int top_resolution_x, top_resolution_y;
+    uint32_t top_cell_count;
 
     HAPPYRAY_HD void operator()(uint32_t i) const {
         const uint32_t owner = top_cell_keys[i];
+        if (owner >= top_cell_count) {
+            exact_counts[i] = 0;
+            return;
+        }
         const SecondLevelGridInfo& info = infos[owner];
         const int cx = static_cast<int>(owner % top_resolution_x);
         const int cy = static_cast<int>((owner / top_resolution_x) % top_resolution_y);
@@ -202,12 +212,15 @@ struct FragmentWriter {
                            top_inv_cell_size.y * info.resolution.y,
                            top_inv_cell_size.z * info.resolution.z);
         const uint32_t tri = top_triangle_indices[i];
+        const uint32_t write_begin = i == 0 ? 0u : inclusive_offsets[i - 1];
+        const uint32_t write_end = inclusive_offsets[i];
         const Vec3 sub_cell_size(top_cell_size.x / info.resolution.x,
                                  top_cell_size.y / info.resolution.y,
                                  top_cell_size.z / info.resolution.z);
-        uint32_t offset = i == 0 ? 0u : inclusive_offsets[i - 1];
+        uint32_t offset = write_begin;
+        const Triangle triangle = FetchTriangle(scene, tri);
         detail::ForEachIntersectedCell(
-            scene, tri, triangle_bboxes[tri], cell_min, sub_inv, sub_cell_size,
+            triangle, triangle_bboxes[tri], cell_min, sub_inv, sub_cell_size,
             info.resolution.x, info.resolution.y, info.resolution.z,
             [&](int x, int y, int z) {
                 out_cell_indices[offset] = info.cell_range_offset +
@@ -216,6 +229,12 @@ struct FragmentWriter {
                 out_triangle_indices[offset] = tri;
                 ++offset;
             });
+        exact_counts[i] = offset - write_begin;
+        while (offset < write_end) {
+            out_cell_indices[offset] = invalid_cell_index;
+            out_triangle_indices[offset] = tri;
+            ++offset;
+        }
     }
 };
 
@@ -319,9 +338,9 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
     thrust::transform(
         thrust::counting_iterator<uint32_t>(0),
         thrust::counting_iterator<uint32_t>(triangle_count), top_pair_counts.begin(),
-        TopPairCounter{scene, thrust::raw_pointer_cast(triangle_bboxes.data()),
+        TopPairCounter{scene,
                    bounds.min_bound, impl_->top_level.inv_cell_size,
-                   impl_->top_level.cell_size,
+                       impl_->top_level.cell_size,
                        top_resolution.x, top_resolution.y, top_resolution.z});
     thrust::inclusive_scan(top_pair_counts.begin(), top_pair_counts.end(),
                            top_pair_counts.begin());
@@ -337,6 +356,7 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
                       bounds.min_bound, impl_->top_level.inv_cell_size,
                   impl_->top_level.cell_size,
                       top_resolution.x, top_resolution.y, top_resolution.z,
+                      num_top_cells,
                       thrust::raw_pointer_cast(top_cell_keys.data()),
                       thrust::raw_pointer_cast(impl_->top_triangle_indices.data())});
     thrust::sort_by_key(top_cell_keys.begin(), top_cell_keys.end(),
@@ -350,7 +370,8 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
         CellRangeExtractor{thrust::raw_pointer_cast(top_cell_keys.data()),
                            thrust::raw_pointer_cast(impl_->top_cell_range_start.data()),
                            thrust::raw_pointer_cast(impl_->top_cell_range_end.data()),
-                           total_top_pairs});
+                           total_top_pairs,
+                           num_top_cells});
 
     const GridRangeView top_view = impl_->View().top_level;
     thrust::device_vector<SecondLevelGridInfo> infos(num_top_cells);
@@ -379,27 +400,20 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
     thrust::transform(
         thrust::counting_iterator<uint32_t>(0),
         thrust::counting_iterator<uint32_t>(total_top_pairs), second_pair_counts.begin(),
-        FragmentCounter{scene, thrust::raw_pointer_cast(triangle_bboxes.data()),
+        FragmentCounter{scene,
                         thrust::raw_pointer_cast(top_cell_keys.data()),
                         thrust::raw_pointer_cast(impl_->top_triangle_indices.data()),
                         thrust::raw_pointer_cast(infos.data()), top_view.bounds_min,
                         top_view.cell_size, top_view.inv_cell_size,
-                        top_view.resolution_x, top_view.resolution_y});
-    thrust::transform(
-        thrust::counting_iterator<uint32_t>(0),
-        thrust::counting_iterator<uint32_t>(num_top_cells), infos.begin(),
-        infos.begin(),
-        SetTriangleRefCountFunctor{
-            thrust::raw_pointer_cast(impl_->top_cell_range_start.data()),
-            thrust::raw_pointer_cast(impl_->top_cell_range_end.data()),
-            thrust::raw_pointer_cast(second_pair_counts.data())});
-
+                        top_view.resolution_x, top_view.resolution_y,
+                        num_top_cells});
     thrust::inclusive_scan(second_pair_counts.begin(), second_pair_counts.end(),
                            second_pair_counts.begin());
     const uint32_t total_second_pairs =
         total_top_pairs > 0 ? second_pair_counts.back() : 0u;
     thrust::device_vector<uint32_t> second_cell_keys(total_second_pairs);
     thrust::device_vector<uint32_t> second_triangle_indices(total_second_pairs);
+    thrust::device_vector<uint32_t> exact_second_pair_counts(total_top_pairs, 0u);
     thrust::for_each(
         thrust::counting_iterator<uint32_t>(0),
         thrust::counting_iterator<uint32_t>(total_top_pairs),
@@ -408,14 +422,23 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
                        thrust::raw_pointer_cast(impl_->top_triangle_indices.data()),
                        thrust::raw_pointer_cast(infos.data()),
                        thrust::raw_pointer_cast(second_pair_counts.data()),
+                       thrust::raw_pointer_cast(exact_second_pair_counts.data()),
+                       total_second_cells,
                        thrust::raw_pointer_cast(second_cell_keys.data()),
                        thrust::raw_pointer_cast(second_triangle_indices.data()),
                        top_view.bounds_min, top_view.cell_size,
                        top_view.inv_cell_size, top_view.resolution_x,
-                       top_view.resolution_y});
+                       top_view.resolution_y, num_top_cells});
+    thrust::transform(
+        thrust::counting_iterator<uint32_t>(0),
+        thrust::counting_iterator<uint32_t>(num_top_cells), infos.begin(),
+        infos.begin(),
+        SetTriangleRefCountFunctor{
+            thrust::raw_pointer_cast(impl_->top_cell_range_start.data()),
+            thrust::raw_pointer_cast(impl_->top_cell_range_end.data()),
+            thrust::raw_pointer_cast(exact_second_pair_counts.data())});
     thrust::sort_by_key(second_cell_keys.begin(), second_cell_keys.end(),
                         second_triangle_indices.begin());
-
     impl_->second_level_cell_range_start.assign(total_second_cells, 0u);
     impl_->second_level_cell_range_end.assign(total_second_cells, 0u);
     thrust::for_each(
@@ -425,7 +448,8 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
             thrust::raw_pointer_cast(second_cell_keys.data()),
             thrust::raw_pointer_cast(impl_->second_level_cell_range_start.data()),
             thrust::raw_pointer_cast(impl_->second_level_cell_range_end.data()),
-            total_second_pairs});
+            total_second_pairs,
+            total_second_cells});
 
     impl_->second_level_infos = std::move(infos);
     impl_->second_level_triangle_indices = std::move(second_triangle_indices);

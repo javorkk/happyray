@@ -50,6 +50,7 @@ add_library(happyray_thrust_backend INTERFACE)
 target_link_libraries(happyray_thrust_backend INTERFACE CUDA::toolkit)
 if(HAPPYRAY_THRUST_BACKEND STREQUAL "CUDA")
     target_link_libraries(happyray_thrust_backend INTERFACE CUDA::cudart)
+    target_compile_definitions(happyray_thrust_backend INTERFACE HAPPYRAY_FAST_CELL_COUNT=0)
 else()
     # Prefer system TBB (e.g. Ubuntu's libtbb-dev); older Rez TBB packages may not
     # provide a CMake config package, so retain their REZ_TBB_ROOT fallback.
@@ -66,7 +67,8 @@ else()
     endif()
     target_compile_definitions(happyray_thrust_backend INTERFACE
         TBB_SUPPRESS_DEPRECATED_MESSAGES
-        HAPPYRAY_THRUST_BACKEND_IS_TBB=1)
+        HAPPYRAY_THRUST_BACKEND_IS_TBB=1
+        HAPPYRAY_FAST_CELL_COUNT=1)
 endif()
 
 enable_testing()
