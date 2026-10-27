@@ -19,7 +19,7 @@
 
 namespace happyray {
 
-struct GridRangeView {
+struct GridBoundsView {
   Vec3 bounds_min;
   Vec3 bounds_max;
   Vec3 cell_size;
@@ -27,6 +27,9 @@ struct GridRangeView {
   int resolution_x = 1;
   int resolution_y = 1;
   int resolution_z = 1;
+};
+
+struct GridRangeView : GridBoundsView {
   const CellRange *cell_ranges = nullptr;
   const uint32_t *triangle_indices = nullptr;
 };
@@ -36,12 +39,17 @@ struct GridRangeView {
 struct alignas(8) TopLevelCell {
   int resolution = 1;
   uint32_t cell_range_offset = 0;
+
+  HAPPYRAY_HD bool IsEmpty() const { return resolution < 0; }
+  HAPPYRAY_HD int Resolution() const {
+    return IsEmpty() ? -resolution : resolution;
+  }
 };
 static_assert(sizeof(TopLevelCell) == 2 * sizeof(uint32_t));
 static_assert(alignof(TopLevelCell) == 8);
 
 struct TwoLevelGridView {
-  GridRangeView top_level;
+  GridBoundsView top_level;
   const TopLevelCell *top_level_cells =
       nullptr; // One entry per top-level cell.
   const CellRange *second_level_cell_ranges = nullptr;
@@ -52,8 +60,9 @@ struct TwoLevelGridView {
 // Builds the range view for top-level cell `cell_index`'s second-level grid.
 HAPPYRAY_HD inline GridRangeView SecondLevelView(const TwoLevelGridView &grid,
                                                  uint32_t cell_index) {
-  const GridRangeView &top = grid.top_level;
+  const GridBoundsView &top = grid.top_level;
   const TopLevelCell &info = grid.top_level_cells[cell_index];
+  const int resolution = info.Resolution();
   const int res_xy = top.resolution_x * top.resolution_y;
   const int cz = static_cast<int>(cell_index) / res_xy;
   const int rem = static_cast<int>(cell_index) % res_xy;
@@ -62,18 +71,18 @@ HAPPYRAY_HD inline GridRangeView SecondLevelView(const TwoLevelGridView &grid,
   const Vec3 bounds_min(top.bounds_min.x + cx * top.cell_size.x,
                         top.bounds_min.y + cy * top.cell_size.y,
                         top.bounds_min.z + cz * top.cell_size.z);
-  const Vec3 cell_size(top.cell_size.x / info.resolution,
-                       top.cell_size.y / info.resolution,
-                       top.cell_size.z / info.resolution);
+  const Vec3 cell_size(top.cell_size.x / resolution,
+                       top.cell_size.y / resolution,
+                       top.cell_size.z / resolution);
   GridRangeView view;
   view.bounds_min = bounds_min;
   view.bounds_max = bounds_min + top.cell_size;
   view.cell_size = cell_size;
   view.inv_cell_size = Vec3(1.0f / cell_size.x, 1.0f / cell_size.y,
                             1.0f / cell_size.z);
-  view.resolution_x = info.resolution;
-  view.resolution_y = info.resolution;
-  view.resolution_z = info.resolution;
+  view.resolution_x = resolution;
+  view.resolution_y = resolution;
+  view.resolution_z = resolution;
   view.cell_ranges = grid.second_level_cell_ranges + info.cell_range_offset;
   view.triangle_indices = grid.second_level_triangle_indices;
   return view;
@@ -84,7 +93,7 @@ namespace detail {
 // Two-level traversal, ported from happyray's TLGridTraverser: the outer DDA
 // directly initializes an inner DDA for each non-empty top-level cell, with no
 // nested WalkGridCells calls or second-level box test. Top-level cells with no
-// triangles are skipped using the top level's explicit ranges.
+// triangles are skipped using their resolution sign bit.
 // `visit_top(top_index)` is called for every top-level cell visited (a no-op
 // for queries; the SAH calibration counts steps with it);
 // `visit_leaf(leaf_index, &ray_t_max)` for every second-level cell, where
@@ -94,7 +103,7 @@ HAPPYRAY_HD inline bool TraverseTwoLevelGrid(const TwoLevelGridView &grid,
                                              const Ray &ray,
                                              VisitTopFn &&visit_top,
                                              VisitLeafFn &&visit_leaf) {
-  const GridRangeView &top = grid.top_level;
+  const GridBoundsView &top = grid.top_level;
   const Vec3 inv_dir = SafeRcp(ray.direction);
   float t_near, t_far;
   if (!IntersectRayBoxRcp(ray.origin, ray.direction, inv_dir, top.bounds_min,
@@ -139,11 +148,12 @@ HAPPYRAY_HD inline bool TraverseTwoLevelGrid(const TwoLevelGridView &grid,
              static_cast<uint32_t>(top.resolution_y) * static_cast<uint32_t>(cz));
     visit_top(top_index);
 
-    if (top.cell_ranges[top_index].start != top.cell_ranges[top_index].end) {
-      const TopLevelCell &info = grid.top_level_cells[top_index];
-      const int res_x = info.resolution;
-      const int res_y = info.resolution;
-      const int res_z = info.resolution;
+    const TopLevelCell &info = grid.top_level_cells[top_index];
+    if (!info.IsEmpty()) {
+      const int resolution = info.Resolution();
+      const int res_x = resolution;
+      const int res_y = resolution;
+      const int res_z = resolution;
       const Vec3 cell_min(top.bounds_min.x + cx * top.cell_size.x,
                           top.bounds_min.y + cy * top.cell_size.y,
                           top.bounds_min.z + cz * top.cell_size.z);
@@ -293,11 +303,9 @@ public:
   // used by
   // tests/accel_performance_tests.cpp to compute an analytic memory-footprint
   // estimate (count * sizeof(element)) without needing any CUDA-specific
-  // allocation introspection. `top_level`'s own cell count/second-level info
-  // count is `View().top_level.resolution_x/y/z`'s product, already public;
-  // these fill in the remaining counts that aren't otherwise derivable from
-  // TwoLevelGridView alone.
-  uint32_t TopLevelTriangleIndexCount() const;
+  // allocation introspection. `top_level`'s own cell count is
+  // `View().top_level.resolution_x/y/z`'s product, already public; these fill
+  // in the remaining counts that aren't otherwise derivable from the view.
   uint32_t SecondLevelCellCount() const;
   uint32_t SecondLevelTriangleIndexCount() const;
 

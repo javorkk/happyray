@@ -94,7 +94,7 @@ void Synchronize(const T* device_data) {
 }
 
 void SyncGrid(const UniformGridView& view) { Synchronize(view.cell_ranges); }
-void SyncGrid(const TwoLevelGridView& view) { Synchronize(view.top_level.cell_ranges); }
+void SyncGrid(const TwoLevelGridView& view) { Synchronize(view.top_level_cells); }
 void SyncGrid(const IrregularGridView& view) {
     Synchronize(view.top_level.cell_ranges);
 }
@@ -119,9 +119,8 @@ size_t GridMemoryBytes(const TwoLevelGrid& grid) {
     const TwoLevelGridView view = grid.View();
     const auto num_top_cells = static_cast<size_t>(view.top_level.resolution_x) *
                                view.top_level.resolution_y * view.top_level.resolution_z;
-    size_t bytes = num_top_cells * sizeof(CellRange);
-    bytes += static_cast<size_t>(grid.TopLevelTriangleIndexCount()) * sizeof(uint32_t);
-    bytes += num_top_cells * (sizeof(TopLevelCell) + sizeof(uint32_t));
+    size_t bytes = num_top_cells * sizeof(TopLevelCell);
+    bytes += num_top_cells * sizeof(uint32_t);
     bytes += static_cast<size_t>(grid.SecondLevelCellCount()) * sizeof(CellRange);
     bytes += static_cast<size_t>(grid.SecondLevelTriangleIndexCount()) * sizeof(uint32_t);
     return bytes;

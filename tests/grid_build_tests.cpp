@@ -203,15 +203,35 @@ void CheckFragmentWriters() {
     const uint32_t num_top_cells = two_view.top_level.resolution_x *
                                    two_view.top_level.resolution_y *
                                    two_view.top_level.resolution_z;
-    const auto top_ranges = Download(two_view.top_level.cell_ranges, num_top_cells);
-    uint32_t top_reference_count = 0;
-    for (const auto& range : top_ranges) {
-        top_reference_count = std::max(top_reference_count, range.end);
-    }
-    CheckSatCellRanges(host_scene, two_view.top_level, top_reference_count);
     const auto top_level_cells = Download(two_view.top_level_cells, num_top_cells);
     two_view.top_level_cells = top_level_cells.data();
-    const auto second_level_view = happyray::SecondLevelView(two_view, 0);
+    uint32_t empty_top_cells = 0;
+    uint32_t occupied_top_cell = num_top_cells;
+    for (uint32_t cell = 0; cell < num_top_cells; ++cell) {
+        if (top_level_cells[cell].IsEmpty()) {
+            ++empty_top_cells;
+            Check(top_level_cells[cell].resolution < 0 &&
+                      top_level_cells[cell].Resolution() > 0,
+                  "empty top-level resolution uses its sign bit");
+        } else if (occupied_top_cell == num_top_cells) {
+            const auto candidate = happyray::SecondLevelView(two_view, cell);
+            const uint32_t candidate_cell_count =
+                candidate.resolution_x * candidate.resolution_y *
+                candidate.resolution_z;
+            const auto candidate_ranges =
+                Download(candidate.cell_ranges, candidate_cell_count);
+            for (const auto& range : candidate_ranges) {
+                if (range.end > 0) {
+                    occupied_top_cell = cell;
+                    break;
+                }
+            }
+        }
+    }
+    Check(empty_top_cells > 0 && occupied_top_cell < num_top_cells,
+          "top-level cell metadata distinguishes empty cells");
+    const auto second_level_view =
+        happyray::SecondLevelView(two_view, occupied_top_cell);
     Check(second_level_view.resolution_x == second_level_view.resolution_y &&
               second_level_view.resolution_y == second_level_view.resolution_z,
           "two-level second grid has equal axis resolutions");

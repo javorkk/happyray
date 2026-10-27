@@ -142,19 +142,12 @@ struct MakeMockSecondLevelInfoFunctor {
   }
 };
 
-struct MakeMockCellRangeFunctor {
-  HAPPYRAY_HD CellRange operator()(uint32_t i) const {
-    return CellRange{i, i + 1};
-  }
-};
-
 // Same idea as MockUniformGrid, but with a `top_resolution`-cubed top-level
 // grid, each cell recursing into its own `second_resolution`-cubed second-level
 // grid -- exactly TwoLevelGrid's own shape, just with manually-populated
 // TopLevelCell entries instead of ones chosen by density.
 struct MockTwoLevelGrid {
   thrust::device_vector<TopLevelCell> top_level_cells;
-  thrust::device_vector<CellRange> top_cell_ranges;
   thrust::device_vector<CellRange> cell_ranges;
   TwoLevelGridView view;
 
@@ -176,16 +169,8 @@ struct MockTwoLevelGrid {
         1.0f / top_cell_size.x, 1.0f / top_cell_size.y, 1.0f / top_cell_size.z);
     view.top_level.resolution_x = view.top_level.resolution_y =
         view.top_level.resolution_z = top_resolution;
-    // One (never-read) triangle per top-level cell, so traversal descends into
-    // every one instead of skipping it as empty -- the second-level CSR below
-    // stays empty.
-    top_cell_ranges.resize(num_top_cells);
-    thrust::transform(thrust::counting_iterator<uint32_t>(0),
-                      thrust::counting_iterator<uint32_t>(num_top_cells),
-                      top_cell_ranges.begin(), MakeMockCellRangeFunctor());
-    view.top_level.cell_ranges =
-        thrust::raw_pointer_cast(top_cell_ranges.data());
-    view.top_level.triangle_indices = nullptr;
+    // Mark all cells occupied so traversal descends into each nested grid.
+
 
     top_level_cells.resize(num_top_cells);
     thrust::transform(

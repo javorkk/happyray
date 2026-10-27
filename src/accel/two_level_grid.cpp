@@ -1,7 +1,6 @@
 // Thrust implementation of TwoLevelGrid (see two_level_grid.h), following the legacy
 // TLGridSortBuilder: build the top level directly, then build each nested grid from its owning
-// cell's sorted primitive range. Both levels store explicit begin/end ranges rather than CSR
-// offsets.
+// cell's sorted primitive range. Only the nested grids retain explicit begin/end ranges.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
 #define THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_TBB
@@ -124,15 +123,15 @@ struct ComputeTopLevelCellFunctor {
                                                                       : computed_res.z)
                                    : (computed_res.y > computed_res.z ? computed_res.y
                                                                       : computed_res.z);
-        info.resolution = resolution;
+        info.resolution = triangle_count == 0 ? -resolution : resolution;
         return info;
     }
 };
 
 struct ExtractNumCellsFunctor {
     HAPPYRAY_HD uint32_t operator()(const TopLevelCell& info) const {
-        return static_cast<uint32_t>(info.resolution) * info.resolution *
-               info.resolution;
+        const uint32_t resolution = static_cast<uint32_t>(info.Resolution());
+        return resolution * resolution * resolution;
     }
 };
 
@@ -163,18 +162,19 @@ struct FragmentCounter {
         const Vec3 cell_min(top_bounds_min.x + cx * top_cell_size.x,
                             top_bounds_min.y + cy * top_cell_size.y,
                             top_bounds_min.z + cz * top_cell_size.z);
-          const Vec3 sub_inv(top_inv_cell_size.x * info.resolution,
-                       top_inv_cell_size.y * info.resolution,
-                       top_inv_cell_size.z * info.resolution);
-        const Vec3 sub_cell_size(top_cell_size.x / info.resolution,
-                           top_cell_size.y / info.resolution,
-                           top_cell_size.z / info.resolution);
+        const int resolution = info.Resolution();
+        const Vec3 sub_inv(top_inv_cell_size.x * resolution,
+                       top_inv_cell_size.y * resolution,
+                       top_inv_cell_size.z * resolution);
+        const Vec3 sub_cell_size(top_cell_size.x / resolution,
+                           top_cell_size.y / resolution,
+                           top_cell_size.z / resolution);
         const uint32_t tri = top_triangle_indices[i];
         const Triangle triangle = FetchTriangle(scene, tri);
         const BBox box = BBoxExtractor<Triangle>::Get(triangle);
         return detail::CountTriangleCellIntersections(
-            triangle, box, cell_min, sub_inv, sub_cell_size, info.resolution,
-            info.resolution, info.resolution);
+            triangle, box, cell_min, sub_inv, sub_cell_size, resolution,
+            resolution, resolution);
     }
 };
 
@@ -206,24 +206,25 @@ struct FragmentWriter {
         const Vec3 cell_min(top_bounds_min.x + cx * top_cell_size.x,
                             top_bounds_min.y + cy * top_cell_size.y,
                             top_bounds_min.z + cz * top_cell_size.z);
-        const Vec3 sub_inv(top_inv_cell_size.x * info.resolution,
-                   top_inv_cell_size.y * info.resolution,
-                   top_inv_cell_size.z * info.resolution);
+        const int resolution = info.Resolution();
+        const Vec3 sub_inv(top_inv_cell_size.x * resolution,
+                           top_inv_cell_size.y * resolution,
+                           top_inv_cell_size.z * resolution);
         const uint32_t tri = top_triangle_indices[i];
         const uint32_t write_begin = i == 0 ? 0u : inclusive_offsets[i - 1];
         const uint32_t write_end = inclusive_offsets[i];
-        const Vec3 sub_cell_size(top_cell_size.x / info.resolution,
-                                 top_cell_size.y / info.resolution,
-                                 top_cell_size.z / info.resolution);
+        const Vec3 sub_cell_size(top_cell_size.x / resolution,
+                                 top_cell_size.y / resolution,
+                                 top_cell_size.z / resolution);
         uint32_t offset = write_begin;
         const Triangle triangle = FetchTriangle(scene, tri);
         detail::ForEachIntersectedCell(
             triangle, triangle_bboxes[tri], cell_min, sub_inv, sub_cell_size,
-            info.resolution, info.resolution, info.resolution,
+            resolution, resolution, resolution,
             [&](int x, int y, int z) {
                 out_cell_indices[offset] =
                     info.cell_range_offset +
-                    FlattenCellIndex(x, y, z, info.resolution, info.resolution);
+                    FlattenCellIndex(x, y, z, resolution, resolution);
                 out_triangle_indices[offset] = tri;
                 ++offset;
             });
@@ -256,11 +257,13 @@ struct TwoLevelGridSahFunctor {
 
     HAPPYRAY_HD float operator()(uint32_t t) const {
         const TopLevelCell& cell = top_level_cells[t];
-        const auto num_local = static_cast<uint32_t>(cell.resolution) *
-                               cell.resolution * cell.resolution;
-        const Vec3 cell_size(top_cell_size.x / cell.resolution,
-                             top_cell_size.y / cell.resolution,
-                             top_cell_size.z / cell.resolution);
+        if (cell.IsEmpty()) return 0.0f;
+        const int resolution = cell.Resolution();
+        const auto num_local = static_cast<uint32_t>(resolution) *
+                                                             resolution * resolution;
+        const Vec3 cell_size(top_cell_size.x / resolution,
+                                                         top_cell_size.y / resolution,
+                                                         top_cell_size.z / resolution);
         return HalfSurfaceArea(cell_size) *
                (static_cast<float>(num_local) * costs.traversal +
                 static_cast<float>(top_level_triangle_ref_counts[t]) *
@@ -271,9 +274,7 @@ struct TwoLevelGridSahFunctor {
 }  // namespace
 
 struct TwoLevelGrid::Impl {
-    GridRangeView top_level;
-    thrust::device_vector<CellRange> top_cell_ranges;
-    thrust::device_vector<uint32_t> top_triangle_indices;
+    GridBoundsView top_level;
     thrust::device_vector<TopLevelCell> top_level_cells;
     thrust::device_vector<uint32_t> top_level_triangle_ref_counts;
     thrust::device_vector<CellRange> second_level_cell_ranges;
@@ -282,8 +283,6 @@ struct TwoLevelGrid::Impl {
     TwoLevelGridView View() const {
         TwoLevelGridView view;
         view.top_level = top_level;
-        view.top_level.cell_ranges = thrust::raw_pointer_cast(top_cell_ranges.data());
-        view.top_level.triangle_indices = thrust::raw_pointer_cast(top_triangle_indices.data());
         view.top_level_cells = thrust::raw_pointer_cast(top_level_cells.data());
         view.second_level_cell_ranges =
             thrust::raw_pointer_cast(second_level_cell_ranges.data());
@@ -341,31 +340,32 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
     const uint32_t total_top_pairs =
         triangle_count > 0 ? top_pair_counts.back() : 0u;
     thrust::device_vector<uint32_t> top_cell_keys(total_top_pairs);
-    impl_->top_triangle_indices.resize(total_top_pairs);
+    thrust::device_vector<uint32_t> top_triangle_indices(total_top_pairs);
     thrust::for_each(
         thrust::counting_iterator<uint32_t>(0),
         thrust::counting_iterator<uint32_t>(triangle_count),
         TopPairWriter{scene, thrust::raw_pointer_cast(triangle_bboxes.data()),
                       thrust::raw_pointer_cast(top_pair_counts.data()),
                       bounds.min_bound, impl_->top_level.inv_cell_size,
-                  impl_->top_level.cell_size,
+                                            impl_->top_level.cell_size,
                       top_resolution.x, top_resolution.y, top_resolution.z,
                       num_top_cells,
                       thrust::raw_pointer_cast(top_cell_keys.data()),
-                      thrust::raw_pointer_cast(impl_->top_triangle_indices.data())});
+                                            thrust::raw_pointer_cast(top_triangle_indices.data())});
     thrust::sort_by_key(top_cell_keys.begin(), top_cell_keys.end(),
-                        impl_->top_triangle_indices.begin());
+                                                top_triangle_indices.begin());
 
-    impl_->top_cell_ranges.assign(num_top_cells, CellRange{0u, 0u});
+        thrust::device_vector<CellRange> top_cell_ranges(num_top_cells,
+                                                                                                         CellRange{0u, 0u});
     thrust::for_each(
         thrust::counting_iterator<uint32_t>(0),
         thrust::counting_iterator<uint32_t>(total_top_pairs),
         CellRangeExtractor{thrust::raw_pointer_cast(top_cell_keys.data()),
-                           thrust::raw_pointer_cast(impl_->top_cell_ranges.data()),
+                           thrust::raw_pointer_cast(top_cell_ranges.data()),
                            total_top_pairs,
                            num_top_cells});
 
-    const GridRangeView top_view = impl_->View().top_level;
+    const GridBoundsView top_view = impl_->View().top_level;
     thrust::device_vector<TopLevelCell> top_level_cells(num_top_cells);
     thrust::transform(
         thrust::counting_iterator<uint32_t>(0),
@@ -373,7 +373,7 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
         ComputeTopLevelCellFunctor{
             top_view.bounds_min, top_view.cell_size, top_view.resolution_x,
             top_view.resolution_y,
-            thrust::raw_pointer_cast(impl_->top_cell_ranges.data()),
+            thrust::raw_pointer_cast(top_cell_ranges.data()),
             second_level_density, dense_cell_threshold});
 
     thrust::device_vector<uint32_t> num_second_cells(num_top_cells);
@@ -394,7 +394,7 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
         thrust::counting_iterator<uint32_t>(total_top_pairs), second_pair_counts.begin(),
         FragmentCounter{scene,
                         thrust::raw_pointer_cast(top_cell_keys.data()),
-                        thrust::raw_pointer_cast(impl_->top_triangle_indices.data()),
+                        thrust::raw_pointer_cast(top_triangle_indices.data()),
                         thrust::raw_pointer_cast(top_level_cells.data()), top_view.bounds_min,
                         top_view.cell_size, top_view.inv_cell_size,
                         top_view.resolution_x, top_view.resolution_y,
@@ -411,7 +411,7 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
         thrust::counting_iterator<uint32_t>(total_top_pairs),
         FragmentWriter{scene, thrust::raw_pointer_cast(triangle_bboxes.data()),
                        thrust::raw_pointer_cast(top_cell_keys.data()),
-                       thrust::raw_pointer_cast(impl_->top_triangle_indices.data()),
+                       thrust::raw_pointer_cast(top_triangle_indices.data()),
                        thrust::raw_pointer_cast(top_level_cells.data()),
                        thrust::raw_pointer_cast(second_pair_counts.data()),
                        thrust::raw_pointer_cast(exact_second_pair_counts.data()),
@@ -427,7 +427,7 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
         thrust::counting_iterator<uint32_t>(num_top_cells),
         top_level_triangle_ref_counts.begin(),
         ComputeTopLevelCellRefCountFunctor{
-            thrust::raw_pointer_cast(impl_->top_cell_ranges.data()),
+            thrust::raw_pointer_cast(top_cell_ranges.data()),
             thrust::raw_pointer_cast(exact_second_pair_counts.data())});
     thrust::sort_by_key(second_cell_keys.begin(), second_cell_keys.end(),
                         second_triangle_indices.begin());
@@ -448,10 +448,6 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
 }
 
 TwoLevelGrid::~TwoLevelGrid() = default;
-
-uint32_t TwoLevelGrid::TopLevelTriangleIndexCount() const {
-    return static_cast<uint32_t>(impl_->top_triangle_indices.size());
-}
 
 uint32_t TwoLevelGrid::SecondLevelCellCount() const {
     return static_cast<uint32_t>(impl_->second_level_cell_ranges.size());
