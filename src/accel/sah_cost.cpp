@@ -105,8 +105,7 @@ std::vector<Ray> GenerateUnitCubeRays(uint64_t seed, uint32_t count) {
 // UniformGrid's own density-based constructor, since that always collapses an
 // empty scene straight to a trivial 1x1x1 grid.
 struct MockUniformGrid {
-  thrust::device_vector<uint32_t> cell_range_start;
-  thrust::device_vector<uint32_t> cell_range_end;
+  thrust::device_vector<CellRange> cell_ranges;
   UniformGridView view;
 
   MockUniformGrid(const BBox &bounds, int resolution) {
@@ -120,15 +119,13 @@ struct MockUniformGrid {
     view.inv_cell_size = Vec3(1.0f / view.cell_size.x, 1.0f / view.cell_size.y,
                               1.0f / view.cell_size.z);
     view.resolution_x = view.resolution_y = view.resolution_z = resolution;
-    cell_range_start.assign(num_cells, 0u);
-    cell_range_end.assign(num_cells, 0u);
-    view.cell_range_start = thrust::raw_pointer_cast(cell_range_start.data());
-    view.cell_range_end = thrust::raw_pointer_cast(cell_range_end.data());
+    cell_ranges.assign(num_cells, CellRange{0u, 0u});
+    view.cell_ranges = thrust::raw_pointer_cast(cell_ranges.data());
     view.triangle_indices = nullptr;
   }
 };
 
-// Builds a SecondLevelGridInfo for top-level cell `t` of a top_resolution^3
+// Builds a TopLevelCell for top-level cell `t` of a top_resolution^3
 // top-level grid, each with its own second_resolution^3 second-level grid --
 // the per-top-level-cell bounds/CSR- offset variant of a single whole-bounds
 // top-level cell, used by MockTwoLevelGrid below so its top-level 3D-DDA
@@ -136,25 +133,29 @@ struct MockUniformGrid {
 struct MakeMockSecondLevelInfoFunctor {
   int second_resolution;
 
-  HAPPYRAY_HD SecondLevelGridInfo operator()(uint32_t t) const {
-    SecondLevelGridInfo info;
-    info.resolution = {second_resolution, second_resolution, second_resolution};
+  HAPPYRAY_HD TopLevelCell operator()(uint32_t t) const {
+    TopLevelCell info;
+    info.resolution = second_resolution;
     info.cell_range_offset = t * static_cast<uint32_t>(second_resolution) *
                  second_resolution * second_resolution;
     return info;
   }
 };
 
+struct MakeMockCellRangeFunctor {
+  HAPPYRAY_HD CellRange operator()(uint32_t i) const {
+    return CellRange{i, i + 1};
+  }
+};
+
 // Same idea as MockUniformGrid, but with a `top_resolution`-cubed top-level
 // grid, each cell recursing into its own `second_resolution`-cubed second-level
 // grid -- exactly TwoLevelGrid's own shape, just with manually-populated
-// SecondLevelGridInfo entries instead of ones chosen by density.
+// TopLevelCell entries instead of ones chosen by density.
 struct MockTwoLevelGrid {
-  thrust::device_vector<SecondLevelGridInfo> infos;
-  thrust::device_vector<uint32_t> top_cell_range_start;
-  thrust::device_vector<uint32_t> top_cell_range_end;
-  thrust::device_vector<uint32_t> cell_range_start;
-  thrust::device_vector<uint32_t> cell_range_end;
+  thrust::device_vector<TopLevelCell> top_level_cells;
+  thrust::device_vector<CellRange> top_cell_ranges;
+  thrust::device_vector<CellRange> cell_ranges;
   TwoLevelGridView view;
 
   MockTwoLevelGrid(const BBox &bounds, int top_resolution,
@@ -178,30 +179,25 @@ struct MockTwoLevelGrid {
     // One (never-read) triangle per top-level cell, so traversal descends into
     // every one instead of skipping it as empty -- the second-level CSR below
     // stays empty.
-    top_cell_range_start.resize(num_top_cells);
-    top_cell_range_end.resize(num_top_cells);
-    thrust::sequence(top_cell_range_start.begin(), top_cell_range_start.end(), 0u);
-    thrust::sequence(top_cell_range_end.begin(), top_cell_range_end.end(), 1u);
-    view.top_level.cell_range_start =
-      thrust::raw_pointer_cast(top_cell_range_start.data());
-    view.top_level.cell_range_end =
-      thrust::raw_pointer_cast(top_cell_range_end.data());
+    top_cell_ranges.resize(num_top_cells);
+    thrust::transform(thrust::counting_iterator<uint32_t>(0),
+                      thrust::counting_iterator<uint32_t>(num_top_cells),
+                      top_cell_ranges.begin(), MakeMockCellRangeFunctor());
+    view.top_level.cell_ranges =
+        thrust::raw_pointer_cast(top_cell_ranges.data());
     view.top_level.triangle_indices = nullptr;
 
-    infos.resize(num_top_cells);
+    top_level_cells.resize(num_top_cells);
     thrust::transform(
         thrust::counting_iterator<uint32_t>(0),
-        thrust::counting_iterator<uint32_t>(num_top_cells), infos.begin(),
+        thrust::counting_iterator<uint32_t>(num_top_cells), top_level_cells.begin(),
         MakeMockSecondLevelInfoFunctor{second_resolution});
 
-    cell_range_start.assign(num_top_cells * num_local, 0u);
-    cell_range_end.assign(num_top_cells * num_local, 0u);
+    cell_ranges.assign(num_top_cells * num_local, CellRange{0u, 0u});
 
-    view.second_level_infos = thrust::raw_pointer_cast(infos.data());
-    view.second_level_cell_range_start =
-      thrust::raw_pointer_cast(cell_range_start.data());
-    view.second_level_cell_range_end =
-      thrust::raw_pointer_cast(cell_range_end.data());
+    view.top_level_cells = thrust::raw_pointer_cast(top_level_cells.data());
+    view.second_level_cell_ranges =
+        thrust::raw_pointer_cast(cell_ranges.data());
     view.second_level_triangle_indices = nullptr;
   }
 };
@@ -242,8 +238,7 @@ struct MakeMockIrregularCellFunctor {
     cell.max_x = cell.min_x + 1;
     cell.max_y = cell.min_y + 1;
     cell.max_z = cell.min_z + 1;
-    cell.ref_start = 0;
-    cell.ref_end = 0;
+    cell.references = {0u, 0u};
     return cell;
   }
 };
@@ -328,8 +323,7 @@ struct MockIrregularGrid {
         1.0f / top_cell_size.x, 1.0f / top_cell_size.y, 1.0f / top_cell_size.z);
     view.top_level.resolution_x = view.top_level.resolution_y =
         view.top_level.resolution_z = top_resolution;
-    view.top_level.cell_range_start = nullptr;
-    view.top_level.cell_range_end = nullptr;
+    view.top_level.cell_ranges = nullptr;
     view.top_level.triangle_indices = nullptr;
 
     infos.resize(num_top_cells);

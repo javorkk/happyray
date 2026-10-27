@@ -98,8 +98,7 @@ struct UniformGrid::Impl {
     int resolution_y = 1;
     int resolution_z = 1;
     uint32_t triangle_reference_count = 0;
-    thrust::device_vector<uint32_t> cell_range_start;
-    thrust::device_vector<uint32_t> cell_range_end;
+    thrust::device_vector<CellRange> cell_ranges;
     thrust::device_vector<uint32_t> triangle_indices;
 
     UniformGridView View() const {
@@ -114,8 +113,7 @@ struct UniformGrid::Impl {
         view.resolution_x = resolution_x;
         view.resolution_y = resolution_y;
         view.resolution_z = resolution_z;
-        view.cell_range_start = thrust::raw_pointer_cast(cell_range_start.data());
-        view.cell_range_end = thrust::raw_pointer_cast(cell_range_end.data());
+        view.cell_ranges = thrust::raw_pointer_cast(cell_ranges.data());
         view.triangle_indices = thrust::raw_pointer_cast(triangle_indices.data());
         return view;
     }
@@ -187,21 +185,23 @@ UniformGrid::UniformGrid(const SceneView& scene, float target_triangles_per_cell
                                   thrust::raw_pointer_cast(pair_triangle_indices.data())};
     thrust::for_each(thrust::counting_iterator<uint32_t>(0),
                      thrust::counting_iterator<uint32_t>(triangle_count), write_fragments);
+#if HAPPYRAY_FAST_CELL_COUNT
     impl_->triangle_reference_count = thrust::reduce(counts.begin(), counts.end(), 0u);
+#else
+    impl_->triangle_reference_count = total_pairs;
+#endif
 
     // 4. Sort by cell index -- the defining "sort-based" step.
     thrust::sort_by_key(pair_cell_indices.begin(), pair_cell_indices.end(),
                        pair_triangle_indices.begin());
 
     // 5. Extract start/end ranges directly from adjacent sorted cell keys.
-    impl_->cell_range_start.assign(num_cells, 0u);
-    impl_->cell_range_end.assign(num_cells, 0u);
+    impl_->cell_ranges.assign(num_cells, CellRange{0u, 0u});
     thrust::for_each(thrust::counting_iterator<uint32_t>(0),
                      thrust::counting_iterator<uint32_t>(total_pairs),
                      detail::CellRangeExtractor{
                          thrust::raw_pointer_cast(pair_cell_indices.data()),
-                         thrust::raw_pointer_cast(impl_->cell_range_start.data()),
-                         thrust::raw_pointer_cast(impl_->cell_range_end.data()),
+                         thrust::raw_pointer_cast(impl_->cell_ranges.data()),
                          total_pairs,
                          num_cells});
 

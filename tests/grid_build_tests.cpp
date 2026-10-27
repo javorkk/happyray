@@ -98,10 +98,11 @@ thrust::host_vector<T> Download(const T* data, uint32_t count) {
 
 void CheckFilteredFragments(const happyray::SceneView& scene, const happyray::UniformGridView& grid) {
     const uint32_t num_cells = grid.resolution_x * grid.resolution_y * grid.resolution_z;
-    const auto starts = Download(grid.cell_range_start, num_cells);
-    const auto ends = Download(grid.cell_range_end, num_cells);
-    const uint32_t reference_count =
-        *std::max_element(ends.begin(), ends.end());
+    const auto ranges = Download(grid.cell_ranges, num_cells);
+    uint32_t reference_count = 0;
+    for (const auto& range : ranges) {
+        reference_count = std::max(reference_count, range.end);
+    }
     const auto refs = Download(grid.triangle_indices, reference_count);
     const happyray::BBox box = happyray::ComputeTriangleBBox(scene, 0);
     int x0, x1, y0, y1, z0, z1;
@@ -118,7 +119,8 @@ void CheckFilteredFragments(const happyray::SceneView& scene, const happyray::Un
                     z >= z0 && z <= z1 &&
                     intersects(grid.bounds_min + happyray::Vec3(x + 0.5f, y + 0.5f, z + 0.5f) *
                                    grid.cell_size, grid.cell_size);
-                Check(ends[cell] - starts[cell] == static_cast<uint32_t>(expected),
+                Check(ranges[cell].end - ranges[cell].start ==
+                          static_cast<uint32_t>(expected),
                       "writer/extractor must retain exactly the intersecting candidates");
                 expected_refs += expected;
             }
@@ -133,8 +135,7 @@ void CheckSatCellRanges(const happyray::SceneView& scene,
                         const happyray::GridRangeView& grid,
                         uint32_t reference_count) {
     const uint32_t num_cells = grid.resolution_x * grid.resolution_y * grid.resolution_z;
-    const auto starts = Download(grid.cell_range_start, num_cells);
-    const auto ends = Download(grid.cell_range_end, num_cells);
+    const auto ranges = Download(grid.cell_ranges, num_cells);
     const auto refs = Download(grid.triangle_indices, reference_count);
     const happyray::BBox box = happyray::ComputeTriangleBBox(scene, 0);
     int x0, x1, y0, y1, z0, z1;
@@ -158,7 +159,8 @@ void CheckSatCellRanges(const happyray::SceneView& scene,
                             happyray::Vec3(x + 0.5f, y + 0.5f, z + 0.5f) *
                                 grid.cell_size,
                         grid.cell_size);
-                Check(ends[cell] - starts[cell] == static_cast<uint32_t>(expected),
+                Check(ranges[cell].end - ranges[cell].start ==
+                          static_cast<uint32_t>(expected),
                       "two-level ranges must retain exactly SAT-intersecting cells");
                 expected_refs += expected;
             }
@@ -185,42 +187,56 @@ void CheckFragmentWriters() {
 
     const happyray::UniformGrid uniform(scene, 128);
     CheckFilteredFragments(host_scene, uniform.View());
-    const auto uniform_starts = Download(uniform.View().cell_range_start,
-        uniform.View().resolution_x * uniform.View().resolution_y * uniform.View().resolution_z);
-    const auto uniform_ends = Download(uniform.View().cell_range_end,
-        uniform.View().resolution_x * uniform.View().resolution_y * uniform.View().resolution_z);
-        Check(uniform.TriangleIndexCount() >= *std::max_element(uniform_ends.begin(),
-                                            uniform_ends.end()),
-            "uniform ranges fit in pair storage including padding");
+    const auto uniform_ranges = Download(
+        uniform.View().cell_ranges,
+        uniform.View().resolution_x * uniform.View().resolution_y *
+            uniform.View().resolution_z);
+    uint32_t uniform_reference_count = 0;
+    for (const auto& range : uniform_ranges) {
+        uniform_reference_count = std::max(uniform_reference_count, range.end);
+    }
+    Check(uniform.TriangleIndexCount() >= uniform_reference_count,
+          "uniform ranges fit in pair storage including padding");
 
     const happyray::TwoLevelGrid two_level(scene, 128, 128, 0);
     auto two_view = two_level.View();
     const uint32_t num_top_cells = two_view.top_level.resolution_x *
                                    two_view.top_level.resolution_y *
                                    two_view.top_level.resolution_z;
-        const auto top_ends = Download(two_view.top_level.cell_range_end, num_top_cells);
-        CheckSatCellRanges(host_scene, two_view.top_level,
-                     *std::max_element(top_ends.begin(), top_ends.end()));
-    const auto infos = Download(two_view.second_level_infos, num_top_cells);
-    two_view.second_level_infos = infos.data();
+    const auto top_ranges = Download(two_view.top_level.cell_ranges, num_top_cells);
+    uint32_t top_reference_count = 0;
+    for (const auto& range : top_ranges) {
+        top_reference_count = std::max(top_reference_count, range.end);
+    }
+    CheckSatCellRanges(host_scene, two_view.top_level, top_reference_count);
+    const auto top_level_cells = Download(two_view.top_level_cells, num_top_cells);
+    two_view.top_level_cells = top_level_cells.data();
     const auto second_level_view = happyray::SecondLevelView(two_view, 0);
     Check(second_level_view.resolution_x == second_level_view.resolution_y &&
               second_level_view.resolution_y == second_level_view.resolution_z,
           "two-level second grid has equal axis resolutions");
-    CheckSatCellRanges(host_scene, second_level_view, infos[0].triangle_ref_count);
+    const uint32_t second_level_cell_count =
+        second_level_view.resolution_x * second_level_view.resolution_y *
+        second_level_view.resolution_z;
+    const auto second_level_ranges =
+        Download(second_level_view.cell_ranges, second_level_cell_count);
+    uint32_t second_level_ref_end = 0;
+    for (const auto& range : second_level_ranges) {
+        second_level_ref_end = std::max(second_level_ref_end, range.end);
+    }
+    CheckSatCellRanges(host_scene, second_level_view, second_level_ref_end);
 
     const happyray::IrregularGrid irregular(scene, 0.12f, 128, 0, 0, 0);
     const auto irregular_view = irregular.View();
     const auto info = Download(irregular_view.cell_infos, 1).front();
     const uint32_t num_cells = info.resolution_x * info.resolution_y * info.resolution_z;
     const auto cells = Download(irregular_view.local_cells, num_cells);
-    std::vector<uint32_t> starts, ends;
+    std::vector<happyray::CellRange> ranges;
     for (const auto& cell : cells) {
-        starts.push_back(cell.ref_start);
-        ends.push_back(cell.ref_end);
+        ranges.push_back(cell.references);
     }
-    const thrust::device_vector<uint32_t> device_starts(starts.begin(), starts.end());
-    const thrust::device_vector<uint32_t> device_ends(ends.begin(), ends.end());
+    const thrust::device_vector<happyray::CellRange> device_ranges(ranges.begin(),
+                                                                   ranges.end());
     happyray::UniformGridView finest;
     finest.bounds_min = info.bounds_min;
     finest.cell_size = info.cell_size;
@@ -228,17 +244,15 @@ void CheckFragmentWriters() {
     finest.resolution_x = info.resolution_x;
     finest.resolution_y = info.resolution_y;
     finest.resolution_z = info.resolution_z;
-    finest.cell_range_start = thrust::raw_pointer_cast(device_starts.data());
-    finest.cell_range_end = thrust::raw_pointer_cast(device_ends.data());
+    finest.cell_ranges = thrust::raw_pointer_cast(device_ranges.data());
     finest.triangle_indices = irregular_view.triangle_indices;
     CheckFilteredFragments(host_scene, finest);
 
     const happyray::UniformGrid single_cell(scene, 1);
     Check(single_cell.TriangleIndexCount() == 1, "no rejected sentinel required for final cell");
-        const auto single_starts = Download(single_cell.View().cell_range_start, 1);
-        const auto single_ends = Download(single_cell.View().cell_range_end, 1);
-        Check(single_starts[0] == 0 && single_ends[0] == 1,
-            "single occupied-cell range endpoints");
+        const auto single_ranges = Download(single_cell.View().cell_ranges, 1);
+        Check(single_ranges[0].start == 0 && single_ranges[0].end == 1,
+                    "single occupied-cell range endpoints");
 }
 
 void CheckCellStarts(const std::vector<uint32_t>& keys, uint32_t num_cells) {

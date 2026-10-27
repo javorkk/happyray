@@ -40,6 +40,12 @@ struct GridResolution {
   int z = 1;
 };
 
+struct alignas(8) CellRange {
+  uint32_t start = 0;
+  uint32_t end = 0;
+};
+static_assert(sizeof(CellRange) == 2 * sizeof(uint32_t));
+
 // Sizes a grid from the expanded geometry bounds and target triangle density.
 HAPPYRAY_HD inline GridResolution
 ComputeGridResolution(const BBox &bounds, uint32_t triangle_count,
@@ -109,8 +115,7 @@ struct UniformGridView {
   int resolution_y = 1;
   int resolution_z = 1;
   // One begin/end pair per cell; empty cells have equal indices.
-  const uint32_t *cell_range_start = nullptr;
-  const uint32_t *cell_range_end = nullptr;
+  const CellRange *cell_ranges = nullptr;
   const uint32_t *triangle_indices =
       nullptr; // Sorted by cell; indexes into SceneView.
 };
@@ -197,16 +202,15 @@ struct CellExtractor {
 
 struct CellRangeExtractor {
   const uint32_t *keys;
-  uint32_t *range_start;
-  uint32_t *range_end;
+  CellRange *ranges;
   uint32_t pair_count;
   uint32_t cell_count;
 
   HAPPYRAY_HD void operator()(uint32_t i) const {
     const uint32_t cell = keys[i];
     if (cell >= cell_count) return;
-    if (i == 0 || keys[i - 1] != cell) range_start[cell] = i;
-    if (i + 1 == pair_count || keys[i + 1] != cell) range_end[cell] = i + 1;
+    if (i == 0 || keys[i - 1] != cell) ranges[cell].start = i;
+    if (i + 1 == pair_count || keys[i + 1] != cell) ranges[cell].end = i + 1;
   }
 };
 
@@ -503,8 +507,8 @@ HAPPYRAY_HD inline bool IntersectSceneGrid(const SceneView &scene,
   detail::TraverseGrid(
       grid, ray, [&](uint32_t cell_index, float *ray_t_max) -> bool {
         IntersectTrianglesClosest(
-            scene, grid.triangle_indices, grid.cell_range_start[cell_index],
-            grid.cell_range_end[cell_index], ray, ray_t_max, &hit);
+          scene, grid.triangle_indices, grid.cell_ranges[cell_index].start,
+          grid.cell_ranges[cell_index].end, ray, ray_t_max, &hit);
         return false; // The walk itself stops once a hit lies before the next
                       // cell boundary.
       });
@@ -519,8 +523,8 @@ HAPPYRAY_HD inline bool IsOccludedGrid(const SceneView &scene,
   return detail::TraverseGrid(
       grid, ray, [&](uint32_t cell_index, float *) -> bool {
         return TestTrianglesInRangeOccluded(
-            scene, grid.triangle_indices, grid.cell_range_start[cell_index],
-            grid.cell_range_end[cell_index], ray);
+            scene, grid.triangle_indices, grid.cell_ranges[cell_index].start,
+            grid.cell_ranges[cell_index].end, ray);
       });
 }
 

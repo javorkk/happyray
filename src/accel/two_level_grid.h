@@ -27,25 +27,24 @@ struct GridRangeView {
   int resolution_x = 1;
   int resolution_y = 1;
   int resolution_z = 1;
-  const uint32_t *cell_range_start = nullptr;
-  const uint32_t *cell_range_end = nullptr;
+  const CellRange *cell_ranges = nullptr;
   const uint32_t *triangle_indices = nullptr;
 };
 
 // Per-top-level-cell second-level grid metadata. `cell_range_offset` locates
 // this grid's ranges in the shared second-level arrays.
-struct SecondLevelGridInfo {
-  GridResolution resolution;
+struct alignas(8) TopLevelCell {
+  int resolution = 1;
   uint32_t cell_range_offset = 0;
-  uint32_t triangle_ref_count = 0;
 };
+static_assert(sizeof(TopLevelCell) == 2 * sizeof(uint32_t));
+static_assert(alignof(TopLevelCell) == 8);
 
 struct TwoLevelGridView {
   GridRangeView top_level;
-  const SecondLevelGridInfo *second_level_infos =
+  const TopLevelCell *top_level_cells =
       nullptr; // One entry per top-level cell.
-  const uint32_t *second_level_cell_range_start = nullptr;
-  const uint32_t *second_level_cell_range_end = nullptr;
+  const CellRange *second_level_cell_ranges = nullptr;
   const uint32_t *second_level_triangle_indices =
       nullptr; // Sorted by second-level cell.
 };
@@ -54,7 +53,7 @@ struct TwoLevelGridView {
 HAPPYRAY_HD inline GridRangeView SecondLevelView(const TwoLevelGridView &grid,
                                                  uint32_t cell_index) {
   const GridRangeView &top = grid.top_level;
-  const SecondLevelGridInfo &info = grid.second_level_infos[cell_index];
+  const TopLevelCell &info = grid.top_level_cells[cell_index];
   const int res_xy = top.resolution_x * top.resolution_y;
   const int cz = static_cast<int>(cell_index) / res_xy;
   const int rem = static_cast<int>(cell_index) % res_xy;
@@ -63,22 +62,19 @@ HAPPYRAY_HD inline GridRangeView SecondLevelView(const TwoLevelGridView &grid,
   const Vec3 bounds_min(top.bounds_min.x + cx * top.cell_size.x,
                         top.bounds_min.y + cy * top.cell_size.y,
                         top.bounds_min.z + cz * top.cell_size.z);
-  const Vec3 cell_size(top.cell_size.x / info.resolution.x,
-                       top.cell_size.y / info.resolution.y,
-                       top.cell_size.z / info.resolution.z);
+  const Vec3 cell_size(top.cell_size.x / info.resolution,
+                       top.cell_size.y / info.resolution,
+                       top.cell_size.z / info.resolution);
   GridRangeView view;
   view.bounds_min = bounds_min;
   view.bounds_max = bounds_min + top.cell_size;
   view.cell_size = cell_size;
   view.inv_cell_size = Vec3(1.0f / cell_size.x, 1.0f / cell_size.y,
                             1.0f / cell_size.z);
-  view.resolution_x = info.resolution.x;
-  view.resolution_y = info.resolution.y;
-  view.resolution_z = info.resolution.z;
-  view.cell_range_start =
-      grid.second_level_cell_range_start + info.cell_range_offset;
-  view.cell_range_end =
-      grid.second_level_cell_range_end + info.cell_range_offset;
+  view.resolution_x = info.resolution;
+  view.resolution_y = info.resolution;
+  view.resolution_z = info.resolution;
+  view.cell_ranges = grid.second_level_cell_ranges + info.cell_range_offset;
   view.triangle_indices = grid.second_level_triangle_indices;
   return view;
 }
@@ -143,11 +139,11 @@ HAPPYRAY_HD inline bool TraverseTwoLevelGrid(const TwoLevelGridView &grid,
              static_cast<uint32_t>(top.resolution_y) * static_cast<uint32_t>(cz));
     visit_top(top_index);
 
-    if (top.cell_range_start[top_index] != top.cell_range_end[top_index]) {
-      const SecondLevelGridInfo &info = grid.second_level_infos[top_index];
-      const int res_x = info.resolution.x;
-      const int res_y = info.resolution.y;
-      const int res_z = info.resolution.z;
+    if (top.cell_ranges[top_index].start != top.cell_ranges[top_index].end) {
+      const TopLevelCell &info = grid.top_level_cells[top_index];
+      const int res_x = info.resolution;
+      const int res_y = info.resolution;
+      const int res_z = info.resolution;
       const Vec3 cell_min(top.bounds_min.x + cx * top.cell_size.x,
                           top.bounds_min.y + cy * top.cell_size.y,
                           top.bounds_min.z + cz * top.cell_size.z);
@@ -254,9 +250,9 @@ HAPPYRAY_HD inline bool IntersectSceneTwoLevelGrid(const SceneView &scene,
       grid, ray, [](uint32_t) {},
       [&](uint32_t leaf, float *ray_t_max) -> bool {
         IntersectTrianglesClosest(scene, grid.second_level_triangle_indices,
-                                  grid.second_level_cell_range_start[leaf],
-                                  grid.second_level_cell_range_end[leaf], ray,
-                                  ray_t_max, &hit);
+                grid.second_level_cell_ranges[leaf].start,
+                grid.second_level_cell_ranges[leaf].end, ray,
+                ray_t_max, &hit);
         return false;
       });
   return ResolveClosestHit(scene, ray, hit, out_hit);
@@ -272,8 +268,8 @@ HAPPYRAY_HD inline bool IsOccludedTwoLevelGrid(const SceneView &scene,
       [&](uint32_t leaf, float *) -> bool {
         return TestTrianglesInRangeOccluded(
             scene, grid.second_level_triangle_indices,
-            grid.second_level_cell_range_start[leaf],
-            grid.second_level_cell_range_end[leaf], ray);
+            grid.second_level_cell_ranges[leaf].start,
+            grid.second_level_cell_ranges[leaf].end, ray);
       });
 }
 

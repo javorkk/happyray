@@ -125,8 +125,7 @@ HAPPYRAY_HD inline IrregularCell MakeCell(const int min_arr[3], const int max_ar
     cell.max_x = max_arr[0];
     cell.max_y = max_arr[1];
     cell.max_z = max_arr[2];
-    cell.ref_start = ref_start;
-    cell.ref_end = ref_end;
+    cell.references = {ref_start, ref_end};
     return cell;
 }
 
@@ -155,8 +154,7 @@ struct ComputeCellInfoFunctor {
     Vec3 top_cell_size;
     int top_resolution_x;
     int top_resolution_y;
-    const uint32_t* top_cell_range_start;
-    const uint32_t* top_cell_range_end;
+    const CellRange* top_cell_ranges;
     float second_level_density;
     uint32_t dense_cell_threshold;
 
@@ -170,7 +168,7 @@ struct ComputeCellInfoFunctor {
                             top_bounds_min.z + cz * top_cell_size.z);
         const Vec3 cell_max = cell_min + top_cell_size;
         const uint32_t triangle_count =
-            top_cell_range_end[c] - top_cell_range_start[c];
+            top_cell_ranges[c].end - top_cell_ranges[c].start;
 
         GridResolution res = (triangle_count <= dense_cell_threshold)
                                  ? GridResolution{1, 1, 1}
@@ -248,6 +246,17 @@ struct ScatterOwnerFunctor {
         const uint32_t begin = range_start[c];
         const uint32_t end = range_end[c];
         for (uint32_t i = begin; i < end; ++i) {
+            owner[i] = c;
+        }
+    }
+};
+
+struct ScatterCellRangeOwnerFunctor {
+    const CellRange* ranges;
+    uint32_t* owner;
+
+    HAPPYRAY_HD void operator()(uint32_t c) const {
+        for (uint32_t i = ranges[c].start; i < ranges[c].end; ++i) {
             owner[i] = c;
         }
     }
@@ -418,7 +427,7 @@ struct MergeCandidateFunctor {
         int cell_min[3], cell_max[3];
         CellMinArr(cell, cell_min);
         CellMaxArr(cell, cell_max);
-        const uint32_t own_count = cell.ref_end - cell.ref_start;
+        const uint32_t own_count = cell.references.end - cell.references.start;
 
         MergeCandidate result;
         result.ref_count = own_count;
@@ -452,7 +461,7 @@ struct MergeCandidateFunctor {
             return result;
         }
 
-        const uint32_t next_count = next_cell.ref_end - next_cell.ref_start;
+        const uint32_t next_count = next_cell.references.end - next_cell.references.start;
         const Vec3 extent1((cell_max[0] - cell_min[0]) * global_cell_size.x,
                            (cell_max[1] - cell_min[1]) * global_cell_size.y,
                            (cell_max[2] - cell_min[2]) * global_cell_size.z);
@@ -481,8 +490,8 @@ struct MergeCandidateFunctor {
         }
 
         const uint32_t union_count =
-            CountSortedUnion(triangle_indices + cell.ref_start, own_count,
-                            triangle_indices + next_cell.ref_start, next_count);
+            CountSortedUnion(triangle_indices + cell.references.start, own_count,
+                            triangle_indices + next_cell.references.start, next_count);
         const float cost_union = area_union * (static_cast<float>(union_count) + kUnitCost);
         if (cost_union <= cost1 + cost2) {
             result.next_cell = static_cast<int32_t>(next_index);
@@ -573,15 +582,17 @@ struct WriteMergedFunctor {
                 max_arr[a] = max_arr[a] > next_max[a] ? max_arr[a] : next_max[a];
             }
             const uint32_t count =
-                MergeSortedUnique(triangle_indices + cell.ref_start, cell.ref_end - cell.ref_start,
-                                 triangle_indices + next_cell.ref_start,
-                                 next_cell.ref_end - next_cell.ref_start,
+                MergeSortedUnique(triangle_indices + cell.references.start,
+                                 cell.references.end - cell.references.start,
+                                 triangle_indices + next_cell.references.start,
+                                 next_cell.references.end - next_cell.references.start,
                                  new_triangle_indices + new_ref_start);
             result = MakeCell(min_arr, max_arr, new_ref_start, new_ref_start + count);
         } else {
-            const uint32_t count = cell.ref_end - cell.ref_start;
+            const uint32_t count = cell.references.end - cell.references.start;
             for (uint32_t k = 0; k < count; ++k) {
-                new_triangle_indices[new_ref_start + k] = triangle_indices[cell.ref_start + k];
+                new_triangle_indices[new_ref_start + k] =
+                    triangle_indices[cell.references.start + k];
             }
             int min_arr[3], max_arr[3];
             CellMinArr(cell, min_arr);
@@ -732,10 +743,10 @@ struct ExpandFunctor {
             return cell;  // Only grow into a single neighbor that spans the whole shared face.
         }
 
-        const uint32_t own_count = cell.ref_end - cell.ref_start;
-        const uint32_t next_count = next_cell.ref_end - next_cell.ref_start;
-        if (!IsSubsetOf(triangle_indices + next_cell.ref_start, next_count,
-                        triangle_indices + cell.ref_start, own_count)) {
+        const uint32_t own_count = cell.references.end - cell.references.start;
+        const uint32_t next_count = next_cell.references.end - next_cell.references.start;
+        if (!IsSubsetOf(triangle_indices + next_cell.references.start, next_count,
+                triangle_indices + cell.references.start, own_count)) {
             return cell;  // Growing could miss a triangle only `next` currently knows about.
         }
 
@@ -744,7 +755,8 @@ struct ExpandFunctor {
         } else {
             cell_min[axis] = next_min[axis];
         }
-        return MakeCell(cell_min, cell_max, cell.ref_start, cell.ref_end);
+        return MakeCell(cell_min, cell_max, cell.references.start,
+                cell.references.end);
     }
 };
 
@@ -760,7 +772,7 @@ struct IrregularGridSahFunctor {
         const Vec3 extent((cell.max_x - cell.min_x) * grid.global_cell_size.x,
                           (cell.max_y - cell.min_y) * grid.global_cell_size.y,
                           (cell.max_z - cell.min_z) * grid.global_cell_size.z);
-        const uint32_t ref_count = cell.ref_end - cell.ref_start;
+        const uint32_t ref_count = cell.references.end - cell.references.start;
         return HalfSurfaceArea(extent) *
               (costs.traversal + static_cast<float>(ref_count) * costs.intersection);
     }
@@ -823,8 +835,7 @@ IrregularGrid::IrregularGrid(const SceneView& scene, float top_level_density,
                       thrust::counting_iterator<uint32_t>(num_top_cells), infos.begin(),
                       ComputeCellInfoFunctor{top_view.bounds_min, top_view.cell_size,
                                              top_view.resolution_x, top_view.resolution_y,
-                                             top_view.cell_range_start,
-                                             top_view.cell_range_end, second_level_density,
+                                             top_view.cell_ranges, second_level_density,
                                              dense_cell_threshold});
 
     // Every top-level cell is the same world-space size, so the per-axis maximum over every
@@ -878,9 +889,9 @@ IrregularGrid::IrregularGrid(const SceneView& scene, float top_level_density,
     thrust::device_vector<uint32_t> owning_top_cell(total_top_level_pairs);
     thrust::for_each(thrust::counting_iterator<uint32_t>(0),
                      thrust::counting_iterator<uint32_t>(num_top_cells),
-                     ScatterOwnerFunctor{top_view.cell_range_start,
-                                        top_view.cell_range_end,
-                                        thrust::raw_pointer_cast(owning_top_cell.data())});
+                     ScatterCellRangeOwnerFunctor{
+                         top_view.cell_ranges,
+                         thrust::raw_pointer_cast(owning_top_cell.data())});
 
     thrust::device_vector<uint32_t> voxel_owner(total_entries);
     thrust::for_each(thrust::counting_iterator<uint32_t>(0),

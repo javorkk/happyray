@@ -93,10 +93,10 @@ void Synchronize(const T* device_data) {
     static_cast<void>(static_cast<T>(*thrust::device_pointer_cast(device_data)));
 }
 
-void SyncGrid(const UniformGridView& view) { Synchronize(view.cell_range_start); }
-void SyncGrid(const TwoLevelGridView& view) { Synchronize(view.top_level.cell_range_start); }
+void SyncGrid(const UniformGridView& view) { Synchronize(view.cell_ranges); }
+void SyncGrid(const TwoLevelGridView& view) { Synchronize(view.top_level.cell_ranges); }
 void SyncGrid(const IrregularGridView& view) {
-    Synchronize(view.top_level.cell_range_start);
+    Synchronize(view.top_level.cell_ranges);
 }
 
 // Analytic per-grid-type memory-footprint estimate: count * sizeof(element), summed over every
@@ -111,7 +111,7 @@ size_t GridMemoryBytes(const UniformGrid& grid) {
     const UniformGridView view = grid.View();
     const auto num_cells =
         static_cast<size_t>(view.resolution_x) * view.resolution_y * view.resolution_z;
-    return 2 * num_cells * sizeof(uint32_t) +
+    return num_cells * sizeof(CellRange) +
           static_cast<size_t>(grid.TriangleIndexCount()) * sizeof(uint32_t);
 }
 
@@ -119,10 +119,10 @@ size_t GridMemoryBytes(const TwoLevelGrid& grid) {
     const TwoLevelGridView view = grid.View();
     const auto num_top_cells = static_cast<size_t>(view.top_level.resolution_x) *
                                view.top_level.resolution_y * view.top_level.resolution_z;
-    size_t bytes = 2 * num_top_cells * sizeof(uint32_t);
+    size_t bytes = num_top_cells * sizeof(CellRange);
     bytes += static_cast<size_t>(grid.TopLevelTriangleIndexCount()) * sizeof(uint32_t);
-    bytes += num_top_cells * sizeof(SecondLevelGridInfo);
-    bytes += 2 * static_cast<size_t>(grid.SecondLevelCellCount()) * sizeof(uint32_t);
+    bytes += num_top_cells * (sizeof(TopLevelCell) + sizeof(uint32_t));
+    bytes += static_cast<size_t>(grid.SecondLevelCellCount()) * sizeof(CellRange);
     bytes += static_cast<size_t>(grid.SecondLevelTriangleIndexCount()) * sizeof(uint32_t);
     return bytes;
 }
@@ -131,7 +131,7 @@ size_t GridMemoryBytes(const IrregularGrid& grid) {
     const IrregularGridView view = grid.View();
     const auto num_top_cells = static_cast<size_t>(view.top_level.resolution_x) *
                                view.top_level.resolution_y * view.top_level.resolution_z;
-    size_t bytes = 2 * num_top_cells * sizeof(uint32_t);
+    size_t bytes = num_top_cells * sizeof(CellRange);
     bytes += static_cast<size_t>(grid.TopLevelTriangleIndexCount()) * sizeof(uint32_t);
     bytes += num_top_cells * sizeof(IrregularCellInfo);
     bytes += num_top_cells * sizeof(IrregularTopCell);

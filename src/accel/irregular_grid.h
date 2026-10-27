@@ -56,7 +56,7 @@
 namespace happyray {
 
 // Per-top-level-cell local "finest grid" metadata -- the local analogue of
-// TwoLevelGrid's SecondLevelGridInfo. `cell_size`/`resolution_*` describe the
+// TwoLevelGrid's TopLevelCell. `cell_size`/`resolution_*` describe the
 // *finest* voxel granularity (the grid before any merging coarsens it);
 // `entries_offset` is where this cell's local voxel-map entries begin in
 // IrregularGridView's shared `local_entries` array (every top-level cell's
@@ -98,8 +98,7 @@ struct alignas(16) IrregularCell {
   int min_x = 0, min_y = 0, min_z = 0;
   int max_x = 0, max_y = 0,
       max_z = 0; // Exclusive, like a UniformGridView cell range.
-  uint32_t ref_start = 0;
-  uint32_t ref_end = 0;
+  CellRange references;
 };
 
 // Traversal-only, 8-byte digest of an IrregularCellInfo (the analogue of HAGrid's 4-byte voxel
@@ -296,7 +295,8 @@ HAPPYRAY_HD inline bool IntersectSceneIrregularGrid(const SceneView &scene,
   ClosestTriangleHit hit;
   detail::TraverseIrregularGrid(
       grid, ray, [&](const IrregularCell &cell, float *ray_t_max) -> bool {
-        IntersectTrianglesClosest(scene, grid.triangle_indices, cell.ref_start, cell.ref_end,
+        IntersectTrianglesClosest(scene, grid.triangle_indices, cell.references.start,
+                cell.references.end,
                                   ray, ray_t_max, &hit);
         return false;
       });
@@ -309,8 +309,9 @@ HAPPYRAY_HD inline bool IsOccludedIrregularGrid(const SceneView &scene,
                                             const Ray &ray) {
   return detail::TraverseIrregularGrid(
       grid, ray, [&](const IrregularCell &cell, float *) -> bool {
-        return TestTrianglesInRangeOccluded(scene, grid.triangle_indices, cell.ref_start,
-                                            cell.ref_end, ray);
+        return TestTrianglesInRangeOccluded(scene, grid.triangle_indices,
+                    cell.references.start,
+                    cell.references.end, ray);
       });
 }
 
