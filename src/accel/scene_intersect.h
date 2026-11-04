@@ -5,7 +5,7 @@
 #include "primitive.h"
 #include "ray.h"
 #include "scene.h"
-#include "triangle_intersect.h"
+#include "triangle.h"
 #include "irregular_grid.h"
 #include "two_level_grid.h"
 #include "uniform_grid.h"

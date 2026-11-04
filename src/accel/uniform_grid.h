@@ -24,7 +24,7 @@
 #include "ray.h"
 #include "sah_cost.h"
 #include "scene.h"
-#include "triangle_intersect.h"
+#include "triangle.h"
 #include "vec.h"
 
 namespace happyray {
@@ -140,53 +140,19 @@ HAPPYRAY_HD inline uint32_t CountCandidateCells(
          static_cast<uint32_t>(cz1 - cz0 + 1);
 }
 
-// Full triangle/box SAT: box axes, triangle plane, and nine edge/box axes.
-// Like obj2string, enlarge the half cell by 1% and tolerate projection
-// roundoff. Unnormalized axes also handle degenerate triangles without dividing
-// by zero.
+// Preserve the grid's 1% cell enlargement while delegating the SAT to core geometry.
 struct TriangleCellIntersection {
-  Vec3 a, b, c;
-  Vec3 edges[3];
-  Vec3 normal;
+  TriangleBoxIntersection intersects;
 
   HAPPYRAY_HD TriangleCellIntersection(const SceneView &scene, uint32_t tri)
       : TriangleCellIntersection(FetchTriangle(scene, tri)) {}
 
   HAPPYRAY_HD explicit TriangleCellIntersection(const Triangle &triangle)
-      : a(triangle.vtx[0]), b(triangle.vtx[1]), c(triangle.vtx[2]),
-        edges{b - a, c - b, a - c}, normal(Cross(edges[0], c - a)) {}
-
-  HAPPYRAY_HD static bool AxisTest(const Vec3 &axis, const Vec3 &a, const Vec3 &b,
-                               const Vec3 &c, const Vec3 &half) {
-    const float p = Dot(axis, a), q = Dot(axis, b), r = Dot(axis, c);
-    const float radius = std::fabs(axis.x) * half.x +
-                         std::fabs(axis.y) * half.y +
-                         std::fabs(axis.z) * half.z;
-    return !(std::fmin(p, std::fmin(q, r)) > radius + 1e-5f ||
-             std::fmax(p, std::fmax(q, r)) < -radius - 1e-5f);
-  }
+      : intersects(triangle) {}
 
   HAPPYRAY_HD bool operator()(const Vec3 &center, const Vec3 &cell_size) const {
-    const Vec3 v0 = a - center, v1 = b - center, v2 = c - center;
     const Vec3 half = cell_size * 0.505f;
-    if (!AxisTest(Vec3(1, 0, 0), v0, v1, v2, half) ||
-        !AxisTest(Vec3(0, 1, 0), v0, v1, v2, half) ||
-        !AxisTest(Vec3(0, 0, 1), v0, v1, v2, half) ||
-        !AxisTest(normal, v0, v1, v2, half))
-      return false;
-    const Vec3 opposite[3] = {v2, v0, v1};
-    const Vec3 endpoints[3] = {v0, v1, v2};
-    for (int i = 0; i < 3; ++i) {
-      const Vec3 &edge = edges[i];
-      // The edge's two endpoints have the same projection on these axes.
-      const Vec3 &p = endpoints[i];
-      const Vec3 &q = opposite[i];
-      if (!AxisTest(Vec3(0, edge.z, -edge.y), p, q, q, half) ||
-          !AxisTest(Vec3(-edge.z, 0, edge.x), p, q, q, half) ||
-          !AxisTest(Vec3(edge.y, -edge.x, 0), p, q, q, half))
-        return false;
-    }
-    return true;
+    return intersects(BBox(center - half, center + half));
   }
 };
 

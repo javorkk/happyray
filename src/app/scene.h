@@ -13,6 +13,7 @@
 #include "../render/camera.h"
 #include "mesh.h"
 #include "primitive.h"
+#include "triangle.h"
 #include "vec.h"
 
 namespace happyray {

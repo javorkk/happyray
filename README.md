@@ -159,8 +159,10 @@ backends; it carries the `performance` label and runs serially.
 ## Architecture
 
 - `src/core/`: header-only, `HAPPYRAY_HD`-annotated math (`vec.h`, `mat4.h`, `quaternion.h`,
-  `random.h`), geometry (`ray.h`, `primitive.h`, `bbox.h`, `triangle_intersect.h`), and scene
-  mesh representation (`mesh.h`). No Thrust/CUDA dependency.
+  `random.h`), geometry (`ray.h`, `primitive.h`, `point.h`, `sphere.h`, `bezier_curve.h`,
+  `bbox.h`, `triangle.h`), and scene mesh representation (`mesh.h`). Triangle, point, sphere, and
+  cubic Bezier tube geometry includes ray and box intersection predicates; triangle pairs also
+  have an intersection test. No Thrust/CUDA dependency.
   Each `Mesh` stores positions separately from packed `VertexAttributes` (normal and UV);
   both buffers have one entry per vertex and share the same triangle indices. OBJ attribute
   seams retain distinct vertex entries. Flattening extracts the positions and normals used by

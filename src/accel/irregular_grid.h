@@ -49,7 +49,7 @@
 #include "ray.h"
 #include "sah_cost.h"
 #include "scene.h"
-#include "triangle_intersect.h"
+#include "triangle.h"
 #include "uniform_grid.h"
 #include "vec.h"
 

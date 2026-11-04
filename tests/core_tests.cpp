@@ -5,8 +5,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <type_traits>
 
 #include "bbox.h"
+#include "bezier_curve.h"
+#include "point.h"
+#include "sphere.h"
 #include "scene.h"
 #include "random.h"
 #include "mat4.h"
@@ -14,9 +18,15 @@
 #include "obj_loader.h"
 #include "quaternion.h"
 #include "ray.h"
+#include "triangle.h"
 #include "vec.h"
 
 namespace {
+
+static_assert(happyray::Triangle::kNumVertices == 3);
+static_assert(std::is_base_of<happyray::Primitive<1>, happyray::Point>::value);
+static_assert(std::is_base_of<happyray::Primitive<1>, happyray::Sphere>::value);
+static_assert(std::is_base_of<happyray::Primitive<4>, happyray::BezierCurve>::value);
 
 int g_failures = 0;
 
@@ -175,6 +185,76 @@ void TestBBoxExtractor() {
     const BBox quad_bounds = BBoxExtractor<Primitive<4>>::Get(quad);
     HAPPYRAY_CHECK(NearlyEqual(quad_bounds.min_bound, Vec3(-2, -1, -3)));
     HAPPYRAY_CHECK(NearlyEqual(quad_bounds.max_bound, Vec3(5, 6, 7)));
+}
+
+void TestAdditionalPrimitiveBounds() {
+    using namespace happyray;
+    const Point point{Vec3(1, -2, 3)};
+    const BBox point_bounds = BBoxExtractor<Point>::Get(point);
+    HAPPYRAY_CHECK(NearlyEqual(point_bounds.min_bound, point.vtx[0]));
+    HAPPYRAY_CHECK(NearlyEqual(point_bounds.max_bound, point.vtx[0]));
+
+    const Sphere sphere{Vec3(1, 2, 3), 2.0f};
+    const BBox sphere_bounds = BBoxExtractor<Sphere>::Get(sphere);
+    HAPPYRAY_CHECK(NearlyEqual(sphere_bounds.min_bound, Vec3(-1, 0, 1)));
+    HAPPYRAY_CHECK(NearlyEqual(sphere_bounds.max_bound, Vec3(3, 4, 5)));
+
+    const BezierCurve curve(Vec3(-2, 0, 1), Vec3(1, 3, -1), Vec3(4, -2, 2),
+                            Vec3(0, 1, 5), 0.5f);
+    const BBox curve_bounds = BBoxExtractor<BezierCurve>::Get(curve);
+    HAPPYRAY_CHECK(NearlyEqual(curve_bounds.min_bound, Vec3(-2.5f, -2.5f, -1.5f)));
+    HAPPYRAY_CHECK(NearlyEqual(curve_bounds.max_bound, Vec3(4.5f, 3.5f, 5.5f)));
+}
+
+void TestPrimitiveIntersections() {
+    using namespace happyray;
+    float t = 0.0f;
+    const Ray x_ray(Vec3(0, 0, 0), Vec3(1, 0, 0));
+    HAPPYRAY_CHECK(IntersectRayPoint(x_ray, Point{Vec3(2, 5e-5f, 0)}, &t));
+    HAPPYRAY_CHECK(NearlyEqual(t, 2.0f));
+    HAPPYRAY_CHECK(!IntersectRayPoint(x_ray, Point{Vec3(2, 0.01f, 0)}, &t));
+
+    HAPPYRAY_CHECK(IntersectRaySphere(x_ray, Sphere{Vec3(4, 0, 0), 1.0f}, &t));
+    HAPPYRAY_CHECK(NearlyEqual(t, 3.0f));
+    const Ray tangent_ray(Vec3(0, 1, 0), Vec3(1, 0, 0));
+    HAPPYRAY_CHECK(IntersectRaySphere(tangent_ray, Sphere{Vec3(4, 0, 0), 1.0f}, &t));
+    HAPPYRAY_CHECK(NearlyEqual(t, 4.0f));
+    HAPPYRAY_CHECK(!IntersectRaySphere(x_ray, Sphere{Vec3(4, 0, 0), -1.0f}, &t));
+
+    const BezierCurve line_curve(Vec3(4, 0, 0), Vec3(5, 0, 0), Vec3(6, 0, 0),
+                                 Vec3(7, 0, 0), 0.5f);
+    const Ray tube_ray(Vec3(5.5f, 0, -2), Vec3(0, 0, 1));
+    HAPPYRAY_CHECK(IntersectRayBezierCurve(tube_ray, line_curve, &t));
+    HAPPYRAY_CHECK(t > 1.49f && t < 1.51f);
+    const Ray tube_miss(Vec3(5.5f, 0.7f, -2), Vec3(0, 0, 1));
+    HAPPYRAY_CHECK(!IntersectRayBezierCurve(tube_miss, line_curve, &t));
+    const BezierCurve curved_tube(Vec3(0, 0, 0), Vec3(0, 1, 0), Vec3(1, 1, 0),
+                                  Vec3(1, 0, 0), 0.05f);
+    const Ray curved_tube_ray(Vec3(0.5f, 0.75f, -1), Vec3(0, 0, 1));
+    HAPPYRAY_CHECK(IntersectRayBezierCurve(curved_tube_ray, curved_tube, &t));
+
+    const BBox box(Vec3(-1, -1, -1), Vec3(1, 1, 1));
+    HAPPYRAY_CHECK(Intersects(Point{Vec3(1, 0, 0)}, box));
+    HAPPYRAY_CHECK(!Intersects(Point{Vec3(1.01f, 0, 0)}, box));
+    HAPPYRAY_CHECK(Intersects(Sphere{Vec3(1.5f, 0, 0), 0.5f}, box));
+    HAPPYRAY_CHECK(!Intersects(Sphere{Vec3(1.51f, 0, 0), 0.5f}, box));
+    HAPPYRAY_CHECK(Intersects(line_curve, BBox(Vec3(5, -0.5f, -0.5f), Vec3(6, 0.5f, 0.5f))));
+
+    const Triangle flat{{Vec3(0, 0, 0), Vec3(2, 0, 0), Vec3(0, 2, 0)}};
+    const Triangle crossing{{Vec3(0.5f, -1, -1), Vec3(0.5f, 2, -1), Vec3(0.5f, 0, 1)}};
+    const Triangle separated{{Vec3(3, 0, 0), Vec3(4, 0, 0), Vec3(3, 1, 0)}};
+    const Triangle coplanar_overlap{{Vec3(0.5f, 0.5f, 0), Vec3(2, 0.5f, 0),
+                                    Vec3(0.5f, 2, 0)}};
+    const Triangle coplanar_separated{{Vec3(3, 3, 0), Vec3(4, 3, 0), Vec3(3, 4, 0)}};
+    const Triangle degenerate_inside{{Vec3(0.5f, 0.5f, 0), Vec3(0.5f, 0.5f, 0),
+                                      Vec3(0.5f, 0.5f, 0)}};
+    const Triangle degenerate_outside{{Vec3(3, 3, 0), Vec3(3, 3, 0), Vec3(3, 3, 0)}};
+    HAPPYRAY_CHECK(IntersectTriangles(flat, crossing));
+    HAPPYRAY_CHECK(!IntersectTriangles(flat, separated));
+    HAPPYRAY_CHECK(IntersectTriangles(flat, coplanar_overlap));
+    HAPPYRAY_CHECK(!IntersectTriangles(flat, coplanar_separated));
+    HAPPYRAY_CHECK(IntersectTriangles(flat, degenerate_inside));
+    HAPPYRAY_CHECK(!IntersectTriangles(flat, degenerate_outside));
 }
 
 void TestQuaternion() {
@@ -391,6 +471,8 @@ int main(int argc, char** argv) {
     TestMat4();
     TestBBox();
     TestBBoxExtractor();
+    TestAdditionalPrimitiveBounds();
+    TestPrimitiveIntersections();
     TestQuaternion();
     TestHalton();
     TestTriangleSubdivision();
