@@ -329,6 +329,35 @@ void TestDensityGridRebuilds(const happyray::FlatScene& scene, const happyray::C
     }
 }
 
+void TestAnimatedSceneUpdate(const happyray::FlatScene& scene,
+                             const happyray::Camera& camera) {
+    using namespace happyray;
+    Renderer grid_renderer(scene), reference_renderer(scene);
+    grid_renderer.SetAccelType(AccelType::kUniformGrid);
+    FlatScene updated_scene = scene;
+    for (Vec3& position : updated_scene.positions) {
+        position.z -= 0.35f;
+    }
+    grid_renderer.UpdateScene(updated_scene);
+    reference_renderer.UpdateScene(updated_scene);
+    HAPPYRAY_CHECK(grid_renderer.HasUniformGrid());
+    HAPPYRAY_CHECK(!grid_renderer.HasTwoLevelGrid());
+    HAPPYRAY_CHECK(!grid_renderer.HasIrregularGrid());
+
+    grid_renderer.ResizeFramebuffer(12, 8);
+    reference_renderer.ResizeFramebuffer(12, 8);
+    AOIntegrator integrator;
+    integrator.max_distance = 1.5f;
+    grid_renderer.RenderFrame(camera, integrator);
+    reference_renderer.RenderFrame(camera, integrator);
+    HAPPYRAY_CHECK(grid_renderer.ResolvedPixels().size() ==
+                   reference_renderer.ResolvedPixels().size());
+    for (size_t i = 0; i < reference_renderer.ResolvedPixels().size(); ++i) {
+        HAPPYRAY_CHECK(Length(grid_renderer.ResolvedPixels()[i] -
+                              reference_renderer.ResolvedPixels()[i]) < 1e-3f);
+    }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -352,6 +381,7 @@ int main(int argc, char** argv) {
 
     TestProgressiveBlend(flat_scene, camera);
     TestDensityGridRebuilds(flat_scene, camera);
+    TestAnimatedSceneUpdate(flat_scene, camera);
 
     happyray::AOIntegrator integrator;
     integrator.samples_per_pixel_per_frame = 4;

@@ -8,6 +8,7 @@
 #include <type_traits>
 
 #include "bbox.h"
+#include "animation.h"
 #include "bezier_curve.h"
 #include "point.h"
 #include "sphere.h"
@@ -462,6 +463,38 @@ void TestObjLoaderCubeWithMaterialsAndQuads(const std::string& assets_dir) {
     HAPPYRAY_CHECK(NearlyEqual(bounds.Extent(), Vec3(1.0f, 1.0f, 1.0f)));
 }
 
+void TestKeyframeAnimation() {
+    using namespace happyray;
+    FlatScene first;
+    first.positions = {Vec3(0, 0, 0), Vec3(2, 0, 0)};
+    first.normals = {Vec3(1, 0, 0), Vec3(1, 0, 0)};
+    first.indices = {0, 0, 0};
+    FlatScene second;
+    second.positions = {Vec3(10, 0, 0), Vec3(12, 0, 0)};
+    second.normals = {Vec3(0, 1, 0), Vec3(0, 1, 0)};
+    second.indices = {1, 0, 1};
+
+    KeyframeAnimation animation({first, second}, 0.5f);
+    FlatScene frame = animation.InterpolatedScene();
+    HAPPYRAY_CHECK(frame.indices == second.indices);
+    HAPPYRAY_CHECK(NearlyEqual(frame.positions[0], first.positions[0]));
+
+    animation.Advance();
+    frame = animation.InterpolatedScene();
+    HAPPYRAY_CHECK(NearlyEqual(frame.positions[0], Vec3(5, 0, 0)));
+    HAPPYRAY_CHECK(NearlyEqual(frame.normals[0], Normalize(Vec3(1, 1, 0))));
+    animation.TogglePause();
+    animation.Advance();
+    HAPPYRAY_CHECK(NearlyEqual(animation.InterpolatedScene().positions[0], Vec3(5, 0, 0)));
+
+    animation.TogglePause();
+    animation.Advance();
+    HAPPYRAY_CHECK(NearlyEqual(animation.InterpolatedScene().positions[0], Vec3(10, 0, 0)));
+    animation.Advance();
+    animation.Advance();
+    HAPPYRAY_CHECK(NearlyEqual(animation.InterpolatedScene().positions[0], Vec3(0, 0, 0)));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -481,6 +514,7 @@ int main(int argc, char** argv) {
     TestObjLoaderTriangleNoNormals(assets_dir);
     TestObjLoaderAttributeSeam(assets_dir);
     TestObjLoaderCubeWithMaterialsAndQuads(assets_dir);
+    TestKeyframeAnimation();
 
     if (g_failures == 0) {
         std::printf("All core tests passed.\n");

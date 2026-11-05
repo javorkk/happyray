@@ -31,10 +31,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "animation.h"
 #include "camera.h"
 #include "grid_density_search.h"
 #include "obj_loader.h"
@@ -122,6 +124,7 @@ void PrintControlsHelp() {
       "Output camera parameters: c\n"
       "Save PNG screenshot: t\n"
       "Acceleration structure: 1 = uniform, 2 = two-level, 3 = irregular\n"
+      "Pause/resume animation: p\n"
       "Print this help: F1\n"
       "Quit: Esc\n");
 }
@@ -161,7 +164,7 @@ float ComputeHorizontalFovDeg(float vertical_fov_deg, int width, int height) {
 
 int main(int argc, char **argv) {
   if (argc < 2) {
-    std::fprintf(stderr, "Usage: %s <scene.obj> [width] [height]\n", argv[0]);
+    std::fprintf(stderr, "Usage: %s <scene.obj|animation.cfg> [width] [height]\n", argv[0]);
     return EXIT_FAILURE;
   }
   // Resolution precedence: an explicit command-line [width] [height] wins
@@ -176,16 +179,35 @@ int main(int argc, char **argv) {
   int height = height_from_args ? std::atoi(argv[3]) : kDefaultHeight;
 
   happyray::Scene scene;
-  if (!happyray::LoadObj(argv[1], &scene)) {
+  happyray::KeyframeAnimation animation;
+  const std::string input_extension = std::filesystem::path(argv[1]).extension().string();
+  const bool animation_loaded = input_extension == ".cfg";
+  if (animation_loaded) {
+    if (!animation.LoadConfig(argv[1], &scene)) {
+      std::fprintf(stderr, "Failed to load animation configuration '%s'\n", argv[1]);
+      return EXIT_FAILURE;
+    }
+  } else if (input_extension == ".obj") {
+    if (!happyray::LoadObj(argv[1], &scene)) {
+      return EXIT_FAILURE;
+    }
+  } else {
+    std::fprintf(stderr, "Input must be an OBJ scene or animation CFG file\n");
     return EXIT_FAILURE;
   }
+  const std::string camera_config_path =
+      animation_loaded ? animation.CameraConfigPath() : happyray::CameraConfigPathFor(argv[1]);
   std::printf("Loaded '%s': %u triangle(s), %u material(s)\n", argv[1],
               scene.TriangleCount(),
               static_cast<unsigned>(scene.materials.size()));
-  const happyray::FlatScene flat_scene = happyray::FlattenScene(scene);
+  if (animation_loaded) {
+    std::printf("Loaded keyframe animation (frame step %.4g per rendered frame)\n",
+                animation.FrameStep());
+  }
+  const happyray::FlatScene flat_scene =
+      animation_loaded ? animation.InterpolatedScene() : happyray::FlattenScene(scene);
 
   happyray::Camera camera = happyray::MakeDefaultCamera(scene);
-  const std::string camera_config_path = happyray::CameraConfigPathFor(argv[1]);
   int config_width = 0;
   int config_height = 0;
   if (happyray::LoadCameraConfig(camera_config_path, &camera, &config_width,
@@ -246,9 +268,6 @@ int main(int argc, char **argv) {
   // file's header comment). HAPPYRAY_ACCEL_TYPE=uniform_grid, two_level_grid, or
   // irregular_grid selects a different one from startup, for headless
   // verification.
-  renderer.BuildUniformGrid();
-  renderer.BuildTwoLevelGrid();
-  renderer.BuildIrregularGrid();
   happyray::AccelType accel_type = happyray::AccelType::kTwoLevelGrid;
   const char *initial_accel_type = std::getenv("HAPPYRAY_ACCEL_TYPE");
   if (initial_accel_type && std::string(initial_accel_type) == "uniform_grid") {
@@ -352,6 +371,7 @@ int main(int argc, char **argv) {
   const char *screenshot_frame_str = std::getenv("HAPPYRAY_SCREENSHOT_FRAME");
   const int screenshot_at_frame =
       screenshot_frame_str ? std::atoi(screenshot_frame_str) : -1;
+  int rendered_frame_count = 0;
   bool screenshot_failed = false;
 
   while (running) {
@@ -432,6 +452,10 @@ int main(int argc, char **argv) {
       } else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F1 &&
                  event.key.repeat == 0) {
         PrintControlsHelp();
+      } else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_p &&
+                 event.key.repeat == 0 && animation_loaded) {
+        animation.TogglePause();
+        std::printf("Animation %s\n", animation.IsPaused() ? "paused" : "playing");
       } else if (event.type == SDL_MOUSEBUTTONDOWN &&
                  event.button.button == SDL_BUTTON_LEFT) {
         // happyray toggles the mouse grab with a click (not a held button).
@@ -545,8 +569,11 @@ int main(int argc, char **argv) {
 
     simple_integrator.light_direction = camera.Forward() * -1.0f;
     renderer.RenderProgressiveFrame(camera, ao_integrator, simple_integrator);
+    ++rendered_frame_count;
 
-    if (density_search_enabled && !camera_dirty && running &&
+    const bool density_search_view_stable =
+      !animation_loaded || animation.IsPaused();
+    if (density_search_enabled && density_search_view_stable && !camera_dirty && running &&
         density_search.CanRebuild(renderer.SampleCount())) {
       auto rebuild_grid = [&](happyray::GridDensities densities) {
         const auto build_start = std::chrono::steady_clock::now();
@@ -614,8 +641,9 @@ int main(int argc, char **argv) {
       // Disk I/O time must not become camera-motion time on the next frame.
       last_ticks = SDL_GetTicks();
     }
-    if (screenshot_path &&
-        static_cast<int>(renderer.SampleCount()) >= screenshot_at_frame) {
+    const int screenshot_frame_count =
+      animation_loaded ? rendered_frame_count : static_cast<int>(renderer.SampleCount());
+    if (screenshot_path && screenshot_frame_count >= screenshot_at_frame) {
       const std::string path(screenshot_path);
       if (path.size() >= 4 && path.compare(path.size() - 4, 4, ".png") == 0) {
         screenshot_failed = !WritePngScreenshot(path, width, height, pixel_buffer);
@@ -630,6 +658,13 @@ int main(int argc, char **argv) {
     SDL_RenderCopy(sdl_renderer, texture, nullptr, nullptr);
     SDL_RenderPresent(sdl_renderer);
 
+    if (animation_loaded && !animation.IsPaused() && running) {
+      animation.Advance();
+      renderer.UpdateScene(animation.InterpolatedScene());
+      renderer.ResetAccumulation();
+      last_ticks = SDL_GetTicks();
+    }
+
     char title[256];
     // Brute force is excluded from this viewer (see this file's header
     // comment), so accel_type is always one of these three.
@@ -643,8 +678,9 @@ int main(int argc, char **argv) {
             .count();
     const double fps = 1.0 / frame_seconds;
     const int title_length = std::snprintf(
-        title, sizeof(title), "HappyRay [%s/%s] - %u spp - %.1f fps",
-        happyray::RendererBackendName(), accel_name, renderer.SampleCount(), fps);
+        title, sizeof(title), "HappyRay [%s/%s] - %u spp - %.1f fps%s",
+        happyray::RendererBackendName(), accel_name, renderer.SampleCount(), fps,
+        animation_loaded && animation.IsPaused() ? " - paused" : "");
     if (build_ms >= 0 && title_length >= 0 &&
         static_cast<size_t>(title_length) < sizeof(title)) {
       std::snprintf(title + title_length, sizeof(title) - title_length,

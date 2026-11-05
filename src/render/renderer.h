@@ -41,6 +41,9 @@ public:
   // Cranley-Patterson jitter table (see random.h) for the new resolution.
   void ResizeFramebuffer(int width, int height);
 
+  // Replaces uploaded geometry, invalidates stale grids, and rebuilds the active grid.
+  void UpdateScene(const FlatScene &scene);
+
   // Restarts progressive accumulation (e.g. after the camera moves) without
   // regenerating the pixel jitter table.
   void ResetAccumulation();
@@ -70,10 +73,8 @@ public:
                           float merge_alpha = 0.7f, int expand_iterations = 2);
   bool HasIrregularGrid() const;
 
-  // Selects which acceleration structure RenderFrame traces against;
-  // kUniformGrid/ kTwoLevelGrid/kIrregularGrid require the matching Build*() to
-  // have been called first. Does not reset accumulation itself -- callers that
-  // want a clean image after switching should call ResetAccumulation() too.
+  // Selects which acceleration structure RenderFrame traces against. Builds a
+  // missing structure on demand. Does not reset accumulation itself.
   void SetAccelType(AccelType type);
   AccelType GetAccelType() const;
 

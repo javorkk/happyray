@@ -32,3 +32,4 @@ Testing/*
 *.log
 assets/hairball.camera.cfg
 assets/san_miguel.camera.cfg
+scenes/*

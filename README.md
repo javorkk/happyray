@@ -68,9 +68,24 @@ uniform grid, the two-level grid (the default), and the irregular grid accelerat
 runtime). `T` saves the current rendered image (including accumulated AO) as
 `happyray_<date>_<time>.png` (for example, `happyray_2026-10-22_17-30-45-123456.png`) in the
 current working directory. Holding the key does not generate repeated screenshots.
-Setting the environment variables `HAPPYRAY_SCREENSHOT_PATH=/path/to/out.ppm` and
-`HAPPYRAY_SCREENSHOT_FRAME=<n>` dumps a PPM screenshot after `<n>` accumulated frames and exits
-(use a `.png` path instead to save PNG), and
+Press `P` to pause/resume a keyframe animation. To use the legacy animation format, create an
+animation `.cfg` file and pass it to the viewer:
+
+```ini
+frame prefix = scenes/ogre/ogre0
+frame suffix = .obj
+number of frames = 9
+frame step = 0.4
+camera = ogre.camera.cfg
+```
+
+For example, `./build/happyray scenes/ogre/scene.cfg` loads `ogre00.obj` through `ogre08.obj`.
+Frame and camera paths in the configuration are relative to the `.cfg` file. The viewer loads the
+numbered OBJ frames into memory and advances by `frame step` per rendered frame, interpolating
+adjacent geometry; the active acceleration structure is rebuilt as frames advance. Passing an OBJ
+directly loads it as a static scene. `HAPPYRAY_SCREENSHOT_PATH=/path/to/out.ppm` and
+`HAPPYRAY_SCREENSHOT_FRAME=<n>` dump a PPM screenshot and exit after `<n>` accumulated frames for a
+still scene, or `<n>` rendered frames during animation (use a `.png` path to save PNG), and
 `HAPPYRAY_ACCEL_TYPE=uniform_grid`, `HAPPYRAY_ACCEL_TYPE=two_level_grid`, or
 `HAPPYRAY_ACCEL_TYPE=irregular_grid` selects that structure from startup instead of the default, for
 headless verification. A scene can also have a sibling `<name>.camera.cfg` giving it a fixed

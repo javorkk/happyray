@@ -162,6 +162,47 @@ void Renderer::ResizeFramebuffer(int width, int height) {
     impl_->pixel_jitter.assign(jitter.begin(), jitter.end());
 }
 
+void Renderer::UpdateScene(const FlatScene& scene) {
+    impl_->positions.assign(scene.positions.begin(), scene.positions.end());
+    impl_->normals.assign(scene.normals.begin(), scene.normals.end());
+    impl_->indices.assign(scene.indices.begin(), scene.indices.end());
+    impl_->material_ids.assign(scene.material_ids.begin(), scene.material_ids.end());
+    impl_->material_diffuse_colors.assign(scene.material_diffuse_colors.begin(),
+                                          scene.material_diffuse_colors.end());
+
+    impl_->uniform_grid.reset();
+    impl_->two_level_grid.reset();
+    impl_->irregular_grid.reset();
+    switch (impl_->accel_type) {
+        case AccelType::kUniformGrid:
+            BuildUniformGrid(impl_->uniform_densities.top_level > 0.0f
+                                 ? impl_->uniform_densities.top_level
+                                 : UniformGrid::kDefaultDensity);
+            break;
+        case AccelType::kTwoLevelGrid:
+            BuildTwoLevelGrid(impl_->two_level_densities.top_level > 0.0f
+                                  ? impl_->two_level_densities.top_level
+                                  : TwoLevelGrid::kDefaultTopLevelDensity,
+                              impl_->two_level_densities.second_level > 0.0f
+                                  ? impl_->two_level_densities.second_level
+                                  : TwoLevelGrid::kDefaultSecondLevelDensity,
+                              impl_->two_level_threshold);
+            break;
+        case AccelType::kIrregularGrid:
+            BuildIrregularGrid(impl_->irregular_densities.top_level > 0.0f
+                                   ? impl_->irregular_densities.top_level
+                                   : IrregularGrid::kDefaultTopLevelDensity,
+                               impl_->irregular_densities.second_level > 0.0f
+                                   ? impl_->irregular_densities.second_level
+                                   : IrregularGrid::kDefaultSecondLevelDensity,
+                               impl_->irregular_threshold, impl_->irregular_merge_alpha,
+                               impl_->irregular_expand_iterations);
+            break;
+        default:
+            break;
+    }
+}
+
 void Renderer::ResetAccumulation() {
     thrust::fill(impl_->accumulated.begin(), impl_->accumulated.end(), Vec3(0.0f, 0.0f, 0.0f));
     impl_->sample_count = 0;
@@ -200,7 +241,43 @@ void Renderer::BuildIrregularGrid(float top_level_density, float second_level_de
 
 bool Renderer::HasIrregularGrid() const { return impl_->irregular_grid != nullptr; }
 
-void Renderer::SetAccelType(AccelType type) { impl_->accel_type = type; }
+void Renderer::SetAccelType(AccelType type) {
+    impl_->accel_type = type;
+    switch (type) {
+        case AccelType::kUniformGrid:
+            if (!impl_->uniform_grid) {
+                BuildUniformGrid(impl_->uniform_densities.top_level > 0.0f
+                                     ? impl_->uniform_densities.top_level
+                                     : UniformGrid::kDefaultDensity);
+            }
+            break;
+        case AccelType::kTwoLevelGrid:
+            if (!impl_->two_level_grid) {
+                BuildTwoLevelGrid(impl_->two_level_densities.top_level > 0.0f
+                                      ? impl_->two_level_densities.top_level
+                                      : TwoLevelGrid::kDefaultTopLevelDensity,
+                                  impl_->two_level_densities.second_level > 0.0f
+                                      ? impl_->two_level_densities.second_level
+                                      : TwoLevelGrid::kDefaultSecondLevelDensity,
+                                  impl_->two_level_threshold);
+            }
+            break;
+        case AccelType::kIrregularGrid:
+            if (!impl_->irregular_grid) {
+                BuildIrregularGrid(impl_->irregular_densities.top_level > 0.0f
+                                       ? impl_->irregular_densities.top_level
+                                       : IrregularGrid::kDefaultTopLevelDensity,
+                                   impl_->irregular_densities.second_level > 0.0f
+                                       ? impl_->irregular_densities.second_level
+                                       : IrregularGrid::kDefaultSecondLevelDensity,
+                                   impl_->irregular_threshold, impl_->irregular_merge_alpha,
+                                   impl_->irregular_expand_iterations);
+            }
+            break;
+        default:
+            break;
+    }
+}
 
 AccelType Renderer::GetAccelType() const { return impl_->accel_type; }
 
