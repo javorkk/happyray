@@ -80,16 +80,15 @@ void TestSimpleIntegrator() {
     const AccelStructures accel;
     const Ray hit(Vec3(0.25f, 0.25f, 1), Vec3(0, 0, -1));
     const Ray miss(Vec3(0.25f, 0.25f, 1), Vec3(0, 0, 1));
+    const float expected_shade = 1.0f / (1.0f + std::exp(-2.0f));
     const float intensities[] = {-1, 0, 0.1f, 0.2499f, 0.25f, 0.2501f,
                                  0.5f, 0.9499f, 0.95f, 0.9501f, 1};
     for (float intensity : intensities) {
         integrator.light_direction = Vec3(std::sqrt(1 - intensity * intensity), 0, intensity) * 2;
-        const float expected = intensity > 0.95f ? 1.2f :
-                               (intensity > 0.25f ? intensity : 0.1f);
         HAPPYRAY_CHECK(NearlyEqual(integrator.Integrate(scene.View(), accel, hit, 0, Vec2()),
-                               scene.material_diffuse_colors[0] * expected, 1e-5f));
+                               scene.material_diffuse_colors[0] * expected_shade, 1e-5f));
         HAPPYRAY_CHECK(NearlyEqual(integrator.Integrate(scene.View(), accel, hit, 100, Vec2(0.3f, 0.7f)),
-                               scene.material_diffuse_colors[0] * expected, 1e-5f));
+                               scene.material_diffuse_colors[0] * expected_shade, 1e-5f));
     }
     HAPPYRAY_CHECK(NearlyEqual(integrator.Integrate(scene.View(), accel, miss, 0, Vec2()),
                            integrator.background_color));

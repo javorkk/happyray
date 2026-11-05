@@ -16,8 +16,9 @@ struct SimpleIntegrator {
         if (!IntersectScene(scene, accel, primary_ray, &hit)) {
             return background_color;
         }
-        const float intensity = Dot(Normalize(light_direction), Normalize(hit.normal));
-        const float shade = intensity > 0.95f ? 1.2f : (intensity > 0.25f ? intensity : 0.1f);
+
+        const float intensity = -Dot(primary_ray.direction, Normalize(hit.normal));
+        const float shade = 1.f / (1.f + std::exp(-intensity * 2.f));  // Sigmoid for cartoon shading.
         return scene.material_diffuse_colors[hit.material_id] * shade;
     }
 };
