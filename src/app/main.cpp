@@ -660,9 +660,12 @@ int main(int argc, char **argv) {
 
     if (animation_loaded && !animation.IsPaused() && running) {
       animation.Advance();
+      const auto build_start = std::chrono::steady_clock::now();
       renderer.UpdateScene(animation.InterpolatedScene());
+      build_ms = std::chrono::duration<double, std::milli>(
+                     std::chrono::steady_clock::now() - build_start)
+                     .count();
       renderer.ResetAccumulation();
-      last_ticks = SDL_GetTicks();
     }
 
     char title[256];
