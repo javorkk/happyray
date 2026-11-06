@@ -1,7 +1,7 @@
 # HappyRay v2.0
 
 A small ray tracer implemented in [Thrust](https://developer.nvidia.com/thrust).
-Currently supports fly-throughs in static .obj scenes in an interactive SDL2 window.
+Currently supports fly-throughs in static or animated .obj scenes in an interactive SDL2 window, and collision detection. 
 Implements:
 
   * [A Parallel Algorithm for Construction of Uniform Grids](https://javor.me/data/gpu_grid_construction.pdf)

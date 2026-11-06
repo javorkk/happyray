@@ -283,7 +283,7 @@ int main(int argc, char **argv) {
   }
   // 'o' toggles collision detection; while an animation is paused its geometry
   // doesn't change, so per-build detection is skipped and the results stay valid.
-  bool collisions_enabled = true;
+  bool collisions_enabled = false;
   auto update_collision_detection = [&]() {
     renderer.SetCollisionDetectionEnabled(
         collisions_enabled && (!animation_loaded || !animation.IsPaused()));
