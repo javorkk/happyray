@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <type_traits>
 
@@ -424,6 +426,53 @@ void TestFlattenScene() {
     HAPPYRAY_CHECK(flat.View().triangle_count == 2);
 }
 
+// `o`/`g` statements become per-triangle object ids that survive subdivision and flattening.
+void TestObjLoaderObjectIds() {
+    using namespace happyray;
+    const std::string path =
+        (std::filesystem::temp_directory_path() / "happyray_core_tests_objects.obj").string();
+    {
+        std::ofstream obj(path);
+        obj << "v 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\n"
+               "f 1 2 3\n"        // Default object: 0.
+               "o A\no B\n"       // A has no faces yet, so it gets no id.
+               "f 1 2 4\n"        // (B): 1.
+               "g left arm \n"
+               "f 1 3 4\n"        // (B, "left arm"): 2.
+               "g right\n"
+               "f 2 3 4\n"        // (B, right): 3.
+               "g left arm\n"
+               "f 1 2 3 4\n"      // Repeated group continues object 2 (quad -> 2 triangles).
+               "o A\n"
+               "f 1 2 4\n";       // (A): 4.
+    }
+    Scene scene;
+    HAPPYRAY_CHECK(LoadObj(path, &scene));
+    std::filesystem::remove(path);
+    HAPPYRAY_CHECK(scene.meshes.size() == 1);
+    if (scene.meshes.size() != 1) return;
+    const Mesh& mesh = scene.meshes[0];
+    // Subdivision rewrites triangles in place and appends children, so the first entries keep
+    // the parsed order.
+    HAPPYRAY_CHECK(mesh.TriangleCount() > 7);
+    HAPPYRAY_CHECK(mesh.object_ids.size() == mesh.TriangleCount());
+    const std::vector<uint32_t> parsed(mesh.object_ids.begin(), mesh.object_ids.begin() + 7);
+    HAPPYRAY_CHECK(parsed == std::vector<uint32_t>({0, 1, 2, 3, 2, 2, 4}));
+    for (uint32_t object_id : mesh.object_ids) HAPPYRAY_CHECK(object_id < 5);
+
+    // A second mesh without object ids is one more object after the first mesh's five.
+    Mesh second = mesh;
+    second.object_ids.clear();
+    scene.meshes.push_back(second);
+    const FlatScene flat = FlattenScene(scene);
+    HAPPYRAY_CHECK(flat.object_ids.size() == flat.indices.size() / 3);
+    HAPPYRAY_CHECK(flat.View().object_ids == flat.object_ids.data());
+    for (uint32_t tri = 0; tri < mesh.TriangleCount(); ++tri) {
+        HAPPYRAY_CHECK(flat.object_ids[tri] == mesh.object_ids[tri]);
+        HAPPYRAY_CHECK(flat.object_ids[mesh.TriangleCount() + tri] == 5);
+    }
+}
+
 void TestObjLoaderCubeWithMaterialsAndQuads(const std::string& assets_dir) {
     using namespace happyray;
     Scene scene;
@@ -514,6 +563,7 @@ int main(int argc, char** argv) {
     TestObjLoaderTriangleNoNormals(assets_dir);
     TestObjLoaderAttributeSeam(assets_dir);
     TestObjLoaderCubeWithMaterialsAndQuads(assets_dir);
+    TestObjLoaderObjectIds();
     TestKeyframeAnimation();
 
     if (g_failures == 0) {

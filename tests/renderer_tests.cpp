@@ -10,6 +10,7 @@
 // each grid's degenerate path is exercised) and dense_cube.obj (dense enough that some
 // top-level cells get real, non-degenerate refinement -- for the irregular grid, this also
 // exercises real merge and expand, not just the flat initial build).
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -358,6 +359,130 @@ void TestAnimatedSceneUpdate(const happyray::FlatScene& scene,
     }
 }
 
+// Appends an n x n tessellated parallelogram (origin + [0,1]^2 * (u, v)) tagged `object_id`.
+void AddTessellatedQuad(happyray::FlatScene* scene, const happyray::Vec3& origin,
+                        const happyray::Vec3& u, const happyray::Vec3& v, int n,
+                        uint32_t object_id) {
+    using namespace happyray;
+    const Vec3 normal = Normalize(Cross(u, v));
+    const uint32_t base = static_cast<uint32_t>(scene->positions.size());
+    for (int j = 0; j <= n; ++j) {
+        for (int i = 0; i <= n; ++i) {
+            scene->positions.push_back(origin + u * (static_cast<float>(i) / n) +
+                                       v * (static_cast<float>(j) / n));
+            scene->normals.push_back(normal);
+        }
+    }
+    for (int j = 0; j < n; ++j) {
+        for (int i = 0; i < n; ++i) {
+            const uint32_t a = base + j * (n + 1) + i;
+            const uint32_t b = a + 1, c = a + (n + 1), d = c + 1;
+            scene->indices.insert(scene->indices.end(), {a, b, d, a, d, c});
+            scene->material_ids.insert(scene->material_ids.end(), {0u, 0u});
+            scene->object_ids.insert(scene->object_ids.end(), {object_id, object_id});
+        }
+    }
+}
+
+// Every grid's leaf-cell collision detection must match an all-pairs host oracle, and colliding
+// triangles must render with the red collided material.
+void TestCollisionDetection() {
+    using namespace happyray;
+    FlatScene scene;
+    scene.material_diffuse_colors = {Vec3(1.0f, 1.0f, 1.0f)};
+    // Object 0: floor plus a wall piercing it (a self-intersection, which must be ignored).
+    AddTessellatedQuad(&scene, Vec3(-1, 0, -1), Vec3(2, 0, 0), Vec3(0, 0, 2), 16, 0);
+    AddTessellatedQuad(&scene, Vec3(0.73f, -0.3f, -0.2f), Vec3(0, 0, 0.4f), Vec3(0, 0.6f, 0), 4,
+                       0);
+    // Object 1: a wall crossing the floor. Object 2: a ceiling touching nothing.
+    AddTessellatedQuad(&scene, Vec3(-0.5f, -0.5f, 0.03f), Vec3(1, 0, 0), Vec3(0, 1, 0), 16, 1);
+    AddTessellatedQuad(&scene, Vec3(-1, 0.8f, -1), Vec3(0, 0, 2), Vec3(2, 0, 0), 8, 2);
+
+    const SceneView view = scene.View();
+    std::vector<uint32_t> expected(view.triangle_count, kNoCollision);
+    for (uint32_t a = 0; a < view.triangle_count; ++a) {
+        for (uint32_t b = a + 1; b < view.triangle_count; ++b) {
+            const uint32_t object_a = scene.object_ids[a], object_b = scene.object_ids[b];
+            if (object_a != object_b &&
+                IntersectTriangles(FetchTriangle(view, a), FetchTriangle(view, b))) {
+                expected[a] = std::min(expected[a], object_b);
+                expected[b] = std::min(expected[b], object_a);
+            }
+        }
+    }
+    uint32_t expected_count = 0;
+    bool ceiling_untouched = true;
+    for (uint32_t tri = 0; tri < view.triangle_count; ++tri) {
+        if (expected[tri] != kNoCollision) ++expected_count;
+        if (scene.object_ids[tri] == 2 && expected[tri] != kNoCollision) ceiling_untouched = false;
+    }
+    HAPPYRAY_CHECK(expected_count > 0);
+    HAPPYRAY_CHECK(ceiling_untouched);
+
+    Renderer renderer(scene);
+    HAPPYRAY_CHECK(renderer.CollisionIds() == std::vector<uint32_t>(view.triangle_count,
+                                                                     kNoCollision));
+    const AccelType grids[] = {AccelType::kUniformGrid, AccelType::kTwoLevelGrid,
+                               AccelType::kIrregularGrid};
+    for (AccelType type : grids) {
+        renderer.SetAccelType(type);
+        HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
+        HAPPYRAY_CHECK(renderer.LastCollisionStats().object_count == 3);
+        HAPPYRAY_CHECK(renderer.LastCollisionStats().candidate_cell_count > 0);
+        HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_triangle_count == expected_count);
+    }
+    // Refined second levels and small irregular cells exercise more leaves than the defaults.
+    renderer.BuildTwoLevelGrid(0.5f, 8.0f, 2);
+    HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
+    renderer.BuildIrregularGrid(0.5f, 8.0f, 2);
+    HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
+
+    // Disabled detection (a paused animation) keeps the last results through rebuilds.
+    renderer.SetCollisionDetectionEnabled(false);
+    HAPPYRAY_CHECK(!renderer.CollisionDetectionEnabled());
+    const float last_collision_ms = renderer.LastCollisionStats().total_ms;
+    renderer.BuildUniformGrid(1.0f);
+    renderer.SetAccelType(AccelType::kTwoLevelGrid);
+    HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
+    HAPPYRAY_CHECK(renderer.LastCollisionStats().total_ms == last_collision_ms);
+    HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_triangle_count == expected_count);
+    renderer.SetCollisionDetectionEnabled(true);
+    renderer.SetAccelType(AccelType::kIrregularGrid);
+    HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
+
+    // Toggling off clears the results; an explicit detection runs even while disabled.
+    renderer.SetCollisionDetectionEnabled(false);
+    renderer.ClearCollisions();
+    HAPPYRAY_CHECK(renderer.CollisionIds() == std::vector<uint32_t>(view.triangle_count,
+                                                                     kNoCollision));
+    HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_triangle_count == 0);
+    renderer.DetectCollisions();
+    HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
+    HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_triangle_count == expected_count);
+    renderer.SetCollisionDetectionEnabled(true);
+
+    Camera camera;
+    camera.position = Vec3(0.0f, 0.3f, 2.0f);
+    camera.yaw_deg = -90.0f;
+    camera.pitch_deg = -10.0f;
+    renderer.ResizeFramebuffer(64, 48);
+    renderer.RenderFrame(camera, SimpleIntegrator());
+    int red_pixels = 0;
+    for (const Vec3& pixel : renderer.ResolvedPixels()) {
+        if (pixel.x > 0.1f && pixel.y == 0.0f && pixel.z == 0.0f) ++red_pixels;
+    }
+    HAPPYRAY_CHECK(red_pixels > 0);
+
+    // A single-object scene has nothing to collide with.
+    FlatScene single_object = scene;
+    single_object.object_ids.clear();
+    renderer.UpdateScene(single_object);
+    HAPPYRAY_CHECK(renderer.LastCollisionStats().object_count == 1);
+    HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_triangle_count == 0);
+    HAPPYRAY_CHECK(renderer.CollisionIds() == std::vector<uint32_t>(view.triangle_count,
+                                                                     kNoCollision));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -365,6 +490,7 @@ int main(int argc, char** argv) {
 
     TestRendererLifecycle();
     TestDensitySearchScheduling();
+    TestCollisionDetection();
     happyray::Scene scene;
     HAPPYRAY_CHECK(happyray::LoadObj(assets_dir + "/box_on_floor.obj", &scene));
     const happyray::FlatScene flat_scene = happyray::FlattenScene(scene);

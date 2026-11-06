@@ -56,7 +56,8 @@ mouse for looking around (click again to release it), `[`/`]` to halve/double th
 size (initially 5% of the scene's bounding-box diagonal), `Space` to reset the camera to its
 starting viewpoint, `C` to print the current camera's parameters and window resolution
 (happyray's camera.cfg text format, including its `resX`/`resY` fields -- see `scene.h`'s
-`LoadCameraConfig`) to the console, and `F1` to print this control list.
+`LoadCameraConfig`) to the console, `O` to toggle collision detection (see below), and `F1` to
+print this control list.
 `HAPPYRAY_LOOK_SENSITIVITY=<value>` seeds a starting value instead of the default `0.1`, and each
 wheel adjustment prints the exact value to set via that variable to keep it across runs; pitch
 is additionally scaled by a fixed `0.256` factor relative to yaw (not user-adjustable, to keep
@@ -109,6 +110,22 @@ acceleration structure's own real traversal code and one shared ray/triangle int
 against small synthetic test cases (`happyray::MeasureSahCalibration()`).
 This adaptive search is disabled for scenes with more than 1,000,000 primitives; those scenes
 keep the grid's default densities.
+
+### Collision detection
+
+Every OBJ `o`/`g` statement starts an object: each distinct (`o` name, `g` name) pair with faces
+gets its own id (a new `o` resets the group; repeating a name continues the earlier object). For
+scenes with at least two objects, the renderer runs exact collision detection whenever it builds
+an acceleration structure (or switches to an already-built one), including on every animation
+frame. This follows string2shape's `CollisionDetector`. Leaf cells that hold triangles from only
+one object are dropped. In each remaining cell, every pair of triangles from different objects is
+tested with the triangle/triangle intersection test. Each triangle records the smallest id of
+another object it intersects. Triangles that touch or intersect another object are drawn with a
+red "collided" material. For such scenes the window title shows the latest detection time as
+`coll: <ms>`; the `build: <ms>` figure excludes it. While an animation is paused (`P`), its
+geometry doesn't change, so detection is skipped (density-search rebuilds and grid switches
+included) and the last results stay on screen. `O` turns collision detection off (removing the
+red highlighting) and back on (detecting immediately on the active grid, even while paused).
 
 ## Running the benchmark
 
@@ -216,6 +233,9 @@ backends; it carries the `performance` label and runs serially.
   the integrator. `renderer.h`/`.cpp` is the `Renderer` engine: uploads scene geometry once,
   owns a `UniformGrid`, a `TwoLevelGrid`, and an `IrregularGrid`, and renders each frame via a
   single `thrust::for_each` over a `RenderPixelFunctor` (no `<<<...>>>` kernel launch anywhere).
+  `collision_detector.h`/`.cpp` reuse the leaf cells of any of the three grids for exact
+  object/object collision detection (see "Collision detection" above), parallelized per cell
+  reference with Thrust; the renderer runs it after every grid build.
   `simple_integrator.h` provides deterministic `SimpleIntegrator` cartoon shading with a
   configurable world-space `light_direction` and background color. Both integrators share the
   same host/device `Integrate()` interface. The renderer specializes its shared Thrust pixel
@@ -227,7 +247,7 @@ backends; it carries the `performance` label and runs serially.
   then accumulates only AO frames and resolves their gradual blend for the viewer. The
   single-integrator `RenderFrame` path remains unchanged for benchmarks and direct rendering;
   reset before switching between these paths.
-- `src/app/`: `obj_loader.h`/`.cpp` (OBJ + `mtllib`/`Kd` parsing), `scene.h` (the shared
+- `src/app/`: `obj_loader.h`/`.cpp` (OBJ + `mtllib`/`Kd` parsing, `o`/`g` object ids), `scene.h` (the shared
   `SceneView`, `FlatScene`, flattening, subdivision, and camera/AO helpers),
   `main.cpp` (the
   interactive SDL2 viewer), and `benchmark.cpp` (the headless `happyray_benchmark` timing harness,

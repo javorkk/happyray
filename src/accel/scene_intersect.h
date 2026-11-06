@@ -31,7 +31,7 @@ HAPPYRAY_HD inline bool IntersectSceneBruteForce(const SceneView& scene, Ray ray
             // Barycentric-interpolated shading normal.
             out_hit->normal = Normalize(scene.normals[i0] * (1.0f - u - v) +
                                         scene.normals[i1] * u + scene.normals[i2] * v);
-            out_hit->material_id = scene.material_ids[tri];
+            out_hit->material_id = FetchMaterialId(scene, tri);
             hit_anything = true;
         }
     }

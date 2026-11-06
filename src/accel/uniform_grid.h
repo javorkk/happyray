@@ -441,7 +441,7 @@ HAPPYRAY_HD inline bool ResolveClosestHit(const SceneView &scene, const Ray &ray
   out_hit->normal =
       Normalize(scene.normals[i0] * (1.0f - hit.u - hit.v) +
                 scene.normals[i1] * hit.u + scene.normals[i2] * hit.v);
-  out_hit->material_id = scene.material_ids[hit.triangle];
+  out_hit->material_id = FetchMaterialId(scene, hit.triangle);
   return true;
 }
 

@@ -25,6 +25,7 @@
 // framing it was captured at.
 #include <SDL.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -122,6 +123,7 @@ void PrintControlsHelp() {
       "Adjust mouse look sensitivity: mouse wheel\n"
       "Reset camera: Space\n"
       "Output camera parameters: c\n"
+      "Toggle collision detection: o\n"
       "Save PNG screenshot: t\n"
       "Acceleration structure: 1 = uniform, 2 = two-level, 3 = irregular\n"
       "Pause/resume animation: p\n"
@@ -279,6 +281,14 @@ int main(int argc, char **argv) {
              std::string(initial_accel_type) == "irregular_grid") {
     accel_type = happyray::AccelType::kIrregularGrid;
   }
+  // 'o' toggles collision detection; while an animation is paused its geometry
+  // doesn't change, so per-build detection is skipped and the results stay valid.
+  bool collisions_enabled = true;
+  auto update_collision_detection = [&]() {
+    renderer.SetCollisionDetectionEnabled(
+        collisions_enabled && (!animation_loaded || !animation.IsPaused()));
+  };
+  update_collision_detection();
   renderer.SetAccelType(accel_type);
 
   std::array<happyray::GridDensities, 4> best_densities{};
@@ -374,6 +384,17 @@ int main(int argc, char **argv) {
   int rendered_frame_count = 0;
   bool screenshot_failed = false;
 
+  // Grid build time since `start`, excluding the collision detection that ran
+  // with the build (reported separately in the window title).
+  auto grid_build_ms_since = [&](std::chrono::steady_clock::time_point start) {
+    const double elapsed_ms = std::chrono::duration<double, std::milli>(
+                                  std::chrono::steady_clock::now() - start)
+                                  .count();
+    return renderer.CollisionDetectionEnabled()
+               ? std::max(0.0, elapsed_ms - renderer.LastCollisionStats().total_ms)
+               : elapsed_ms;
+  };
+
   while (running) {
     const auto frame_start = std::chrono::steady_clock::now();
     double build_ms = -1;
@@ -455,7 +476,18 @@ int main(int argc, char **argv) {
       } else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_p &&
                  event.key.repeat == 0 && animation_loaded) {
         animation.TogglePause();
-        std::printf("Animation %s\n", animation.IsPaused() ? "paused" : "playing");
+        update_collision_detection();
+      } else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_o &&
+                 event.key.repeat == 0) {
+        collisions_enabled = !collisions_enabled;
+        update_collision_detection();
+        if (collisions_enabled) {
+          renderer.DetectCollisions();
+        } else {
+          renderer.ClearCollisions();
+        }
+        renderer.ResetAccumulation();
+        //std::printf("Animation %s\n", animation.IsPaused() ? "paused" : "playing");
       } else if (event.type == SDL_MOUSEBUTTONDOWN &&
                  event.button.button == SDL_BUTTON_LEFT) {
         // happyray toggles the mouse grab with a click (not a held button).
@@ -578,9 +610,7 @@ int main(int argc, char **argv) {
       auto rebuild_grid = [&](happyray::GridDensities densities) {
         const auto build_start = std::chrono::steady_clock::now();
         renderer.RebuildGridDensities(densities);
-        build_ms = std::chrono::duration<double, std::milli>(
-                       std::chrono::steady_clock::now() - build_start)
-                       .count();
+        build_ms = grid_build_ms_since(build_start);
       };
       const happyray::GridDensities candidate = density_search.Candidate();
       rebuild_grid(candidate);
@@ -662,9 +692,7 @@ int main(int argc, char **argv) {
       animation.Advance();
       const auto build_start = std::chrono::steady_clock::now();
       renderer.UpdateScene(animation.InterpolatedScene());
-      build_ms = std::chrono::duration<double, std::milli>(
-                     std::chrono::steady_clock::now() - build_start)
-                     .count();
+      build_ms = grid_build_ms_since(build_start);
       renderer.ResetAccumulation();
     }
 
@@ -684,10 +712,24 @@ int main(int argc, char **argv) {
         title, sizeof(title), "HappyRay [%s/%s] - %u spp - %.1f fps%s",
         happyray::RendererBackendName(), accel_name, renderer.SampleCount(), fps,
         animation_loaded && animation.IsPaused() ? " - paused" : "");
-    if (build_ms >= 0 && title_length >= 0 &&
-        static_cast<size_t>(title_length) < sizeof(title)) {
-      std::snprintf(title + title_length, sizeof(title) - title_length,
-                    " - build: %.2f ms", build_ms);
+    // Collision detection runs with every grid build of a multi-object scene,
+    // except while an animation is paused; its time is reported separately.
+    const happyray::CollisionStats &collision_stats =
+        renderer.LastCollisionStats();
+    const bool show_collision_ms = collision_stats.object_count >= 2 &&
+                                   renderer.CollisionDetectionEnabled();
+    int title_used = title_length;
+    if (build_ms >= 0 && title_used >= 0 &&
+        static_cast<size_t>(title_used) < sizeof(title)) {
+      const int written =
+          std::snprintf(title + title_used, sizeof(title) - title_used,
+                        " - build: %.2f ms", build_ms);
+      title_used = written >= 0 ? title_used + written : -1;
+    }
+    if (show_collision_ms && title_used >= 0 &&
+        static_cast<size_t>(title_used) < sizeof(title)) {
+      std::snprintf(title + title_used, sizeof(title) - title_used,
+                    " - coll: %.2f ms", collision_stats.total_ms);
     }
     SDL_SetWindowTitle(window, title);
   }

@@ -13,6 +13,7 @@
 
 #include "ao_integrator.h"
 #include "camera.h"
+#include "collision_detector.h"
 #include "sah_cost.h"
 #include "scene.h"
 #include "scene_intersect.h"
@@ -107,6 +108,30 @@ public:
                               const SimpleIntegrator &simple);
 
   const std::vector<Vec3> &ResolvedPixels() const;
+
+  // Every Build*Grid call (including the on-demand builds of SetAccelType,
+  // UpdateScene and RebuildGridDensities) runs exact collision detection
+  // between the scene's objects (FlatScene::object_ids) over the new grid's
+  // leaf cells (see src/render/collision_detector.h). Colliding triangles are
+  // then rendered with a red "collided" material instead of their own.
+  // CollisionIds() downloads the per-triangle result: the smallest id of
+  // another object each triangle intersects, or kNoCollision.
+  std::vector<uint32_t> CollisionIds() const;
+  const CollisionStats &LastCollisionStats() const;
+
+  // While disabled (e.g. during a paused animation, whose geometry doesn't
+  // change), grid builds skip collision detection and keep rendering the last
+  // results along with LastCollisionStats(). UpdateScene still clears the
+  // results, since they don't describe new geometry. Enabled by default.
+  void SetCollisionDetectionEnabled(bool enabled);
+  bool CollisionDetectionEnabled() const;
+
+  // Runs collision detection on the active grid now, regardless of
+  // CollisionDetectionEnabled() (a no-op for brute force or an unbuilt grid).
+  void DetectCollisions();
+  // Marks every triangle as non-colliding (normal materials) and resets
+  // LastCollisionStats().
+  void ClearCollisions();
 
 private:
   struct Impl;

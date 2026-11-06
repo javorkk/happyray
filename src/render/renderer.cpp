@@ -13,6 +13,7 @@
 
 #include "renderer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <thrust/copy.h>
@@ -21,6 +22,7 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include "collision_detector.h"
 #include "random.h"
 #include "irregular_grid.h"
 #include "two_level_grid.h"
@@ -74,7 +76,13 @@ struct Renderer::Impl {
     thrust::device_vector<Vec3> normals;
     thrust::device_vector<uint32_t> indices;
     thrust::device_vector<uint32_t> material_ids;
-    thrust::device_vector<Vec3> material_diffuse_colors;
+    thrust::device_vector<Vec3> material_diffuse_colors;  // Ends with the collided material.
+    thrust::device_vector<uint32_t> object_ids;
+    thrust::device_vector<uint32_t> collision_ids;
+    uint32_t object_count = 1;
+    CollisionDetector collision_detector;
+    CollisionStats collision_stats;
+    bool collision_detection_enabled = true;
 
     thrust::device_vector<Vec3> accumulated;
     thrust::device_vector<Vec2> pixel_jitter;
@@ -98,6 +106,21 @@ struct Renderer::Impl {
     int height = 0;
     uint32_t sample_count = 0;
 
+    void UploadScene(const FlatScene& scene);
+
+    // Runs collision detection over `grid`'s leaf cells, refreshing collision_ids.
+    template <typename Grid>
+    void RunCollisionDetection(const Grid& grid) {
+        collision_stats = collision_detector.ComputeCollisions(
+            View(), object_count, grid, thrust::raw_pointer_cast(collision_ids.data()));
+    }
+
+    // Per-build detection, skipped while disabled.
+    template <typename Grid>
+    void ComputeCollisions(const Grid& grid) {
+        if (collision_detection_enabled) RunCollisionDetection(grid);
+    }
+
     template <typename Integrator>
     void RenderFrame(const Camera& camera, const Integrator& integrator, uint32_t sample_offset,
                      uint32_t accumulated_frames, const Vec3* preview_pixels = nullptr,
@@ -110,6 +133,9 @@ struct Renderer::Impl {
         view.indices = thrust::raw_pointer_cast(indices.data());
         view.material_ids = thrust::raw_pointer_cast(material_ids.data());
         view.material_diffuse_colors = thrust::raw_pointer_cast(material_diffuse_colors.data());
+        view.object_ids = thrust::raw_pointer_cast(object_ids.data());
+        view.collision_ids = thrust::raw_pointer_cast(collision_ids.data());
+        view.collided_material_id = static_cast<uint32_t>(material_diffuse_colors.size() - 1);
         view.triangle_count = static_cast<uint32_t>(indices.size() / 3);
         return view;
     }
@@ -128,13 +154,35 @@ struct Renderer::Impl {
     }
 };
 
+// Red diffuse color that replaces the material of triangles colliding with another object.
+const Vec3 kCollidedDiffuseColor(1.0f, 0.0f, 0.0f);
+
+void Renderer::Impl::UploadScene(const FlatScene& scene) {
+    const size_t triangle_count = scene.indices.size() / 3;
+    positions.assign(scene.positions.begin(), scene.positions.end());
+    normals.assign(scene.normals.begin(), scene.normals.end());
+    indices.assign(scene.indices.begin(), scene.indices.end());
+    material_ids.assign(scene.material_ids.begin(), scene.material_ids.end());
+    std::vector<Vec3> colors = scene.material_diffuse_colors;
+    colors.push_back(kCollidedDiffuseColor);
+    material_diffuse_colors.assign(colors.begin(), colors.end());
+
+    object_count = 1;
+    if (scene.object_ids.size() == triangle_count) {
+        object_ids.assign(scene.object_ids.begin(), scene.object_ids.end());
+        for (uint32_t object_id : scene.object_ids) {
+            object_count = std::max(object_count, object_id + 1);
+        }
+    } else {
+        object_ids.assign(triangle_count, 0u);
+    }
+    collision_ids.assign(triangle_count, kNoCollision);
+    collision_stats = CollisionStats{};
+    collision_stats.object_count = object_count;
+}
+
 Renderer::Renderer(const FlatScene& scene) : impl_(std::make_unique<Impl>()) {
-    impl_->positions.assign(scene.positions.begin(), scene.positions.end());
-    impl_->normals.assign(scene.normals.begin(), scene.normals.end());
-    impl_->indices.assign(scene.indices.begin(), scene.indices.end());
-    impl_->material_ids.assign(scene.material_ids.begin(), scene.material_ids.end());
-    impl_->material_diffuse_colors.assign(scene.material_diffuse_colors.begin(),
-                                          scene.material_diffuse_colors.end());
+    impl_->UploadScene(scene);
 }
 
 Renderer::~Renderer() = default;
@@ -163,12 +211,7 @@ void Renderer::ResizeFramebuffer(int width, int height) {
 }
 
 void Renderer::UpdateScene(const FlatScene& scene) {
-    impl_->positions.assign(scene.positions.begin(), scene.positions.end());
-    impl_->normals.assign(scene.normals.begin(), scene.normals.end());
-    impl_->indices.assign(scene.indices.begin(), scene.indices.end());
-    impl_->material_ids.assign(scene.material_ids.begin(), scene.material_ids.end());
-    impl_->material_diffuse_colors.assign(scene.material_diffuse_colors.begin(),
-                                          scene.material_diffuse_colors.end());
+    impl_->UploadScene(scene);
 
     impl_->uniform_grid.reset();
     impl_->two_level_grid.reset();
@@ -212,6 +255,7 @@ uint32_t Renderer::SampleCount() const { return impl_->sample_count; }
 
 void Renderer::BuildUniformGrid(float target_triangles_per_cell) {
     impl_->uniform_grid = std::make_unique<UniformGrid>(impl_->View(), target_triangles_per_cell);
+    impl_->ComputeCollisions(*impl_->uniform_grid);
     impl_->uniform_densities = {target_triangles_per_cell, 0};
 }
 
@@ -221,6 +265,7 @@ void Renderer::BuildTwoLevelGrid(float top_level_density, float second_level_den
                               uint32_t dense_cell_threshold) {
     impl_->two_level_grid = std::make_unique<TwoLevelGrid>(
         impl_->View(), top_level_density, second_level_density, dense_cell_threshold);
+    impl_->ComputeCollisions(*impl_->two_level_grid);
     impl_->two_level_densities = {top_level_density, second_level_density};
     impl_->two_level_threshold = dense_cell_threshold;
 }
@@ -233,6 +278,7 @@ void Renderer::BuildIrregularGrid(float top_level_density, float second_level_de
     impl_->irregular_grid =
         std::make_unique<IrregularGrid>(impl_->View(), top_level_density, second_level_density,
                                         dense_cell_threshold, merge_alpha, expand_iterations);
+    impl_->ComputeCollisions(*impl_->irregular_grid);
     impl_->irregular_densities = {top_level_density, second_level_density};
     impl_->irregular_threshold = dense_cell_threshold;
     impl_->irregular_merge_alpha = merge_alpha;
@@ -249,6 +295,8 @@ void Renderer::SetAccelType(AccelType type) {
                 BuildUniformGrid(impl_->uniform_densities.top_level > 0.0f
                                      ? impl_->uniform_densities.top_level
                                      : UniformGrid::kDefaultDensity);
+            } else {
+                impl_->ComputeCollisions(*impl_->uniform_grid);
             }
             break;
         case AccelType::kTwoLevelGrid:
@@ -260,6 +308,8 @@ void Renderer::SetAccelType(AccelType type) {
                                       ? impl_->two_level_densities.second_level
                                       : TwoLevelGrid::kDefaultSecondLevelDensity,
                                   impl_->two_level_threshold);
+            } else {
+                impl_->ComputeCollisions(*impl_->two_level_grid);
             }
             break;
         case AccelType::kIrregularGrid:
@@ -272,6 +322,8 @@ void Renderer::SetAccelType(AccelType type) {
                                        : IrregularGrid::kDefaultSecondLevelDensity,
                                    impl_->irregular_threshold, impl_->irregular_merge_alpha,
                                    impl_->irregular_expand_iterations);
+            } else {
+                impl_->ComputeCollisions(*impl_->irregular_grid);
             }
             break;
         default:
@@ -392,6 +444,42 @@ void Renderer::RenderProgressiveFrame(const Camera& camera, const AOIntegrator& 
 }
 
 const std::vector<Vec3>& Renderer::ResolvedPixels() const { return impl_->resolved_host; }
+
+std::vector<uint32_t> Renderer::CollisionIds() const {
+    std::vector<uint32_t> ids(impl_->collision_ids.size());
+    thrust::copy(impl_->collision_ids.begin(), impl_->collision_ids.end(), ids.begin());
+    return ids;
+}
+
+const CollisionStats& Renderer::LastCollisionStats() const { return impl_->collision_stats; }
+
+void Renderer::SetCollisionDetectionEnabled(bool enabled) {
+    impl_->collision_detection_enabled = enabled;
+}
+
+bool Renderer::CollisionDetectionEnabled() const { return impl_->collision_detection_enabled; }
+
+void Renderer::DetectCollisions() {
+    switch (impl_->accel_type) {
+        case AccelType::kUniformGrid:
+            if (impl_->uniform_grid) impl_->RunCollisionDetection(*impl_->uniform_grid);
+            break;
+        case AccelType::kTwoLevelGrid:
+            if (impl_->two_level_grid) impl_->RunCollisionDetection(*impl_->two_level_grid);
+            break;
+        case AccelType::kIrregularGrid:
+            if (impl_->irregular_grid) impl_->RunCollisionDetection(*impl_->irregular_grid);
+            break;
+        default:
+            break;
+    }
+}
+
+void Renderer::ClearCollisions() {
+    thrust::fill(impl_->collision_ids.begin(), impl_->collision_ids.end(), kNoCollision);
+    impl_->collision_stats = CollisionStats{};
+    impl_->collision_stats.object_count = impl_->object_count;
+}
 
 const char* RendererBackendName() {
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB

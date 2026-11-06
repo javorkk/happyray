@@ -1,6 +1,7 @@
 #include "obj_loader.h"
 #include "scene.h"
 
+#include <cctype>
 #include <cstdio>
 #include <sstream>
 #include <unordered_map>
@@ -119,6 +120,14 @@ bool LoadObj(const std::string& path, Scene* scene) {
     std::unordered_map<std::string, Vec3> mtllib_diffuse_colors;
     uint32_t current_material_id = 0;
     bool have_material = false;
+    // Objects are the distinct (`o` name, `g` name) pairs; a new `o` resets the group. Repeated
+    // names (e.g. interleaved `g` groups) map back to the same object. Ids are assigned on an
+    // object's first face, so they stay consecutive like string2shape's WFObject reader's.
+    std::string current_object_name;
+    std::string current_group_name;
+    std::unordered_map<std::string, uint32_t> object_ids_by_name;
+    bool have_object_id = false;
+    uint32_t current_object_id = 0;
 
     auto get_or_add_material = [&](const std::string& name) -> uint32_t {
         for (size_t i = 0; i < scene->materials.size(); ++i) {
@@ -165,7 +174,28 @@ bool LoadObj(const std::string& path, Scene* scene) {
             line >> name;
             current_material_id = get_or_add_material(name);
             have_material = true;
+        } else if (keyword == "o" || keyword == "g") {
+            std::string name;
+            std::getline(line >> std::ws, name);
+            while (!name.empty() && std::isspace(static_cast<unsigned char>(name.back()))) {
+                name.pop_back();
+            }
+            if (keyword == "o") {
+                current_object_name = name;
+                current_group_name.clear();
+            } else {
+                current_group_name = name;
+            }
+            have_object_id = false;
         } else if (keyword == "f") {
+            if (!have_object_id) {
+                const std::string key = current_object_name + '\n' + current_group_name;
+                current_object_id =
+                    object_ids_by_name
+                        .emplace(key, static_cast<uint32_t>(object_ids_by_name.size()))
+                        .first->second;
+                have_object_id = true;
+            }
             std::vector<uint32_t> face_vertex_indices;
             std::string token;
             while (line >> token) {
@@ -205,9 +235,10 @@ bool LoadObj(const std::string& path, Scene* scene) {
                 mesh.indices.push_back(face_vertex_indices[i]);
                 mesh.indices.push_back(face_vertex_indices[i + 1]);
                 mesh.material_ids.push_back(have_material ? current_material_id : 0);
+                mesh.object_ids.push_back(current_object_id);
             }
         }
-        // Unrecognized/unsupported keywords (o, g, s, #comments, blank lines, ...) are silently
+        // Unrecognized/unsupported keywords (s, #comments, blank lines, ...) are silently
         // skipped.
     }
     std::fclose(file);

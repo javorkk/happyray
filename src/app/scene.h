@@ -1,6 +1,7 @@
 // Scene views, host-owned flattened geometry, subdivision, and camera/AO helpers.
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
@@ -18,6 +19,9 @@
 
 namespace happyray {
 
+// Per-triangle collision id meaning "this triangle does not collide with any other object".
+constexpr uint32_t kNoCollision = 0xffffffffu;
+
 // Non-owning triangle-soup view over either host or device memory.
 struct SceneView {
     const Vec3* positions = nullptr;
@@ -27,6 +31,11 @@ struct SceneView {
     // FlattenScene supplies a default-white entry for scenes with no materials.
     const Vec3* material_diffuse_colors = nullptr;
     uint32_t triangle_count = 0;
+    const uint32_t* object_ids = nullptr;  // 1 per triangle; may be null.
+    // 1 per triangle (the smallest id of another object it intersects, or kNoCollision); may be
+    // null. Colliding triangles are shaded with `collided_material_id` instead of their own.
+    const uint32_t* collision_ids = nullptr;
+    uint32_t collided_material_id = 0;
 };
 
 HAPPYRAY_HD inline Triangle FetchTriangle(const SceneView& scene, uint32_t tri) {
@@ -37,6 +46,15 @@ HAPPYRAY_HD inline Triangle FetchTriangle(const SceneView& scene, uint32_t tri) 
     return t;
 }
 
+// The material a hit on `tri` is shaded with: swapped for the collided material if collision
+// detection found the triangle intersecting another object.
+HAPPYRAY_HD inline uint32_t FetchMaterialId(const SceneView& scene, uint32_t tri) {
+    if (scene.collision_ids && scene.collision_ids[tri] != kNoCollision) {
+        return scene.collided_material_id;
+    }
+    return scene.material_ids[tri];
+}
+
 // Host-owned geometry shared by CPU rendering and GPU upload.
 struct FlatScene {
     std::vector<Vec3> positions;
@@ -44,6 +62,8 @@ struct FlatScene {
     std::vector<uint32_t> indices;
     std::vector<uint32_t> material_ids;
     std::vector<Vec3> material_diffuse_colors;
+    // 1 per triangle, unique across meshes; empty means a single object.
+    std::vector<uint32_t> object_ids;
 
     SceneView View() const {
         SceneView view;
@@ -52,15 +72,18 @@ struct FlatScene {
         view.indices = indices.data();
         view.material_ids = material_ids.data();
         view.material_diffuse_colors = material_diffuse_colors.data();
+        view.object_ids = object_ids.empty() ? nullptr : object_ids.data();
         view.triangle_count = static_cast<uint32_t>(indices.size() / 3);
         return view;
     }
 };
 
-// Concatenates meshes, offsetting indices by the running vertex count.
+// Concatenates meshes, offsetting indices by the running vertex count and object ids by the
+// running object count (a mesh without object ids counts as one object).
 inline FlatScene FlattenScene(const Scene& scene) {
     FlatScene flat;
     uint32_t vertex_offset = 0;
+    uint32_t object_offset = 0;
     for (const Mesh& mesh : scene.meshes) {
         flat.positions.insert(flat.positions.end(), mesh.positions.begin(), mesh.positions.end());
         for (const VertexAttributes& attributes : mesh.attributes) {
@@ -72,6 +95,13 @@ inline FlatScene FlattenScene(const Scene& scene) {
         for (uint32_t material_id : mesh.material_ids) {
             flat.material_ids.push_back(material_id);
         }
+        uint32_t mesh_object_count = 0;
+        for (uint32_t tri = 0; tri < mesh.TriangleCount(); ++tri) {
+            const uint32_t object_id = tri < mesh.object_ids.size() ? mesh.object_ids[tri] : 0;
+            flat.object_ids.push_back(object_id + object_offset);
+            mesh_object_count = std::max(mesh_object_count, object_id + 1);
+        }
+        object_offset += mesh_object_count;
         vertex_offset += static_cast<uint32_t>(mesh.positions.size());
     }
 
@@ -151,6 +181,10 @@ inline void SubdivideLargeTriangles(Scene* scene) {
             if (!mesh.material_ids.empty()) {
                 const uint32_t material = mesh.material_ids[tri];
                 mesh.material_ids.push_back(material);
+            }
+            if (!mesh.object_ids.empty()) {
+                const uint32_t object = mesh.object_ids[tri];
+                mesh.object_ids.push_back(object);
             }
         }
     }

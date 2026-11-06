@@ -31,6 +31,9 @@ struct Mesh {
     std::vector<VertexAttributes> attributes;  // One entry per position, including at seams.
     std::vector<uint32_t> indices;       // 3 per triangle, indexing positions and attributes.
     std::vector<uint32_t> material_ids;  // One entry per triangle, indexing into Scene::materials.
+    // One entry per triangle: the OBJ object (`o` statement) it belongs to, counted from 0 within
+    // this mesh. Empty means the whole mesh is a single object.
+    std::vector<uint32_t> object_ids;
 
     uint32_t TriangleCount() const { return static_cast<uint32_t>(indices.size() / 3); }
 };

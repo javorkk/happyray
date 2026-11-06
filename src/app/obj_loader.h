@@ -4,7 +4,10 @@
 // v//vn and v/vt/vn vertex references (including negative/relative indices), `usemtl` to tag
 // triangles with a material name, and `mtllib`-referenced .mtl files for flat Lambertian
 // diffuse colors (`Kd r g b`, resolved relative to the .obj file's own directory). All faces
-// are merged into a single Mesh.
+// are merged into a single Mesh; `o` and `g` lines tag the following triangles with per-triangle
+// object ids (Mesh::object_ids), used by collision detection: each distinct (`o` name, `g` name)
+// pair with faces is one object (a new `o` resets the group, and a repeated name continues its
+// earlier object), numbered consecutively in order of first appearance.
 //
 // Known limitations (left for later phases, as more material/multi-object support becomes
 // needed):
