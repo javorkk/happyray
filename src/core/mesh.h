@@ -10,55 +10,68 @@
 #include "bbox.h"
 #include "vec.h"
 
-namespace happyray {
+namespace happyray
+{
 
-struct VertexAttributes {
-    Vec3f normal;
-    Vec2f uv;
-};
+	struct VertexAttributes
+	{
+		Vec3f normal;
+		Vec2f uv;
+	};
 
-struct Material {
-    std::string name;
-    // Flat Lambertian diffuse color, parsed from the OBJ's mtllib ("Kd r g b"). Defaults to
-    // white (full albedo) when no material/Kd is available, so AO shading multiplied by this
-    // color is a no-op for un-textured/material-less geometry.
-    Vec3f diffuse_color = Vec3f(1.0f, 1.0f, 1.0f);
-};
+	struct Material
+	{
+		std::string name;
+		// Flat Lambertian diffuse color, parsed from the OBJ's mtllib ("Kd r g b"). Defaults to
+		// white (full albedo) when no material/Kd is available, so AO shading multiplied by this
+		// color is a no-op for un-textured/material-less geometry.
+		Vec3f diffuse_color = Vec3f(1.0f, 1.0f, 1.0f);
+	};
 
-struct Mesh {
-    std::string name;
-    std::vector<Vec3f> positions;
-    std::vector<VertexAttributes> attributes;  // One entry per position, including at seams.
-    std::vector<uint32_t> indices;       // 3 per triangle, indexing positions and attributes.
-    std::vector<uint32_t> material_ids;  // One entry per triangle, indexing into Scene::materials.
-    // One entry per triangle: the OBJ object (`o` statement) it belongs to, counted from 0 within
-    // this mesh. Empty means the whole mesh is a single object.
-    std::vector<uint32_t> object_ids;
+	struct Mesh
+	{
+		std::string					  name;
+		std::vector<Vec3f>			  positions;
+		std::vector<VertexAttributes> attributes;	// One entry per position, including at seams.
+		std::vector<uint32_t>		  indices;		// 3 per triangle, indexing positions and attributes.
+		std::vector<uint32_t>		  material_ids; // One entry per triangle, indexing into Scene::materials.
+		// One entry per triangle: the OBJ object (`o` statement) it belongs to, counted from 0 within
+		// this mesh. Empty means the whole mesh is a single object.
+		std::vector<uint32_t> object_ids;
 
-    uint32_t TriangleCount() const { return static_cast<uint32_t>(indices.size() / 3); }
-};
+		uint32_t TriangleCount() const
+		{
+			return static_cast<uint32_t>(indices.size() / 3);
+		}
+	};
 
-struct Scene {
-    std::vector<Mesh> meshes;
-    std::vector<Material> materials;
+	struct Scene
+	{
+		std::vector<Mesh>	  meshes;
+		std::vector<Material> materials;
 
-    BBox WorldBounds() const {
-        BBox bounds;
-        for (const Mesh& mesh : meshes) {
-            for (const Vec3f& position : mesh.positions) {
-                bounds.Grow(position);
-            }
-        }
-        return bounds;
-    }
+		BBox WorldBounds() const
+		{
+			BBox bounds;
+			for (const Mesh &mesh : meshes)
+			{
+				for (const Vec3f &position : mesh.positions)
+				{
+					bounds.Grow(position);
+				}
+			}
+			return bounds;
+		}
 
-    uint32_t TriangleCount() const {
-        uint32_t total = 0;
-        for (const Mesh& mesh : meshes) {
-            total += mesh.TriangleCount();
-        }
-        return total;
-    }
-};
+		uint32_t TriangleCount() const
+		{
+			uint32_t total = 0;
+			for (const Mesh &mesh : meshes)
+			{
+				total += mesh.TriangleCount();
+			}
+			return total;
+		}
+	};
 
-}  // namespace happyray
+} // namespace happyray

@@ -74,340 +74,353 @@
 namespace happyray
 {
 
-  // Per-top-level-cell local "finest grid" metadata -- the local analogue of
-  // TwoLevelGrid's TopLevelCell. `cell_size`/`resolution_*` describe the
-  // *finest* voxel granularity (the grid before any merging coarsens it);
-  // `entries_offset` is where this cell's local voxel-map entries begin in
-  // IrregularGridView's shared `local_entries` array (every top-level cell's
-  // local grid is built together, the same combined-array approach as the
-  // two-level grid). `shift_*`/`global_offset_*` place this cell's own local
-  // voxel grid within the grid-wide shared integer lattice IrregularCell's own
-  // bounds are expressed in (see the file header comment above): local voxel
-  // index `v` on a given axis maps to shared coordinate `global_offset + (v <<
-  // shift)`, where `shift = log2(IrregularGridView::global_resolution /
-  // resolution)` (always a whole number of bits, since both are powers of 2 of
-  // this top-level cell's own, identically-sized, world-space extent -- a
-  // shift instead of a general multiply/divide keeps the local<->shared
-  // lattice conversion on detail::LookupIrregularCell's hot path cheap)
-  // and `global_offset` is this top-level cell's own origin in that same
-  // shared lattice (`(cx, cy, cz) * global_resolution`, `(cx, cy, cz)` being
-  // this cell's own position in the top-level grid).
-  struct IrregularCellInfo
-  {
-    Vec3f bounds_min;
-    Vec3f cell_size; // Of one *finest* local voxel (pre-merge granularity).
-    Vec3f inv_cell_size;
-    Vec3i resolution = Vec3i(1, 1, 1); // Already rounded up to a power of 2.
-    uint32_t entries_offset = 0;
-    Vec3i shift;
-    Vec3i global_offset;
-  };
+	// Per-top-level-cell local "finest grid" metadata -- the local analogue of
+	// TwoLevelGrid's TopLevelCell. `cell_size`/`resolution_*` describe the
+	// *finest* voxel granularity (the grid before any merging coarsens it);
+	// `entries_offset` is where this cell's local voxel-map entries begin in
+	// IrregularGridView's shared `local_entries` array (every top-level cell's
+	// local grid is built together, the same combined-array approach as the
+	// two-level grid). `shift_*`/`global_offset_*` place this cell's own local
+	// voxel grid within the grid-wide shared integer lattice IrregularCell's own
+	// bounds are expressed in (see the file header comment above): local voxel
+	// index `v` on a given axis maps to shared coordinate `global_offset + (v <<
+	// shift)`, where `shift = log2(IrregularGridView::global_resolution /
+	// resolution)` (always a whole number of bits, since both are powers of 2 of
+	// this top-level cell's own, identically-sized, world-space extent -- a
+	// shift instead of a general multiply/divide keeps the local<->shared
+	// lattice conversion on detail::LookupIrregularCell's hot path cheap)
+	// and `global_offset` is this top-level cell's own origin in that same
+	// shared lattice (`(cx, cy, cz) * global_resolution`, `(cx, cy, cz)` being
+	// this cell's own position in the top-level grid).
+	struct IrregularCellInfo
+	{
+		Vec3f	 bounds_min;
+		Vec3f	 cell_size; // Of one *finest* local voxel (pre-merge granularity).
+		Vec3f	 inv_cell_size;
+		Vec3i	 resolution		= Vec3i(1, 1, 1); // Already rounded up to a power of 2.
+		uint32_t entries_offset = 0;
+		Vec3i	 shift;
+		Vec3i	 global_offset;
+	};
 
-  // One post-merge/expand irregular cell (NOT one per finest voxel -- that's what
-  // the local entries array is for; several finest voxels can resolve to the
-  // same, bigger, IrregularCell). Bounds are stored as integer coordinates in
-  // the grid-wide shared lattice described in this file's header comment above
-  // (directly matching HAGrid's own `ivec3 Cell::min/max`), not world space, so
-  // merge/expand's bbox-growing arithmetic stays exact integer math regardless
-  // of how many top-level cells a cell has grown across; traversal converts to
-  // world-space t-values itself using IrregularGridView's shared
-  // `global_cell_size` (see detail::TraverseIrregularGrid below).
-  struct alignas(16) IrregularCell
-  {
-    Vec3i min;
-    Vec3i max; // Exclusive, like a UniformGridView cell range.
-    CellRange references;
-  };
+	// One post-merge/expand irregular cell (NOT one per finest voxel -- that's what
+	// the local entries array is for; several finest voxels can resolve to the
+	// same, bigger, IrregularCell). Bounds are stored as integer coordinates in
+	// the grid-wide shared lattice described in this file's header comment above
+	// (directly matching HAGrid's own `ivec3 Cell::min/max`), not world space, so
+	// merge/expand's bbox-growing arithmetic stays exact integer math regardless
+	// of how many top-level cells a cell has grown across; traversal converts to
+	// world-space t-values itself using IrregularGridView's shared
+	// `global_cell_size` (see detail::TraverseIrregularGrid below).
+	struct alignas(16) IrregularCell
+	{
+		Vec3i	  min;
+		Vec3i	  max; // Exclusive, like a UniformGridView cell range.
+		CellRange references;
+	};
 
-  // Traversal-only, 8-byte digest of an IrregularCellInfo (the analogue of HAGrid's 4-byte voxel
-  // map `Entry`): everything detail::LookupIrregularCell needs to turn a shared-lattice voxel into
-  // a local_entries slot, packed so each traversal step reads one 8-byte record instead of the
-  // 76-byte IrregularCellInfo. `packed` holds 5-bit fields: shift.x | shift.y << 5 | shift.z << 10 |
-  // log2(resolution.x) << 15 | log2(resolution.y) << 20 (z isn't needed to flatten).
-  struct alignas(8) IrregularTopCell
-  {
-    uint32_t entries_offset = 0;
-    uint32_t packed = 0;
-  };
+	// Traversal-only, 8-byte digest of an IrregularCellInfo (the analogue of HAGrid's 4-byte voxel
+	// map `Entry`): everything detail::LookupIrregularCell needs to turn a shared-lattice voxel into
+	// a local_entries slot, packed so each traversal step reads one 8-byte record instead of the
+	// 76-byte IrregularCellInfo. `packed` holds 5-bit fields: shift.x | shift.y << 5 | shift.z << 10 |
+	// log2(resolution.x) << 15 | log2(resolution.y) << 20 (z isn't needed to flatten).
+	struct alignas(8) IrregularTopCell
+	{
+		uint32_t entries_offset = 0;
+		uint32_t packed			= 0;
+	};
 
-  HAPPYRAY_HD inline int IrregularLog2(int x)
-  {
-    int log = 0;
-    while ((1 << log) < x)
-    {
-      ++log;
-    }
-    return log;
-  }
+	HAPPYRAY_HD inline int IrregularLog2(int x)
+	{
+		int log = 0;
+		while ((1 << log) < x)
+		{
+			++log;
+		}
+		return log;
+	}
 
-  HAPPYRAY_HD inline IrregularTopCell MakeIrregularTopCell(const IrregularCellInfo &info)
-  {
-    IrregularTopCell top;
-    top.entries_offset = info.entries_offset;
-    top.packed = static_cast<uint32_t>(info.shift.x) |
-                 (static_cast<uint32_t>(info.shift.y) << 5) |
-                 (static_cast<uint32_t>(info.shift.z) << 10) |
-                 (static_cast<uint32_t>(IrregularLog2(info.resolution.x)) << 15) |
-                 (static_cast<uint32_t>(IrregularLog2(info.resolution.y)) << 20);
-    return top;
-  }
+	HAPPYRAY_HD inline IrregularTopCell MakeIrregularTopCell(const IrregularCellInfo &info)
+	{
+		IrregularTopCell top;
+		top.entries_offset = info.entries_offset;
+		top.packed		   = static_cast<uint32_t>(info.shift.x) | (static_cast<uint32_t>(info.shift.y) << 5) |
+					 (static_cast<uint32_t>(info.shift.z) << 10) |
+					 (static_cast<uint32_t>(IrregularLog2(info.resolution.x)) << 15) |
+					 (static_cast<uint32_t>(IrregularLog2(info.resolution.y)) << 20);
+		return top;
+	}
 
-  struct IrregularGridView
-  {
-    // Bounds/cell size/resolution define the top-level grid that the shared lattice subdivides.
-    UniformGridView top_level;
-    const IrregularCellInfo *cell_infos = nullptr; // One per top-level cell (build-time data).
-    const IrregularTopCell *top_cells = nullptr;   // One per top-level cell (traversal lookup).
-    // local_entries[info.entries_offset + FlattenCellIndex(x, y, z,
-    // info.resolution.x, info.resolution.y)] gives the *absolute* index (into
-    // local_cells, no further offset needed) of the IrregularCell that currently
-    // owns local finest-voxel (x, y, z) -- before any merging this is the
-    // identity permutation; after merging, several finest-voxel entries can
-    // resolve to the same (now bigger) cell, possibly owned by a *different*
-    // top-level cell than the one whose local_entries slot is being read (see
-    // the file header comment above).
-    const uint32_t *local_entries = nullptr;
-    const IrregularCell *local_cells =
-        nullptr; // Combined across every top-level cell.
-    const uint32_t *triangle_indices =
-        nullptr; // Combined sorted leaf CSR payload.
-    // The grid-wide shared lattice every IrregularCell's bounds are expressed
-    // in (see the file header comment above): `global_cell_size` is one shared
-    // lattice step's world-space size, and `global_resolution` is how many
-    // lattice steps span one top-level cell (the same for every top-level cell,
-    // since they're all the same world-space size) -- i.e. for every top-level
-    // cell's own IrregularCellInfo, `global_resolution_<axis> ==
-    // cell's own IrregularCellInfo, `global_resolution[axis] ==
-    // resolution[axis] << shift[axis]`.
-    Vec3f global_cell_size;
-    Vec3i global_resolution = Vec3i(1, 1, 1);
-    // Traversal helpers derived from the above: 1 / global_cell_size, and log2 of
-    // global_resolution (always a power of 2 per axis).
-    Vec3f global_inv_cell_size;
-    Vec3i global_shift;
-  };
+	struct IrregularGridView
+	{
+		// Bounds/cell size/resolution define the top-level grid that the shared lattice subdivides.
+		UniformGridView			 top_level;
+		const IrregularCellInfo *cell_infos = nullptr; // One per top-level cell (build-time data).
+		const IrregularTopCell	*top_cells	= nullptr; // One per top-level cell (traversal lookup).
+		// local_entries[info.entries_offset + FlattenCellIndex(x, y, z,
+		// info.resolution.x, info.resolution.y)] gives the *absolute* index (into
+		// local_cells, no further offset needed) of the IrregularCell that currently
+		// owns local finest-voxel (x, y, z) -- before any merging this is the
+		// identity permutation; after merging, several finest-voxel entries can
+		// resolve to the same (now bigger) cell, possibly owned by a *different*
+		// top-level cell than the one whose local_entries slot is being read (see
+		// the file header comment above).
+		const uint32_t		*local_entries	  = nullptr;
+		const IrregularCell *local_cells	  = nullptr; // Combined across every top-level cell.
+		const uint32_t		*triangle_indices = nullptr; // Combined sorted leaf CSR payload.
+		// The grid-wide shared lattice every IrregularCell's bounds are expressed
+		// in (see the file header comment above): `global_cell_size` is one shared
+		// lattice step's world-space size, and `global_resolution` is how many
+		// lattice steps span one top-level cell (the same for every top-level cell,
+		// since they're all the same world-space size) -- i.e. for every top-level
+		// cell's own IrregularCellInfo, `global_resolution_<axis> ==
+		// cell's own IrregularCellInfo, `global_resolution[axis] ==
+		// resolution[axis] << shift[axis]`.
+		Vec3f global_cell_size;
+		Vec3i global_resolution = Vec3i(1, 1, 1);
+		// Traversal helpers derived from the above: 1 / global_cell_size, and log2 of
+		// global_resolution (always a power of 2 per axis).
+		Vec3f global_inv_cell_size;
+		Vec3i global_shift;
+	};
 
-  namespace detail
-  {
+	namespace detail
+	{
 
-    // Resolves shared-lattice voxel (vx, vy, vz) -- which must lie inside the grid -- to the index
-    // of the IrregularCell that owns it: top-level cell from the high bits, then that cell's own
-    // local voxel from the low bits (HAGrid's lookup_entry, with the per-top-level-cell local
-    // resolution standing in for HAGrid's octree levels).
-    HAPPYRAY_HD inline uint32_t LookupIrregularCell(const IrregularGridView &grid,
-                                                    const Vec3i &voxel)
-    {
-      const int tx = voxel.x >> grid.global_shift.x;
-      const int ty = voxel.y >> grid.global_shift.y;
-      const int tz = voxel.z >> grid.global_shift.z;
-      const IrregularTopCell top =
-          grid.top_cells[FlattenCellIndex(tx, ty, tz, grid.top_level.resolution.x,
-                                          grid.top_level.resolution.y)];
-      const uint32_t p = top.packed;
-      const int lx = (voxel.x & (grid.global_resolution.x - 1)) >> (p & 31u);
-      const int ly = (voxel.y & (grid.global_resolution.y - 1)) >> ((p >> 5) & 31u);
-      const int lz = (voxel.z & (grid.global_resolution.z - 1)) >> ((p >> 10) & 31u);
-      const int log_x = static_cast<int>((p >> 15) & 31u);
-      const int log_y = static_cast<int>((p >> 20) & 31u);
-      return grid.local_entries[top.entries_offset + static_cast<uint32_t>(lx) +
-                                (static_cast<uint32_t>(ly) << log_x) +
-                                (static_cast<uint32_t>(lz) << (log_x + log_y))];
-    }
+		// Resolves shared-lattice voxel (vx, vy, vz) -- which must lie inside the grid -- to the index
+		// of the IrregularCell that owns it: top-level cell from the high bits, then that cell's own
+		// local voxel from the low bits (HAGrid's lookup_entry, with the per-top-level-cell local
+		// resolution standing in for HAGrid's octree levels).
+		HAPPYRAY_HD inline uint32_t LookupIrregularCell(const IrregularGridView &grid, const Vec3i &voxel)
+		{
+			const int			   tx = voxel.x >> grid.global_shift.x;
+			const int			   ty = voxel.y >> grid.global_shift.y;
+			const int			   tz = voxel.z >> grid.global_shift.z;
+			const IrregularTopCell top =
+				grid.top_cells[FlattenCellIndex(tx, ty, tz, grid.top_level.resolution.x, grid.top_level.resolution.y)];
+			const uint32_t p	 = top.packed;
+			const int	   lx	 = (voxel.x & (grid.global_resolution.x - 1)) >> (p & 31u);
+			const int	   ly	 = (voxel.y & (grid.global_resolution.y - 1)) >> ((p >> 5) & 31u);
+			const int	   lz	 = (voxel.z & (grid.global_resolution.z - 1)) >> ((p >> 10) & 31u);
+			const int	   log_x = static_cast<int>((p >> 15) & 31u);
+			const int	   log_y = static_cast<int>((p >> 20) & 31u);
+			return grid
+				.local_entries[top.entries_offset + static_cast<uint32_t>(lx) + (static_cast<uint32_t>(ly) << log_x) +
+							   (static_cast<uint32_t>(lz) << (log_x + log_y))];
+		}
 
-    // Next voxel along one axis after leaving `cell` at `t_exit` (HAGrid's traverse.cu): the axis
-    // (or axes, on a tie) the ray exits through steps just past the cell's far plane; every other
-    // axis is re-derived from the exit point, clamped to the cell's own extent on that axis (the
-    // ray provably hasn't left it there yet) and to never move backwards, so float rounding near a
-    // boundary can neither skip a neighbor nor stall progress.
-    // `voxel_offset + voxel_scale * t` is the ray's position at `t` in lattice units on this axis.
-    HAPPYRAY_HD inline int NextIrregularVoxel(float t_cell, float t_exit, float voxel_offset,
-                                              float voxel_scale, bool positive, int voxel,
-                                              int cell_min, int cell_max)
-    {
-      if (t_cell == t_exit)
-      {
-        return positive ? cell_max : cell_min - 1;
-      }
-      const int exit_voxel = ClampInt(static_cast<int>(voxel_offset + voxel_scale * t_exit),
-                                      cell_min, cell_max - 1);
-      return positive ? (exit_voxel > voxel ? exit_voxel : voxel)
-                      : (exit_voxel < voxel ? exit_voxel : voxel);
-    }
+		// Next voxel along one axis after leaving `cell` at `t_exit` (HAGrid's traverse.cu): the axis
+		// (or axes, on a tie) the ray exits through steps just past the cell's far plane; every other
+		// axis is re-derived from the exit point, clamped to the cell's own extent on that axis (the
+		// ray provably hasn't left it there yet) and to never move backwards, so float rounding near a
+		// boundary can neither skip a neighbor nor stall progress.
+		// `voxel_offset + voxel_scale * t` is the ray's position at `t` in lattice units on this axis.
+		HAPPYRAY_HD inline int NextIrregularVoxel(float t_cell,
+												  float t_exit,
+												  float voxel_offset,
+												  float voxel_scale,
+												  bool	positive,
+												  int	voxel,
+												  int	cell_min,
+												  int	cell_max)
+		{
+			if (t_cell == t_exit)
+			{
+				return positive ? cell_max : cell_min - 1;
+			}
+			const int exit_voxel =
+				ClampInt(static_cast<int>(voxel_offset + voxel_scale * t_exit), cell_min, cell_max - 1);
+			return positive ? (exit_voxel > voxel ? exit_voxel : voxel) : (exit_voxel < voxel ? exit_voxel : voxel);
+		}
 
-    // Flat irregular-grid traversal, ported from HAGrid's traverse.cu: a single loop over the
-    // grid-wide shared voxel lattice (irregular_grid.h's file header comment) -- no nested
-    // top-level 3D-DDA -- that per step looks up the owning cell, intersects the ray with that
-    // cell's far planes, jumps straight past its exit, and invokes `visit(cell, &ray_t_max)`.
-    // Stops once `visit` returns true (occlusion), once a hit (or the ray's own end) lies inside
-    // the current cell (`ray_t_max <= t_exit`), or when the ray leaves the grid. Returns true only
-    // if `visit` did. Every step strictly advances at least one voxel coordinate monotonically, so
-    // the walk always terminates.
-    template <typename VisitFn>
-    HAPPYRAY_HD inline bool TraverseIrregularGrid(const IrregularGridView &grid, const Ray &ray,
-                                                  VisitFn &&visit)
-    {
-      const UniformGridView &top = grid.top_level;
-      const Vec3f &org = ray.origin;
-      const Vec3f &dir = ray.direction;
-      const Vec3f inv_dir = SafeRcp(dir);
-      float t_start, t_end;
-      if (!IntersectRayBoxRcp(org, dir, inv_dir, top.bounds_min, top.bounds_max, ray.t_min,
-                              ray.t_max, &t_start, &t_end))
-      {
-        return false;
-      }
-      const Vec3i dims(top.resolution.x << grid.global_shift.x,
-                       top.resolution.y << grid.global_shift.y,
-                       top.resolution.z << grid.global_shift.z);
-      const Vec3f &gmin = top.bounds_min;
-      const Vec3f &gsize = grid.global_cell_size;
-      const Vec3f &ginv = grid.global_inv_cell_size;
-      const Vec3f start = (org + dir * t_start - gmin) * ginv;
-      Vec3i voxel(ClampInt(static_cast<int>(start.x), 0, dims.x - 1),
-                  ClampInt(static_cast<int>(start.y), 0, dims.y - 1),
-                  ClampInt(static_cast<int>(start.z), 0, dims.z - 1));
+		// Flat irregular-grid traversal, ported from HAGrid's traverse.cu: a single loop over the
+		// grid-wide shared voxel lattice (irregular_grid.h's file header comment) -- no nested
+		// top-level 3D-DDA -- that per step looks up the owning cell, intersects the ray with that
+		// cell's far planes, jumps straight past its exit, and invokes `visit(cell, &ray_t_max)`.
+		// Stops once `visit` returns true (occlusion), once a hit (or the ray's own end) lies inside
+		// the current cell (`ray_t_max <= t_exit`), or when the ray leaves the grid. Returns true only
+		// if `visit` did. Every step strictly advances at least one voxel coordinate monotonically, so
+		// the walk always terminates.
+		template <typename VisitFn>
+		HAPPYRAY_HD inline bool TraverseIrregularGrid(const IrregularGridView &grid, const Ray &ray, VisitFn &&visit)
+		{
+			const UniformGridView &top	   = grid.top_level;
+			const Vec3f			  &org	   = ray.origin;
+			const Vec3f			  &dir	   = ray.direction;
+			const Vec3f			   inv_dir = SafeRcp(dir);
+			float				   t_start, t_end;
+			if (!IntersectRayBoxRcp(org,
+									dir,
+									inv_dir,
+									top.bounds_min,
+									top.bounds_max,
+									ray.t_min,
+									ray.t_max,
+									&t_start,
+									&t_end))
+			{
+				return false;
+			}
+			const Vec3i	 dims(top.resolution.x << grid.global_shift.x,
+							  top.resolution.y << grid.global_shift.y,
+							  top.resolution.z << grid.global_shift.z);
+			const Vec3f &gmin  = top.bounds_min;
+			const Vec3f &gsize = grid.global_cell_size;
+			const Vec3f &ginv  = grid.global_inv_cell_size;
+			const Vec3f	 start = (org + dir * t_start - gmin) * ginv;
+			Vec3i		 voxel(ClampInt(static_cast<int>(start.x), 0, dims.x - 1),
+						   ClampInt(static_cast<int>(start.y), 0, dims.y - 1),
+						   ClampInt(static_cast<int>(start.z), 0, dims.z - 1));
 
-      // Ray-constant per-axis terms: direction signs, and the ray's lattice-space position at `t`
-      // as `v_offset + v_scale * t` (used to re-derive non-exit axes after each step).
-      const bool pos_x = dir.x >= 0.0f, pos_y = dir.y >= 0.0f, pos_z = dir.z >= 0.0f;
-      const float v_scale_x = dir.x * ginv.x, v_offset_x = (org.x - gmin.x) * ginv.x;
-      const float v_scale_y = dir.y * ginv.y, v_offset_y = (org.y - gmin.y) * ginv.y;
-      const float v_scale_z = dir.z * ginv.z, v_offset_z = (org.z - gmin.z) * ginv.z;
+			// Ray-constant per-axis terms: direction signs, and the ray's lattice-space position at `t`
+			// as `v_offset + v_scale * t` (used to re-derive non-exit axes after each step).
+			const bool	pos_x = dir.x >= 0.0f, pos_y = dir.y >= 0.0f, pos_z = dir.z >= 0.0f;
+			const float v_scale_x = dir.x * ginv.x, v_offset_x = (org.x - gmin.x) * ginv.x;
+			const float v_scale_y = dir.y * ginv.y, v_offset_y = (org.y - gmin.y) * ginv.y;
+			const float v_scale_z = dir.z * ginv.z, v_offset_z = (org.z - gmin.z) * ginv.z;
 
-      float ray_t_max = ray.t_max;
-      for (;;)
-      {
-        const IrregularCell cell = grid.local_cells[LookupIrregularCell(grid, voxel)];
+			float ray_t_max = ray.t_max;
+			for (;;)
+			{
+				const IrregularCell cell = grid.local_cells[LookupIrregularCell(grid, voxel)];
 
-        // Intersect the far-most planes of the cell's box (zero direction components never exit).
-        const float tcx = dir.x != 0.0f
-                              ? ((pos_x ? cell.max.x : cell.min.x) * gsize.x + gmin.x - org.x) *
-                                    inv_dir.x
-                              : INFINITY;
-        const float tcy = dir.y != 0.0f
-                              ? ((pos_y ? cell.max.y : cell.min.y) * gsize.y + gmin.y - org.y) *
-                                    inv_dir.y
-                              : INFINITY;
-        const float tcz = dir.z != 0.0f
-                              ? ((pos_z ? cell.max.z : cell.min.z) * gsize.z + gmin.z - org.z) *
-                                    inv_dir.z
-                              : INFINITY;
-        const float t_exit = std::fmin(tcx, std::fmin(tcy, tcz));
+				// Intersect the far-most planes of the cell's box (zero direction components never exit).
+				const float tcx	   = dir.x != 0.0f
+										 ? ((pos_x ? cell.max.x : cell.min.x) * gsize.x + gmin.x - org.x) * inv_dir.x
+										 : INFINITY;
+				const float tcy	   = dir.y != 0.0f
+										 ? ((pos_y ? cell.max.y : cell.min.y) * gsize.y + gmin.y - org.y) * inv_dir.y
+										 : INFINITY;
+				const float tcz	   = dir.z != 0.0f
+										 ? ((pos_z ? cell.max.z : cell.min.z) * gsize.z + gmin.z - org.z) * inv_dir.z
+										 : INFINITY;
+				const float t_exit = std::fmin(tcx, std::fmin(tcy, tcz));
 
-        if (visit(cell, &ray_t_max))
-        {
-          return true;
-        }
-        if (ray_t_max <= t_exit)
-        {
-          return false;
-        }
+				if (visit(cell, &ray_t_max))
+				{
+					return true;
+				}
+				if (ray_t_max <= t_exit)
+				{
+					return false;
+				}
 
-        voxel.x = NextIrregularVoxel(tcx, t_exit, v_offset_x, v_scale_x, pos_x,
-                                     voxel.x, cell.min.x, cell.max.x);
-        voxel.y = NextIrregularVoxel(tcy, t_exit, v_offset_y, v_scale_y, pos_y,
-                                     voxel.y, cell.min.y, cell.max.y);
-        voxel.z = NextIrregularVoxel(tcz, t_exit, v_offset_z, v_scale_z, pos_z,
-                                     voxel.z, cell.min.z, cell.max.z);
-        if (static_cast<unsigned>(voxel.x) >= static_cast<unsigned>(dims.x) ||
-            static_cast<unsigned>(voxel.y) >= static_cast<unsigned>(dims.y) ||
-            static_cast<unsigned>(voxel.z) >= static_cast<unsigned>(dims.z))
-        {
-          // (`View().top_level.resolution`'s product, already public; these fill
-          return false;
-        }
-      }
-    }
+				voxel.x =
+					NextIrregularVoxel(tcx, t_exit, v_offset_x, v_scale_x, pos_x, voxel.x, cell.min.x, cell.max.x);
+				voxel.y =
+					NextIrregularVoxel(tcy, t_exit, v_offset_y, v_scale_y, pos_y, voxel.y, cell.min.y, cell.max.y);
+				voxel.z =
+					NextIrregularVoxel(tcz, t_exit, v_offset_z, v_scale_z, pos_z, voxel.z, cell.min.z, cell.max.z);
+				if (static_cast<unsigned>(voxel.x) >= static_cast<unsigned>(dims.x) ||
+					static_cast<unsigned>(voxel.y) >= static_cast<unsigned>(dims.y) ||
+					static_cast<unsigned>(voxel.z) >= static_cast<unsigned>(dims.z))
+				{
+					// (`View().top_level.resolution`'s product, already public; these fill
+					return false;
+				}
+			}
+		}
 
-  } // namespace detail
+	} // namespace detail
 
-  // Finds the closest hit by walking the irregular grid's cells front to back (see
-  // detail::TraverseIrregularGrid above). Returns false if the ray hits nothing.
-  HAPPYRAY_HD inline bool IntersectSceneIrregularGrid(const SceneView &scene,
-                                                      const IrregularGridView &grid,
-                                                      const Ray &ray,
-                                                      HitRecord *out_hit)
-  {
-    ClosestTriangleHit hit;
-    detail::TraverseIrregularGrid(
-        grid, ray, [&](const IrregularCell &cell, float *ray_t_max) -> bool
-        {
-        IntersectTrianglesClosest(scene, grid.triangle_indices, cell.references.start,
-                cell.references.end,
-                                  ray, ray_t_max, &hit);
-        return false; });
-    return ResolveClosestHit(scene, ray, hit, out_hit);
-  }
+	// Finds the closest hit by walking the irregular grid's cells front to back (see
+	// detail::TraverseIrregularGrid above). Returns false if the ray hits nothing.
+	HAPPYRAY_HD inline bool IntersectSceneIrregularGrid(const SceneView			&scene,
+														const IrregularGridView &grid,
+														const Ray				&ray,
+														HitRecord				*out_hit)
+	{
+		ClosestTriangleHit hit;
+		detail::TraverseIrregularGrid(grid,
+									  ray,
+									  [&](const IrregularCell &cell, float *ray_t_max) -> bool
+									  {
+										  IntersectTrianglesClosest(scene,
+																	grid.triangle_indices,
+																	cell.references.start,
+																	cell.references.end,
+																	ray,
+																	ray_t_max,
+																	&hit);
+										  return false;
+									  });
+		return ResolveClosestHit(scene, ray, hit, out_hit);
+	}
 
-  // Returns true as soon as any triangle in any irregular cell the ray visits occludes `ray`.
-  HAPPYRAY_HD inline bool IsOccludedIrregularGrid(const SceneView &scene,
-                                                  const IrregularGridView &grid,
-                                                  const Ray &ray)
-  {
-    return detail::TraverseIrregularGrid(
-        grid, ray, [&](const IrregularCell &cell, float *) -> bool
-        { return TestTrianglesInRangeOccluded(scene, grid.triangle_indices,
-                                              cell.references.start,
-                                              cell.references.end, ray); });
-  }
+	// Returns true as soon as any triangle in any irregular cell the ray visits occludes `ray`.
+	HAPPYRAY_HD inline bool
+	IsOccludedIrregularGrid(const SceneView &scene, const IrregularGridView &grid, const Ray &ray)
+	{
+		return detail::TraverseIrregularGrid(grid,
+											 ray,
+											 [&](const IrregularCell &cell, float *) -> bool
+											 {
+												 return TestTrianglesInRangeOccluded(scene,
+																					 grid.triangle_indices,
+																					 cell.references.start,
+																					 cell.references.end,
+																					 ray);
+											 });
+	}
 
-  class IrregularGrid
-  {
-  public:
-    static constexpr float kDefaultTopLevelDensity = 0.12f;
-    static constexpr float kDefaultSecondLevelDensity = 2.4f;
-    // `scene` must point at memory reachable by whichever Thrust backend this
-    // binary was built with (device memory for the CUDA backend, ordinary host
-    // memory for the TBB backend).
-    // `top_level_density`/`second_level_density`/`dense_cell_threshold` match
-    // TwoLevelGrid's defaults and meaning (second_level_density sizes each
-    // top-level cell's *finest* local grid before it gets rounded up to a power
-    // of 2; dense_cell_threshold forces sparse cells straight to a 1x1x1 local
-    // grid, since merging could never shrink them further anyway). `merge_alpha`
-    // stops the merge pass once a round shrinks a top-level cell's local cell
-    // count by less than this fraction (e.g. 0.7 => stop once a round shrinks it
-    // by < 30%). `expand_iterations` is how many outer passes the expand pass
-    // runs (each pass can grow a cell by one more layer of neighbors, so more
-    // iterations let growth propagate further).
-    explicit IrregularGrid(const SceneView &scene,
-                           float top_level_density = kDefaultTopLevelDensity,
-                           float second_level_density = kDefaultSecondLevelDensity,
-                           uint32_t dense_cell_threshold = 16,
-                           float merge_alpha = 0.7f, int expand_iterations = 2);
-    ~IrregularGrid();
-    IrregularGrid(const IrregularGrid &) = delete;
-    IrregularGrid &operator=(const IrregularGrid &) = delete;
+	class IrregularGrid
+	{
+	  public:
+		static constexpr float kDefaultTopLevelDensity	  = 0.12f;
+		static constexpr float kDefaultSecondLevelDensity = 2.4f;
+		// `scene` must point at memory reachable by whichever Thrust backend this
+		// binary was built with (device memory for the CUDA backend, ordinary host
+		// memory for the TBB backend).
+		// `top_level_density`/`second_level_density`/`dense_cell_threshold` match
+		// TwoLevelGrid's defaults and meaning (second_level_density sizes each
+		// top-level cell's *finest* local grid before it gets rounded up to a power
+		// of 2; dense_cell_threshold forces sparse cells straight to a 1x1x1 local
+		// grid, since merging could never shrink them further anyway). `merge_alpha`
+		// stops the merge pass once a round shrinks a top-level cell's local cell
+		// count by less than this fraction (e.g. 0.7 => stop once a round shrinks it
+		// by < 30%). `expand_iterations` is how many outer passes the expand pass
+		// runs (each pass can grow a cell by one more layer of neighbors, so more
+		// iterations let growth propagate further).
+		explicit IrregularGrid(const SceneView &scene,
+							   float			top_level_density	 = kDefaultTopLevelDensity,
+							   float			second_level_density = kDefaultSecondLevelDensity,
+							   uint32_t			dense_cell_threshold = 16,
+							   float			merge_alpha			 = 0.7f,
+							   int				expand_iterations	 = 2);
+		~IrregularGrid();
+		IrregularGrid(const IrregularGrid &)			= delete;
+		IrregularGrid &operator=(const IrregularGrid &) = delete;
 
-    IrregularGridView View() const;
+		IrregularGridView View() const;
 
-    // Total number of distinct (post-merge/expand) IrregularCells, i.e. View().local_cells's own
-    // element count -- not derivable from the view alone, since several finest-voxel
-    // `local_entries` slots can resolve to the same cell. Used by callers that need to enumerate
-    // every distinct cell exactly once (e.g. tests/accel_performance_tests.cpp's SAH cost
-    // computation), mirroring UniformGrid::TriangleIndexCount()'s existing precedent.
-    uint32_t LocalCellCount() const;
+		// Total number of distinct (post-merge/expand) IrregularCells, i.e. View().local_cells's own
+		// element count -- not derivable from the view alone, since several finest-voxel
+		// `local_entries` slots can resolve to the same cell. Used by callers that need to enumerate
+		// every distinct cell exactly once (e.g. tests/accel_performance_tests.cpp's SAH cost
+		// computation), mirroring UniformGrid::TriangleIndexCount()'s existing precedent.
+		uint32_t LocalCellCount() const;
 
-    // Remaining per-array element counts needed (alongside LocalCellCount() above and
-    // View().top_level's own resolution) to compute an analytic memory-footprint estimate
-    // (count * sizeof(element)) without any CUDA-specific allocation introspection -- see
-    // tests/accel_performance_tests.cpp.
-    uint32_t TopLevelTriangleIndexCount() const;
-    uint32_t LocalEntryCount() const;
-    uint32_t TriangleIndexCount() const;
+		// Remaining per-array element counts needed (alongside LocalCellCount() above and
+		// View().top_level's own resolution) to compute an analytic memory-footprint estimate
+		// (count * sizeof(element)) without any CUDA-specific allocation introspection -- see
+		// tests/accel_performance_tests.cpp.
+		uint32_t TopLevelTriangleIndexCount() const;
+		uint32_t LocalEntryCount() const;
+		uint32_t TriangleIndexCount() const;
 
-    // Structural SAH cost estimate for this grid as currently built (see sah_cost.h), normalized
-    // by `scene_bounds`'s own half surface area -- not from casting rays, but the same
-    // surface-area-weighted "expected cost" heuristic the grid density search (see
-    // src/app/grid_density_search.h) uses to prefer one candidate density over another. Unlike the
-    // two-level grid, local cells here are individually sized (merge/expand grows some, leaves
-    // others at the finest voxel size), so this genuinely needs one term per distinct surviving
-    // cell -- LocalCellCount() above is exactly the count needed to enumerate `local_cells`
-    // without re-visiting any cell once per finest voxel it now spans.
-    float ComputeSahCost(const BBox &scene_bounds, const SahCostConstants &costs) const;
+		// Structural SAH cost estimate for this grid as currently built (see sah_cost.h), normalized
+		// by `scene_bounds`'s own half surface area -- not from casting rays, but the same
+		// surface-area-weighted "expected cost" heuristic the grid density search (see
+		// src/app/grid_density_search.h) uses to prefer one candidate density over another. Unlike the
+		// two-level grid, local cells here are individually sized (merge/expand grows some, leaves
+		// others at the finest voxel size), so this genuinely needs one term per distinct surviving
+		// cell -- LocalCellCount() above is exactly the count needed to enumerate `local_cells`
+		// without re-visiting any cell once per finest voxel it now spans.
+		float ComputeSahCost(const BBox &scene_bounds, const SahCostConstants &costs) const;
 
-  private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-  };
+	  private:
+		struct Impl;
+		std::unique_ptr<Impl> impl_;
+	};
 
 } // namespace happyray

@@ -20,127 +20,129 @@
 #include "simple_integrator.h"
 #include "vec.h"
 
-namespace happyray {
+namespace happyray
+{
 
-struct GridDensities {
-  float top_level = 0;
-  float second_level = 0; // Unused for a uniform grid.
-};
+	struct GridDensities
+	{
+		float top_level	   = 0;
+		float second_level = 0; // Unused for a uniform grid.
+	};
 
-class Renderer {
-public:
-  // Uploads `scene`'s geometry once; the Renderer keeps its own copy, so
-  // `scene` doesn't need to outlive this call. ("Uploads" means an actual
-  // host->device copy for the CUDA backend, or just an ordinary host-side copy
-  // for the TBB backend.)
-  explicit Renderer(const FlatScene &scene);
-  ~Renderer();
-  Renderer(const Renderer &) = delete;
-  Renderer &operator=(const Renderer &) = delete;
+	class Renderer
+	{
+	  public:
+		// Uploads `scene`'s geometry once; the Renderer keeps its own copy, so
+		// `scene` doesn't need to outlive this call. ("Uploads" means an actual
+		// host->device copy for the CUDA backend, or just an ordinary host-side copy
+		// for the TBB backend.)
+		explicit Renderer(const FlatScene &scene);
+		~Renderer();
+		Renderer(const Renderer &)			  = delete;
+		Renderer &operator=(const Renderer &) = delete;
 
-  // (Re)allocates the accumulation buffer and generates a fresh per-pixel
-  // Cranley-Patterson jitter table (see random.h) for the new resolution.
-  void ResizeFramebuffer(int width, int height);
+		// (Re)allocates the accumulation buffer and generates a fresh per-pixel
+		// Cranley-Patterson jitter table (see random.h) for the new resolution.
+		void ResizeFramebuffer(int width, int height);
 
-  // Replaces uploaded geometry, invalidates stale grids, and rebuilds the active grid.
-  void UpdateScene(const FlatScene &scene);
+		// Replaces uploaded geometry, invalidates stale grids, and rebuilds the active grid.
+		void UpdateScene(const FlatScene &scene);
 
-  // Restarts progressive accumulation (e.g. after the camera moves) without
-  // regenerating the pixel jitter table.
-  void ResetAccumulation();
+		// Restarts progressive accumulation (e.g. after the camera moves) without
+		// regenerating the pixel jitter table.
+		void ResetAccumulation();
 
-  uint32_t SampleCount() const;
+		uint32_t SampleCount() const;
 
-  // Builds a uniform grid over the already-uploaded geometry (reusing it, not
-  // re-uploading it). Select it with SetAccelType(). Safe to call more than
-  // once (rebuilds in place).
-  void BuildUniformGrid(float target_triangles_per_cell = 3.0f);
-  bool HasUniformGrid() const;
+		// Builds a uniform grid over the already-uploaded geometry (reusing it, not
+		// re-uploading it). Select it with SetAccelType(). Safe to call more than
+		// once (rebuilds in place).
+		void BuildUniformGrid(float target_triangles_per_cell = 3.0f);
+		bool HasUniformGrid() const;
 
-  // Builds a two-level grid over the already-uploaded geometry; see
-  // TwoLevelGrid (src/accel/two_level_grid.h) for the parameter defaults'
-  // meaning.
-  void BuildTwoLevelGrid(float top_level_density = 0.12f,
-                         float second_level_density = 2.4f,
-                         uint32_t dense_cell_threshold = 16);
-  bool HasTwoLevelGrid() const;
+		// Builds a two-level grid over the already-uploaded geometry; see
+		// TwoLevelGrid (src/accel/two_level_grid.h) for the parameter defaults'
+		// meaning.
+		void BuildTwoLevelGrid(float	top_level_density	 = 0.12f,
+							   float	second_level_density = 2.4f,
+							   uint32_t dense_cell_threshold = 16);
+		bool HasTwoLevelGrid() const;
 
-  // Builds an irregular grid over the already-uploaded geometry; see
-  // IrregularGrid (src/accel/irregular_grid.h) for the parameter defaults'
-  // meaning.
-  void BuildIrregularGrid(float top_level_density = 0.12f,
-                          float second_level_density = 2.4f,
-                          uint32_t dense_cell_threshold = 16,
-                          float merge_alpha = 0.7f, int expand_iterations = 2);
-  bool HasIrregularGrid() const;
+		// Builds an irregular grid over the already-uploaded geometry; see
+		// IrregularGrid (src/accel/irregular_grid.h) for the parameter defaults'
+		// meaning.
+		void BuildIrregularGrid(float	 top_level_density	  = 0.12f,
+								float	 second_level_density = 2.4f,
+								uint32_t dense_cell_threshold = 16,
+								float	 merge_alpha		  = 0.7f,
+								int		 expand_iterations	  = 2);
+		bool HasIrregularGrid() const;
 
-  // Selects which acceleration structure RenderFrame traces against. Builds a
-  // missing structure on demand. Does not reset accumulation itself.
-  void SetAccelType(AccelType type);
-  AccelType GetAccelType() const;
+		// Selects which acceleration structure RenderFrame traces against. Builds a
+		// missing structure on demand. Does not reset accumulation itself.
+		void	  SetAccelType(AccelType type);
+		AccelType GetAccelType() const;
 
-  GridDensities CurrentGridDensities() const;
-  // Releases and rebuilds the active grid without rendering or resetting
-  // accumulation.
-  void RebuildGridDensities(GridDensities densities);
+		GridDensities CurrentGridDensities() const;
+		// Releases and rebuilds the active grid without rendering or resetting
+		// accumulation.
+		void RebuildGridDensities(GridDensities densities);
 
-  // Computes the currently active grid's structural SAH cost (see
-  // src/accel/sah_cost.h) from its own already-built cell layout and the
-  // supplied scene bounds/cost constants -- requires an active, already-built
-  // uniform/two-level/irregular grid (not brute force). Used by the grid
-  // density search (src/app/grid_density_search.h) to prefer one candidate
-  // density over another without casting any rays.
-  float ComputeCurrentGridSahCost(const BBox &scene_bounds,
-                                  const SahCostConstants &costs) const;
+		// Computes the currently active grid's structural SAH cost (see
+		// src/accel/sah_cost.h) from its own already-built cell layout and the
+		// supplied scene bounds/cost constants -- requires an active, already-built
+		// uniform/two-level/irregular grid (not brute force). Used by the grid
+		// density search (src/app/grid_density_search.h) to prefer one candidate
+		// density over another without casting any rays.
+		float ComputeCurrentGridSahCost(const BBox &scene_bounds, const SahCostConstants &costs) const;
 
-  // Generates camera rays and evaluates the supplied integrator for each pixel,
-  // accumulates one frame, resolves the frame average, and copies it to
-  // ResolvedPixels(). Reset accumulation after changing the camera or
-  // integrator configuration.
-  void RenderFrame(const Camera &camera, const AOIntegrator &integrator);
-  void RenderFrame(const Camera &camera, const SimpleIntegrator &integrator);
+		// Generates camera rays and evaluates the supplied integrator for each pixel,
+		// accumulates one frame, resolves the frame average, and copies it to
+		// ResolvedPixels(). Reset accumulation after changing the camera or
+		// integrator configuration.
+		void RenderFrame(const Camera &camera, const AOIntegrator &integrator);
+		void RenderFrame(const Camera &camera, const SimpleIntegrator &integrator);
 
-  // First frame after reset/resize is simple-only; later frames average AO and
-  // blend it over that preview with weight n/(n+32), where n is the number of
-  // AO frames. Reset before switching between progressive and single-integrator
-  // rendering.
-  void RenderProgressiveFrame(const Camera &camera, const AOIntegrator &ao,
-                              const SimpleIntegrator &simple);
+		// First frame after reset/resize is simple-only; later frames average AO and
+		// blend it over that preview with weight n/(n+32), where n is the number of
+		// AO frames. Reset before switching between progressive and single-integrator
+		// rendering.
+		void RenderProgressiveFrame(const Camera &camera, const AOIntegrator &ao, const SimpleIntegrator &simple);
 
-  const std::vector<Vec3f> &ResolvedPixels() const;
+		const std::vector<Vec3f> &ResolvedPixels() const;
 
-  // Every Build*Grid call (including the on-demand builds of SetAccelType,
-  // UpdateScene and RebuildGridDensities) runs exact collision detection
-  // between the scene's objects (FlatScene::object_ids) over the new grid's
-  // leaf cells (see src/render/collision_detector.h). Colliding triangles are
-  // then rendered with a red "collided" material instead of their own.
-  // CollisionIds() downloads the per-triangle result: the smallest id of
-  // another object each triangle intersects, or kNoCollision.
-  std::vector<uint32_t> CollisionIds() const;
-  const CollisionStats &LastCollisionStats() const;
+		// Every Build*Grid call (including the on-demand builds of SetAccelType,
+		// UpdateScene and RebuildGridDensities) runs exact collision detection
+		// between the scene's objects (FlatScene::object_ids) over the new grid's
+		// leaf cells (see src/render/collision_detector.h). Colliding triangles are
+		// then rendered with a red "collided" material instead of their own.
+		// CollisionIds() downloads the per-triangle result: the smallest id of
+		// another object each triangle intersects, or kNoCollision.
+		std::vector<uint32_t> CollisionIds() const;
+		const CollisionStats &LastCollisionStats() const;
 
-  // While disabled (e.g. during a paused animation, whose geometry doesn't
-  // change), grid builds skip collision detection and keep rendering the last
-  // results along with LastCollisionStats(). UpdateScene still clears the
-  // results, since they don't describe new geometry. Enabled by default.
-  void SetCollisionDetectionEnabled(bool enabled);
-  bool CollisionDetectionEnabled() const;
+		// While disabled (e.g. during a paused animation, whose geometry doesn't
+		// change), grid builds skip collision detection and keep rendering the last
+		// results along with LastCollisionStats(). UpdateScene still clears the
+		// results, since they don't describe new geometry. Enabled by default.
+		void SetCollisionDetectionEnabled(bool enabled);
+		bool CollisionDetectionEnabled() const;
 
-  // Runs collision detection on the active grid now, regardless of
-  // CollisionDetectionEnabled() (a no-op for brute force or an unbuilt grid).
-  void DetectCollisions();
-  // Marks every triangle as non-colliding (normal materials) and resets
-  // LastCollisionStats().
-  void ClearCollisions();
+		// Runs collision detection on the active grid now, regardless of
+		// CollisionDetectionEnabled() (a no-op for brute force or an unbuilt grid).
+		void DetectCollisions();
+		// Marks every triangle as non-colliding (normal materials) and resets
+		// LastCollisionStats().
+		void ClearCollisions();
 
-private:
-  struct Impl;
-  std::unique_ptr<Impl> impl_;
-};
+	  private:
+		struct Impl;
+		std::unique_ptr<Impl> impl_;
+	};
 
-// A short, human-readable label for whichever Thrust backend this binary was
-// built with (e.g. "CUDA" or "TBB"), for display purposes (the interactive
-// viewer's window title).
-const char *RendererBackendName();
+	// A short, human-readable label for whichever Thrust backend this binary was
+	// built with (e.g. "CUDA" or "TBB"), for display purposes (the interactive
+	// viewer's window title).
+	const char *RendererBackendName();
 
 } // namespace happyray

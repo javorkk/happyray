@@ -22,33 +22,36 @@
 #include "two_level_grid.h"
 #include "uniform_grid.h"
 
-namespace happyray {
+namespace happyray
+{
 
-struct CollisionStats {
-  uint32_t object_count = 0;
-  // Leaf cells holding triangles of at least two different objects.
-  uint32_t candidate_cell_count = 0;
-  uint32_t colliding_triangle_count = 0;
-  float total_ms = 0.0f;
-};
+	struct CollisionStats
+	{
+		uint32_t object_count = 0;
+		// Leaf cells holding triangles of at least two different objects.
+		uint32_t candidate_cell_count	  = 0;
+		uint32_t colliding_triangle_count = 0;
+		float	 total_ms				  = 0.0f;
+	};
 
-class CollisionDetector {
-public:
-  // `scene.object_ids` must be non-null (unless object_count < 2), with ids in
-  // [0, object_count). Overwrites all `scene.triangle_count` entries of
-  // `collision_ids`. Scenes with fewer than two objects skip the detection.
-  CollisionStats ComputeCollisions(const SceneView &scene,
-                                   uint32_t object_count,
-                                   const UniformGrid &grid,
-                                   uint32_t *collision_ids) const;
-  CollisionStats ComputeCollisions(const SceneView &scene,
-                                   uint32_t object_count,
-                                   const TwoLevelGrid &grid,
-                                   uint32_t *collision_ids) const;
-  CollisionStats ComputeCollisions(const SceneView &scene,
-                                   uint32_t object_count,
-                                   const IrregularGrid &grid,
-                                   uint32_t *collision_ids) const;
-};
+	class CollisionDetector
+	{
+	  public:
+		// `scene.object_ids` must be non-null (unless object_count < 2), with ids in
+		// [0, object_count). Overwrites all `scene.triangle_count` entries of
+		// `collision_ids`. Scenes with fewer than two objects skip the detection.
+		CollisionStats ComputeCollisions(const SceneView   &scene,
+										 uint32_t			object_count,
+										 const UniformGrid &grid,
+										 uint32_t		   *collision_ids) const;
+		CollisionStats ComputeCollisions(const SceneView	&scene,
+										 uint32_t			 object_count,
+										 const TwoLevelGrid &grid,
+										 uint32_t			*collision_ids) const;
+		CollisionStats ComputeCollisions(const SceneView	 &scene,
+										 uint32_t			  object_count,
+										 const IrregularGrid &grid,
+										 uint32_t			 *collision_ids) const;
+	};
 
 } // namespace happyray

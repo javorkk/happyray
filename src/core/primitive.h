@@ -3,12 +3,13 @@
 
 #include "vec.h"
 
-namespace happyray {
+namespace happyray
+{
 
-template <int kNumVerticesT>
-struct Primitive {
-    static constexpr int kNumVertices = kNumVerticesT;
-    Vec3f vtx[kNumVerticesT];
-};
+	template <int kNumVerticesT> struct Primitive
+	{
+		static constexpr int kNumVertices = kNumVerticesT;
+		Vec3f				 vtx[kNumVerticesT];
+	};
 
-}  // namespace happyray
+} // namespace happyray
