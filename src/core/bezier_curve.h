@@ -11,7 +11,7 @@ struct BezierCurve : Primitive<4> {
     float radius = 0.0f;
 
     HAPPYRAY_HD BezierCurve() = default;
-    HAPPYRAY_HD BezierCurve(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Vec3& p3,
+    HAPPYRAY_HD BezierCurve(const Vec3f& p0, const Vec3f& p1, const Vec3f& p2, const Vec3f& p3,
                             float radius_)
         : radius(radius_) {
         vtx[0] = p0;
@@ -27,7 +27,7 @@ struct BBoxExtractor<BezierCurve> {
         BBox box;
         for (int i = 0; i < BezierCurve::kNumVertices; ++i) box.Grow(curve.vtx[i]);
         const float radius = curve.radius > 0.0f ? curve.radius : 0.0f;
-        const Vec3 extent(radius);
+        const Vec3f extent(radius);
         box.min_bound -= extent;
         box.max_bound += extent;
         return box;
@@ -39,9 +39,9 @@ constexpr int kBezierMaxSubdivisionDepth = 16;
 
 namespace detail {
 
-HAPPYRAY_HD inline float DistanceSquaredToSegment(const Vec3& point, const Vec3& a,
-                                                   const Vec3& b) {
-    const Vec3 edge = b - a;
+HAPPYRAY_HD inline float DistanceSquaredToSegment(const Vec3f& point, const Vec3f& a,
+                                                   const Vec3f& b) {
+    const Vec3f edge = b - a;
     const float edge_length_squared = LengthSquared(edge);
     const float t = edge_length_squared > 0.0f
                         ? Dot(point - a, edge) / edge_length_squared
@@ -50,16 +50,16 @@ HAPPYRAY_HD inline float DistanceSquaredToSegment(const Vec3& point, const Vec3&
     return LengthSquared(point - (a + edge * clamped_t));
 }
 
-HAPPYRAY_HD inline bool IntersectRayCapsule(const Ray& ray, const Vec3& a, const Vec3& b,
+HAPPYRAY_HD inline bool IntersectRayCapsule(const Ray& ray, const Vec3f& a, const Vec3f& b,
                                              float radius, float* out_t) {
     if (radius < 0.0f) return false;
-    const Vec3 axis = b - a;
+    const Vec3f axis = b - a;
     const float axis_length_squared = LengthSquared(axis);
     if (axis_length_squared == 0.0f) return IntersectRaySphere(ray, Sphere{a, radius}, out_t);
 
     bool found = false;
     float closest_t = ray.t_max;
-    const Vec3 offset = ray.origin - a;
+    const Vec3f offset = ray.origin - a;
     const float direction_length_squared = LengthSquared(ray.direction);
     const float axis_direction = Dot(axis, ray.direction);
     const float axis_offset = Dot(axis, offset);
@@ -99,18 +99,18 @@ HAPPYRAY_HD inline bool IntersectRayCapsule(const Ray& ray, const Vec3& a, const
 }
 
 struct BezierSegment {
-    Vec3 control[4];
+    Vec3f control[4];
     int depth;
 };
 
 HAPPYRAY_HD inline void SplitBezierSegment(const BezierSegment& segment,
                                             BezierSegment* left, BezierSegment* right) {
-    const Vec3 p01 = Lerp(segment.control[0], segment.control[1], 0.5f);
-    const Vec3 p12 = Lerp(segment.control[1], segment.control[2], 0.5f);
-    const Vec3 p23 = Lerp(segment.control[2], segment.control[3], 0.5f);
-    const Vec3 p012 = Lerp(p01, p12, 0.5f);
-    const Vec3 p123 = Lerp(p12, p23, 0.5f);
-    const Vec3 midpoint = Lerp(p012, p123, 0.5f);
+    const Vec3f p01 = Lerp(segment.control[0], segment.control[1], 0.5f);
+    const Vec3f p12 = Lerp(segment.control[1], segment.control[2], 0.5f);
+    const Vec3f p23 = Lerp(segment.control[2], segment.control[3], 0.5f);
+    const Vec3f p012 = Lerp(p01, p12, 0.5f);
+    const Vec3f p123 = Lerp(p12, p23, 0.5f);
+    const Vec3f midpoint = Lerp(p012, p123, 0.5f);
     *left = {{segment.control[0], p01, p012, midpoint}, segment.depth + 1};
     *right = {{midpoint, p123, p23, segment.control[3]}, segment.depth + 1};
 }

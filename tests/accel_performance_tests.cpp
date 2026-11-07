@@ -43,7 +43,7 @@ T* Raw(thrust::device_vector<T>& values) {
 }
 
 struct DeviceScene {
-    thrust::device_vector<Vec3> positions, normals, colors;
+    thrust::device_vector<Vec3f> positions, normals, colors;
     thrust::device_vector<uint32_t> indices, materials;
 
     explicit DeviceScene(const FlatScene& scene)
@@ -220,11 +220,11 @@ void Run(const char* path) {
     Rng rng(20261021, 17);
     for (uint32_t i = 0; i < kRayCount; ++i) {
         const float x = rng.NextFloat(), y = rng.NextFloat(), z = rng.NextFloat();
-        const Vec3 origin = bounds.min_bound + bounds.Extent() * Vec3(x, y, z);
+        const Vec3f origin = bounds.min_bound + bounds.Extent() * Vec3f(x, y, z);
         const float dz = 2 * rng.NextFloat() - 1;
         const float phi = 6.283185307179586f * rng.NextFloat();
         const float r = std::sqrt(std::max(0.0f, 1 - dz * dz));
-        rays.emplace_back(origin, Vec3(r * std::cos(phi), r * std::sin(phi), dz));
+        rays.emplace_back(origin, Vec3f(r * std::cos(phi), r * std::sin(phi), dz));
     }
     thrust::device_vector<Ray> device_rays(rays);
     const SahCalibration calibration = MeasureSahCalibration();

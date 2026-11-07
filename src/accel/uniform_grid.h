@@ -34,12 +34,6 @@ HAPPYRAY_HD inline BBox ComputeTriangleBBox(const SceneView &scene, uint32_t tri
   return BBoxExtractor<Triangle>::Get(FetchTriangle(scene, tri));
 }
 
-struct GridResolution {
-  int x = 1;
-  int y = 1;
-  int z = 1;
-};
-
 struct alignas(8) CellRange {
   uint32_t start = 0;
   uint32_t end = 0;
@@ -47,19 +41,19 @@ struct alignas(8) CellRange {
 static_assert(sizeof(CellRange) == 2 * sizeof(uint32_t));
 
 // Sizes a grid from the expanded geometry bounds and target triangle density.
-HAPPYRAY_HD inline GridResolution
+HAPPYRAY_HD inline Vec3i
 ComputeGridResolution(const BBox &bounds, uint32_t triangle_count,
                       float target_triangles_per_cell) {
   if (triangle_count == 0) {
-    return GridResolution{1, 1, 1};
+    return Vec3i(1, 1, 1);
   }
 
-  const Vec3 raw_extent = bounds.Extent();
+  const Vec3f raw_extent = bounds.Extent();
   // Floor degenerate axes so the volume and resolution formula remain
   // well-defined.
   const float diagonal = Length(raw_extent);
   const float min_extent = diagonal > 0.0f ? diagonal * 1e-3f : 1.0f;
-  const Vec3 extent(raw_extent.x > min_extent ? raw_extent.x : min_extent,
+  const Vec3f extent(raw_extent.x > min_extent ? raw_extent.x : min_extent,
                     raw_extent.y > min_extent ? raw_extent.y : min_extent,
                     raw_extent.z > min_extent ? raw_extent.z : min_extent);
 
@@ -67,50 +61,48 @@ ComputeGridResolution(const BBox &bounds, uint32_t triangle_count,
   const float cells_per_unit_volume = std::cbrt(
       target_triangles_per_cell * static_cast<float>(triangle_count) / volume);
 
-  GridResolution resolution;
-  resolution.x = extent.x * cells_per_unit_volume + 0.5f > 1.0f
-                     ? static_cast<int>(extent.x * cells_per_unit_volume + 0.5f)
-                     : 1;
-  resolution.y = extent.y * cells_per_unit_volume + 0.5f > 1.0f
-                     ? static_cast<int>(extent.y * cells_per_unit_volume + 0.5f)
-                     : 1;
-  resolution.z = extent.z * cells_per_unit_volume + 0.5f > 1.0f
-                     ? static_cast<int>(extent.z * cells_per_unit_volume + 0.5f)
-                     : 1;
-  return resolution;
+    return Vec3i(
+      extent.x * cells_per_unit_volume + 0.5f > 1.0f
+        ? static_cast<int>(extent.x * cells_per_unit_volume + 0.5f)
+        : 1,
+      extent.y * cells_per_unit_volume + 0.5f > 1.0f
+        ? static_cast<int>(extent.y * cells_per_unit_volume + 0.5f)
+        : 1,
+      extent.z * cells_per_unit_volume + 0.5f > 1.0f
+        ? static_cast<int>(extent.z * cells_per_unit_volume + 0.5f)
+        : 1);
 }
 
 // Conservative BBox binning: inclusive cell coordinates, clamped to the grid.
-HAPPYRAY_HD inline void ComputeCellRange(const BBox &box, const Vec3 &bounds_min,
-                                     const Vec3 &inv_cell_size,
-                                     int resolution_x, int resolution_y,
-                                     int resolution_z, int *cx0, int *cx1,
-                                     int *cy0, int *cy1, int *cz0, int *cz1) {
-  *cx0 = ClampInt(
+HAPPYRAY_HD inline void ComputeCellRange(const BBox &box, const Vec3f &bounds_min,
+                                     const Vec3f &inv_cell_size,
+                     const Vec3i &resolution, Vec2i *x_range,
+                     Vec2i *y_range, Vec2i *z_range) {
+    x_range->x = ClampInt(
       static_cast<int>((box.min_bound.x - bounds_min.x) * inv_cell_size.x), 0,
-      resolution_x - 1);
-  *cx1 = ClampInt(
+      resolution.x - 1);
+    x_range->y = ClampInt(
       static_cast<int>((box.max_bound.x - bounds_min.x) * inv_cell_size.x), 0,
-      resolution_x - 1);
-  *cy0 = ClampInt(
+      resolution.x - 1);
+    y_range->x = ClampInt(
       static_cast<int>((box.min_bound.y - bounds_min.y) * inv_cell_size.y), 0,
-      resolution_y - 1);
-  *cy1 = ClampInt(
+      resolution.y - 1);
+    y_range->y = ClampInt(
       static_cast<int>((box.max_bound.y - bounds_min.y) * inv_cell_size.y), 0,
-      resolution_y - 1);
-  *cz0 = ClampInt(
+      resolution.y - 1);
+    z_range->x = ClampInt(
       static_cast<int>((box.min_bound.z - bounds_min.z) * inv_cell_size.z), 0,
-      resolution_z - 1);
-  *cz1 = ClampInt(
+      resolution.z - 1);
+    z_range->y = ClampInt(
       static_cast<int>((box.max_bound.z - bounds_min.z) * inv_cell_size.z), 0,
-      resolution_z - 1);
+      resolution.z - 1);
 }
 
 struct UniformGridView {
-  Vec3 bounds_min;
-  Vec3 bounds_max;
-  Vec3 cell_size;
-  Vec3 inv_cell_size;
+  Vec3f bounds_min;
+  Vec3f bounds_max;
+  Vec3f cell_size;
+  Vec3f inv_cell_size;
   int resolution_x = 1;
   int resolution_y = 1;
   int resolution_z = 1;
@@ -130,14 +122,15 @@ namespace detail {
 
 // Number of grid cells overlapped by the triangle AABB's clamped cell range.
 HAPPYRAY_HD inline uint32_t CountCandidateCells(
-    const BBox &box, const Vec3 &bounds_min, const Vec3 &inv_cell_size,
+    const BBox &box, const Vec3f &bounds_min, const Vec3f &inv_cell_size,
     int resolution_x, int resolution_y, int resolution_z) {
-  int cx0, cx1, cy0, cy1, cz0, cz1;
-  ComputeCellRange(box, bounds_min, inv_cell_size, resolution_x, resolution_y,
-                   resolution_z, &cx0, &cx1, &cy0, &cy1, &cz0, &cz1);
-  return static_cast<uint32_t>(cx1 - cx0 + 1) *
-         static_cast<uint32_t>(cy1 - cy0 + 1) *
-         static_cast<uint32_t>(cz1 - cz0 + 1);
+    Vec2i x_range, y_range, z_range;
+    ComputeCellRange(box, bounds_min, inv_cell_size,
+           Vec3i(resolution_x, resolution_y, resolution_z), &x_range,
+           &y_range, &z_range);
+    return static_cast<uint32_t>(x_range.y - x_range.x + 1) *
+      static_cast<uint32_t>(y_range.y - y_range.x + 1) *
+      static_cast<uint32_t>(z_range.y - z_range.x + 1);
 }
 
 // Preserve the grid's 1% cell enlargement while delegating the SAT to core geometry.
@@ -150,8 +143,8 @@ struct TriangleCellIntersection {
   HAPPYRAY_HD explicit TriangleCellIntersection(const Triangle &triangle)
       : intersects(triangle) {}
 
-  HAPPYRAY_HD bool operator()(const Vec3 &center, const Vec3 &cell_size) const {
-    const Vec3 half = cell_size * 0.505f;
+  HAPPYRAY_HD bool operator()(const Vec3f &center, const Vec3f &cell_size) const {
+    const Vec3f half = cell_size * 0.505f;
     return intersects(BBox(center - half, center + half));
   }
 };
@@ -194,18 +187,19 @@ struct CellRangeExtractor {
 template <typename EmitFn>
 HAPPYRAY_HD inline void
 ForEachIntersectedCell(const Triangle &triangle, const BBox &box,
-                       const Vec3 &bounds_min, const Vec3 &inv_cell_size,
-                       const Vec3 &cell_size, int resolution_x,
+                       const Vec3f &bounds_min, const Vec3f &inv_cell_size,
+                       const Vec3f &cell_size, int resolution_x,
                        int resolution_y, int resolution_z, EmitFn &&emit) {
-  int cx0, cx1, cy0, cy1, cz0, cz1;
-  ComputeCellRange(box, bounds_min, inv_cell_size, resolution_x, resolution_y,
-                   resolution_z, &cx0, &cx1, &cy0, &cy1, &cz0, &cz1);
+  Vec2i x_range, y_range, z_range;
+  ComputeCellRange(box, bounds_min, inv_cell_size,
+                   Vec3i(resolution_x, resolution_y, resolution_z), &x_range,
+                   &y_range, &z_range);
   const TriangleCellIntersection intersects(triangle);
-  for (int cz = cz0; cz <= cz1; ++cz) {
-    for (int cy = cy0; cy <= cy1; ++cy) {
-      for (int cx = cx0; cx <= cx1; ++cx) {
-        const Vec3 center =
-            bounds_min + Vec3(cx + 0.5f, cy + 0.5f, cz + 0.5f) * cell_size;
+  for (int cz = z_range.x; cz <= z_range.y; ++cz) {
+    for (int cy = y_range.x; cy <= y_range.y; ++cy) {
+      for (int cx = x_range.x; cx <= x_range.y; ++cx) {
+        const Vec3f center =
+            bounds_min + Vec3f(cx + 0.5f, cy + 0.5f, cz + 0.5f) * cell_size;
         if (intersects(center, cell_size)) {
           emit(cx, cy, cz);
         }
@@ -215,8 +209,8 @@ ForEachIntersectedCell(const Triangle &triangle, const BBox &box,
 }
 
 HAPPYRAY_HD inline uint32_t CountExactIntersectedCells(
-    const Triangle &triangle, const BBox &box, const Vec3 &bounds_min,
-    const Vec3 &inv_cell_size, const Vec3 &cell_size, int resolution_x,
+    const Triangle &triangle, const BBox &box, const Vec3f &bounds_min,
+    const Vec3f &inv_cell_size, const Vec3f &cell_size, int resolution_x,
     int resolution_y, int resolution_z) {
   uint32_t count = 0;
   ForEachIntersectedCell(triangle, box, bounds_min, inv_cell_size, cell_size,
@@ -226,8 +220,8 @@ HAPPYRAY_HD inline uint32_t CountExactIntersectedCells(
 }
 
 HAPPYRAY_HD inline uint32_t CountTriangleCellIntersections(
-    const Triangle &triangle, const BBox &box, const Vec3 &bounds_min,
-    const Vec3 &inv_cell_size, const Vec3 &cell_size, int resolution_x,
+    const Triangle &triangle, const BBox &box, const Vec3f &bounds_min,
+    const Vec3f &inv_cell_size, const Vec3f &cell_size, int resolution_x,
     int resolution_y, int resolution_z) {
 #if HAPPYRAY_FAST_CELL_COUNT
   return CountCandidateCells(box, bounds_min, inv_cell_size, resolution_x,
@@ -246,16 +240,16 @@ HAPPYRAY_HD inline float SafeRcp(float x) {
   return x != 0.0f ? 1.0f / x : std::copysign(INFINITY, x);
 }
 
-HAPPYRAY_HD inline Vec3 SafeRcp(const Vec3 &d) {
-  return Vec3(SafeRcp(d.x), SafeRcp(d.y), SafeRcp(d.z));
+HAPPYRAY_HD inline Vec3f SafeRcp(const Vec3f &d) {
+  return Vec3f(SafeRcp(d.x), SafeRcp(d.y), SafeRcp(d.z));
 }
 
 // Slab test against [box_min, box_max] using a precomputed reciprocal
 // direction, clipped to [t_min, t_max]. Zero direction components are handled
 // explicitly (no 0 * inf NaNs).
-HAPPYRAY_HD inline bool IntersectRayBoxRcp(const Vec3 &origin, const Vec3 &dir,
-                                       const Vec3 &inv_dir, const Vec3 &box_min,
-                                       const Vec3 &box_max, float t_min,
+HAPPYRAY_HD inline bool IntersectRayBoxRcp(const Vec3f &origin, const Vec3f &dir,
+                                       const Vec3f &inv_dir, const Vec3f &box_min,
+                                       const Vec3f &box_max, float t_min,
                                        float t_max, float *out_t_near,
                                        float *out_t_far) {
   float t_near = t_min, t_far = t_max;
@@ -290,72 +284,67 @@ HAPPYRAY_HD inline bool IntersectRayBoxRcp(const Vec3 &origin, const Vec3 &dir,
 // grid. Returns true only if `visit` did.
 template <typename VisitFn>
 HAPPYRAY_HD inline bool
-WalkGridCells(const Vec3 &origin, const Vec3 &dir, const Vec3 &inv_dir,
-              const Vec3 &grid_min, const Vec3 &cell_size,
-              const Vec3 &inv_cell_size, int res_x, int res_y, int res_z,
+WalkGridCells(const Vec3f &origin, const Vec3f &dir, const Vec3f &inv_dir,
+              const Vec3f &grid_min, const Vec3f &cell_size,
+        const Vec3f &inv_cell_size, const Vec3i &resolution,
               float t_entry, float *ray_t_max, VisitFn &&visit) {
-  const Vec3 entry = (origin + dir * t_entry - grid_min) * inv_cell_size;
-  int cx = ClampInt(static_cast<int>(entry.x), 0, res_x - 1);
-  int cy = ClampInt(static_cast<int>(entry.y), 0, res_y - 1);
-  int cz = ClampInt(static_cast<int>(entry.z), 0, res_z - 1);
+  const Vec3f entry = (origin + dir * t_entry - grid_min) * inv_cell_size;
+  Vec3i cell(ClampInt(static_cast<int>(entry.x), 0, resolution.x - 1),
+       ClampInt(static_cast<int>(entry.y), 0, resolution.y - 1),
+       ClampInt(static_cast<int>(entry.z), 0, resolution.z - 1));
 
   // Next boundary crossing per axis; zero-direction axes never step.
-  const float step_x = dir.x > 0.0f ? 1.0f : 0.0f;
-  const float step_y = dir.y > 0.0f ? 1.0f : 0.0f;
-  const float step_z = dir.z > 0.0f ? 1.0f : 0.0f;
-  float next_x =
-      dir.x != 0.0f
-          ? ((cx + step_x) * cell_size.x + grid_min.x - origin.x) * inv_dir.x
-          : INFINITY;
-  float next_y =
-      dir.y != 0.0f
-          ? ((cy + step_y) * cell_size.y + grid_min.y - origin.y) * inv_dir.y
-          : INFINITY;
-  float next_z =
-      dir.z != 0.0f
-          ? ((cz + step_z) * cell_size.z + grid_min.z - origin.z) * inv_dir.z
-          : INFINITY;
-  const float delta_x = cell_size.x * std::fabs(inv_dir.x);
-  const float delta_y = cell_size.y * std::fabs(inv_dir.y);
-  const float delta_z = cell_size.z * std::fabs(inv_dir.z);
-  const int inc_x = dir.x > 0.0f ? 1 : -1;
-  const int inc_y = dir.y > 0.0f ? 1 : -1;
-  const int inc_z = dir.z > 0.0f ? 1 : -1;
+  const Vec3i step(dir.x > 0.0f ? 1 : 0, dir.y > 0.0f ? 1 : 0,
+           dir.z > 0.0f ? 1 : 0);
+  Vec3f next(dir.x != 0.0f
+         ? ((cell.x + step.x) * cell_size.x + grid_min.x - origin.x) * inv_dir.x
+         : INFINITY,
+       dir.y != 0.0f
+         ? ((cell.y + step.y) * cell_size.y + grid_min.y - origin.y) * inv_dir.y
+         : INFINITY,
+       dir.z != 0.0f
+         ? ((cell.z + step.z) * cell_size.z + grid_min.z - origin.z) * inv_dir.z
+         : INFINITY);
+  const Vec3f delta(cell_size.x * std::fabs(inv_dir.x),
+          cell_size.y * std::fabs(inv_dir.y),
+          cell_size.z * std::fabs(inv_dir.z));
+  const Vec3i increment(dir.x > 0.0f ? 1 : -1, dir.y > 0.0f ? 1 : -1,
+            dir.z > 0.0f ? 1 : -1);
 
   float t_cell = t_entry;
   for (;;) {
     const uint32_t cell_index =
-        static_cast<uint32_t>(cx) +
-        static_cast<uint32_t>(res_x) *
-            (static_cast<uint32_t>(cy) +
-             static_cast<uint32_t>(res_y) * static_cast<uint32_t>(cz));
-    if (visit(cell_index, cx, cy, cz, t_cell, ray_t_max)) {
+        static_cast<uint32_t>(cell.x) +
+        static_cast<uint32_t>(resolution.x) *
+            (static_cast<uint32_t>(cell.y) +
+             static_cast<uint32_t>(resolution.y) * static_cast<uint32_t>(cell.z));
+    if (visit(cell_index, cell.x, cell.y, cell.z, t_cell, ray_t_max)) {
       return true;
     }
-    if (next_x < next_y && next_x < next_z) {
-      if (next_x > *ray_t_max)
+    if (next.x < next.y && next.x < next.z) {
+      if (next.x > *ray_t_max)
         return false;
-      cx += inc_x;
-      if (static_cast<unsigned>(cx) >= static_cast<unsigned>(res_x))
+      cell.x += increment.x;
+      if (static_cast<unsigned>(cell.x) >= static_cast<unsigned>(resolution.x))
         return false;
-      t_cell = next_x;
-      next_x += delta_x;
-    } else if (next_y < next_z) {
-      if (next_y > *ray_t_max)
+      t_cell = next.x;
+      next.x += delta.x;
+    } else if (next.y < next.z) {
+      if (next.y > *ray_t_max)
         return false;
-      cy += inc_y;
-      if (static_cast<unsigned>(cy) >= static_cast<unsigned>(res_y))
+      cell.y += increment.y;
+      if (static_cast<unsigned>(cell.y) >= static_cast<unsigned>(resolution.y))
         return false;
-      t_cell = next_y;
-      next_y += delta_y;
+      t_cell = next.y;
+      next.y += delta.y;
     } else {
-      if (next_z > *ray_t_max)
+      if (next.z > *ray_t_max)
         return false;
-      cz += inc_z;
-      if (static_cast<unsigned>(cz) >= static_cast<unsigned>(res_z))
+      cell.z += increment.z;
+      if (static_cast<unsigned>(cell.z) >= static_cast<unsigned>(resolution.z))
         return false;
-      t_cell = next_z;
-      next_z += delta_z;
+      t_cell = next.z;
+      next.z += delta.z;
     }
   }
 }
@@ -366,7 +355,7 @@ WalkGridCells(const Vec3 &origin, const Vec3 &dir, const Vec3 &inv_dir,
 template <typename VisitCellFn>
 HAPPYRAY_HD inline bool TraverseGrid(const UniformGridView &grid, const Ray &ray,
                                  VisitCellFn &&visit_cell) {
-  const Vec3 inv_dir = SafeRcp(ray.direction);
+  const Vec3f inv_dir = SafeRcp(ray.direction);
   float t_near, t_far;
   if (!IntersectRayBoxRcp(ray.origin, ray.direction, inv_dir, grid.bounds_min,
                           grid.bounds_max, ray.t_min, ray.t_max, &t_near,
@@ -376,8 +365,9 @@ HAPPYRAY_HD inline bool TraverseGrid(const UniformGridView &grid, const Ray &ray
   float ray_t_max = ray.t_max;
   return WalkGridCells(
       ray.origin, ray.direction, inv_dir, grid.bounds_min, grid.cell_size,
-      grid.inv_cell_size, grid.resolution_x, grid.resolution_y,
-      grid.resolution_z, t_near, &ray_t_max,
+      grid.inv_cell_size,
+      Vec3i(grid.resolution_x, grid.resolution_y, grid.resolution_z), t_near,
+      &ray_t_max,
       [&](uint32_t cell_index, int, int, int, float, float *t_max) {
         return visit_cell(cell_index, t_max);
       });

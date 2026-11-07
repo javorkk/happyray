@@ -19,8 +19,8 @@ struct Quaternion {
     HAPPYRAY_HD static Quaternion Identity() { return Quaternion(0.0f, 0.0f, 0.0f, 1.0f); }
 
     // `axis` need not be normalized; `angle_rad` is a right-handed rotation around it.
-    HAPPYRAY_HD static Quaternion FromAxisAngle(const Vec3& axis, float angle_rad) {
-        const Vec3 n = Normalize(axis);
+    HAPPYRAY_HD static Quaternion FromAxisAngle(const Vec3f& axis, float angle_rad) {
+        const Vec3f n = Normalize(axis);
         const float half_angle = angle_rad * 0.5f;
         const float s = std::sin(half_angle);
         return Quaternion(n.x * s, n.y * s, n.z * s, std::cos(half_angle));
@@ -53,9 +53,9 @@ HAPPYRAY_HD inline Quaternion Conjugate(const Quaternion& q) {
 
 // Rotates `v` by unit quaternion `q` (v' = q * v * q^-1), using Fabian Giesen's optimized form
 // that avoids constructing a pure-vector quaternion intermediate.
-HAPPYRAY_HD inline Vec3 RotateVector(const Quaternion& q, const Vec3& v) {
-    const Vec3 qv(q.x, q.y, q.z);
-    const Vec3 t = Cross(qv, v) * 2.0f;
+HAPPYRAY_HD inline Vec3f RotateVector(const Quaternion& q, const Vec3f& v) {
+    const Vec3f qv(q.x, q.y, q.z);
+    const Vec3f t = Cross(qv, v) * 2.0f;
     return v + t * q.w + Cross(qv, t);
 }
 

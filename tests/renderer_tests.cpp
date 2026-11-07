@@ -43,14 +43,14 @@ int g_failures = 0;
 
 // Reproduces Renderer::ResizeFramebuffer's per-pixel jitter table exactly (same Rng/HashSeed
 // calls), so this reference loop draws the identical Halton samples Renderer does.
-std::vector<happyray::Vec2> MakePixelJitter(int width, int height) {
-    std::vector<happyray::Vec2> jitter(static_cast<size_t>(width) * height);
+std::vector<happyray::Vec2f> MakePixelJitter(int width, int height) {
+    std::vector<happyray::Vec2f> jitter(static_cast<size_t>(width) * height);
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
             happyray::Rng rng(happyray::HashSeed(static_cast<uint32_t>(x), static_cast<uint32_t>(y), 0u),
                           static_cast<uint64_t>(y) * width + x);
             jitter[static_cast<size_t>(y) * width + x] =
-                happyray::Vec2(rng.NextFloat(), rng.NextFloat());
+                happyray::Vec2f(rng.NextFloat(), rng.NextFloat());
         }
     }
     return jitter;
@@ -60,15 +60,15 @@ std::vector<happyray::Vec2> MakePixelJitter(int width, int height) {
 // only -- this is the project's simplest possible ground truth, with no Thrust/parallelism
 // involved at all.
 template <typename Integrator>
-std::vector<happyray::Vec3> RenderBruteForceReference(const happyray::SceneView& scene,
+std::vector<happyray::Vec3f> RenderBruteForceReference(const happyray::SceneView& scene,
                                                   const happyray::Camera& camera,
                                                   const Integrator& integrator, int width,
                                                   int height,
-                                                  const std::vector<happyray::Vec2>& pixel_jitter,
+                                                  const std::vector<happyray::Vec2f>& pixel_jitter,
                                                   int num_frames, int samples_per_frame = 1) {
     const happyray::AccelStructures accel;  // Default: brute force.
-    std::vector<happyray::Vec3> accumulated(static_cast<size_t>(width) * height,
-                                        happyray::Vec3(0.0f, 0.0f, 0.0f));
+    std::vector<happyray::Vec3f> accumulated(static_cast<size_t>(width) * height,
+                                        happyray::Vec3f(0.0f, 0.0f, 0.0f));
     for (int frame = 0; frame < num_frames; ++frame) {
         const uint32_t sample_offset =
             static_cast<uint32_t>(frame) * samples_per_frame;
@@ -82,7 +82,7 @@ std::vector<happyray::Vec3> RenderBruteForceReference(const happyray::SceneView&
             }
         }
     }
-    std::vector<happyray::Vec3> resolved(accumulated.size());
+    std::vector<happyray::Vec3f> resolved(accumulated.size());
     for (size_t i = 0; i < accumulated.size(); ++i) {
         resolved[i] = accumulated[i] / static_cast<float>(num_frames);
     }
@@ -94,12 +94,12 @@ std::vector<happyray::Vec3> RenderBruteForceReference(const happyray::SceneView&
 template <typename Integrator>
 void CompareRendererToReference(const char* label, happyray::Renderer* renderer,
                              const happyray::Camera& camera, const Integrator& integrator,
-                             int num_frames, const std::vector<happyray::Vec3>& reference) {
+                             int num_frames, const std::vector<happyray::Vec3f>& reference) {
     renderer->ResetAccumulation();
     for (int frame = 0; frame < num_frames; ++frame) {
         renderer->RenderFrame(camera, integrator);
     }
-    const std::vector<happyray::Vec3>& resolved = renderer->ResolvedPixels();
+    const std::vector<happyray::Vec3f>& resolved = renderer->ResolvedPixels();
 
     HAPPYRAY_CHECK(resolved.size() == reference.size());
 
@@ -107,7 +107,7 @@ void CompareRendererToReference(const char* label, happyray::Renderer* renderer,
     double sum_abs_diff = 0.0;
     const size_t pixel_count = reference.size();
     for (size_t i = 0; i < pixel_count; ++i) {
-        const happyray::Vec3 diff = reference[i] - resolved[i];
+        const happyray::Vec3f diff = reference[i] - resolved[i];
         const float max_channel = std::fmax(std::fabs(diff.x),
                                             std::fmax(std::fabs(diff.y), std::fabs(diff.z)));
         max_abs_diff = std::fmax(max_channel, max_abs_diff);
@@ -129,7 +129,7 @@ void TestRendererLifecycle() {
     happyray::Renderer renderer(happyray::FlatScene{});
     const happyray::Camera camera;
     happyray::AOIntegrator integrator;
-    integrator.background_color = happyray::Vec3(0.2f, 0.4f, 0.6f);
+    integrator.background_color = happyray::Vec3f(0.2f, 0.4f, 0.6f);
     integrator.samples_per_pixel_per_frame = 4;
     HAPPYRAY_CHECK(renderer.SampleCount() == 0);
     HAPPYRAY_CHECK(!renderer.HasUniformGrid());
@@ -139,22 +139,22 @@ void TestRendererLifecycle() {
     for (int frame = 0; frame < 3; ++frame) renderer.RenderFrame(camera, integrator);
     HAPPYRAY_CHECK(renderer.SampleCount() == 3);
     HAPPYRAY_CHECK(renderer.ResolvedPixels().size() == 6);
-    for (const happyray::Vec3& pixel : renderer.ResolvedPixels()) {
+    for (const happyray::Vec3f& pixel : renderer.ResolvedPixels()) {
         HAPPYRAY_CHECK(happyray::Length(pixel - integrator.background_color) < 1e-5f);
     }
     renderer.ResetAccumulation();
     HAPPYRAY_CHECK(renderer.SampleCount() == 0);
-    integrator.background_color = happyray::Vec3(0.8f, 0.6f, 0.4f);
+    integrator.background_color = happyray::Vec3f(0.8f, 0.6f, 0.4f);
     renderer.RenderFrame(camera, integrator);
     HAPPYRAY_CHECK(renderer.SampleCount() == 1);
-    for (const happyray::Vec3& pixel : renderer.ResolvedPixels()) {
+    for (const happyray::Vec3f& pixel : renderer.ResolvedPixels()) {
         HAPPYRAY_CHECK(happyray::Length(pixel - integrator.background_color) < 1e-5f);
     }
     renderer.ResizeFramebuffer(2, 1);
     HAPPYRAY_CHECK(renderer.SampleCount() == 0);
     renderer.RenderFrame(camera, integrator);
     HAPPYRAY_CHECK(renderer.ResolvedPixels().size() == 2);
-    for (const happyray::Vec3& pixel : renderer.ResolvedPixels()) {
+    for (const happyray::Vec3f& pixel : renderer.ResolvedPixels()) {
         HAPPYRAY_CHECK(happyray::Length(pixel - integrator.background_color) < 1e-5f);
     }
 }
@@ -164,14 +164,14 @@ void TestProgressiveBlend(const happyray::FlatScene& scene, happyray::Camera cam
     happyray::AOIntegrator ao;
     ao.samples_per_pixel_per_frame = 3;
     ao.max_distance = 1.5f;
-    ao.background_color = happyray::Vec3(0.1f, 0.3f, 0.5f);
+    ao.background_color = happyray::Vec3f(0.1f, 0.3f, 0.5f);
     happyray::SimpleIntegrator simple;
-    simple.background_color = happyray::Vec3(0.6f, 0.4f, 0.2f);
+    simple.background_color = happyray::Vec3f(0.6f, 0.4f, 0.2f);
     simple.light_direction = camera.Forward() * -1.0f;
     progressive.RenderProgressiveFrame(camera, ao, simple);
     HAPPYRAY_CHECK(progressive.SampleCount() == 0);
 
-    auto check_pixels = [&](const std::vector<happyray::Vec3>& expected) {
+    auto check_pixels = [&](const std::vector<happyray::Vec3f>& expected) {
         HAPPYRAY_CHECK(progressive.ResolvedPixels().size() == expected.size());
         for (size_t i = 0; i < expected.size(); ++i)
             HAPPYRAY_CHECK(happyray::Length(progressive.ResolvedPixels()[i] - expected[i]) < 1e-5f);
@@ -189,7 +189,7 @@ void TestProgressiveBlend(const happyray::FlatScene& scene, happyray::Camera cam
             progressive.RenderProgressiveFrame(camera, ao, simple);
             HAPPYRAY_CHECK(progressive.SampleCount() == n + 1);
             const float weight = static_cast<float>(n) / (n + 32.0f);
-            std::vector<happyray::Vec3> expected(static_cast<size_t>(width) * height);
+            std::vector<happyray::Vec3f> expected(static_cast<size_t>(width) * height);
             for (size_t i = 0; i < expected.size(); ++i)
                 expected[i] = happyray::Lerp(simple_renderer.ResolvedPixels()[i],
                                          ao_renderer.ResolvedPixels()[i], weight);
@@ -336,7 +336,7 @@ void TestAnimatedSceneUpdate(const happyray::FlatScene& scene,
     Renderer grid_renderer(scene), reference_renderer(scene);
     grid_renderer.SetAccelType(AccelType::kUniformGrid);
     FlatScene updated_scene = scene;
-    for (Vec3& position : updated_scene.positions) {
+    for (Vec3f& position : updated_scene.positions) {
         position.z -= 0.35f;
     }
     grid_renderer.UpdateScene(updated_scene);
@@ -360,11 +360,11 @@ void TestAnimatedSceneUpdate(const happyray::FlatScene& scene,
 }
 
 // Appends an n x n tessellated parallelogram (origin + [0,1]^2 * (u, v)) tagged `object_id`.
-void AddTessellatedQuad(happyray::FlatScene* scene, const happyray::Vec3& origin,
-                        const happyray::Vec3& u, const happyray::Vec3& v, int n,
+void AddTessellatedQuad(happyray::FlatScene* scene, const happyray::Vec3f& origin,
+                        const happyray::Vec3f& u, const happyray::Vec3f& v, int n,
                         uint32_t object_id) {
     using namespace happyray;
-    const Vec3 normal = Normalize(Cross(u, v));
+    const Vec3f normal = Normalize(Cross(u, v));
     const uint32_t base = static_cast<uint32_t>(scene->positions.size());
     for (int j = 0; j <= n; ++j) {
         for (int i = 0; i <= n; ++i) {
@@ -389,14 +389,14 @@ void AddTessellatedQuad(happyray::FlatScene* scene, const happyray::Vec3& origin
 void TestCollisionDetection() {
     using namespace happyray;
     FlatScene scene;
-    scene.material_diffuse_colors = {Vec3(1.0f, 1.0f, 1.0f)};
+    scene.material_diffuse_colors = {Vec3f(1.0f, 1.0f, 1.0f)};
     // Object 0: floor plus a wall piercing it (a self-intersection, which must be ignored).
-    AddTessellatedQuad(&scene, Vec3(-1, 0, -1), Vec3(2, 0, 0), Vec3(0, 0, 2), 16, 0);
-    AddTessellatedQuad(&scene, Vec3(0.73f, -0.3f, -0.2f), Vec3(0, 0, 0.4f), Vec3(0, 0.6f, 0), 4,
+    AddTessellatedQuad(&scene, Vec3f(-1, 0, -1), Vec3f(2, 0, 0), Vec3f(0, 0, 2), 16, 0);
+    AddTessellatedQuad(&scene, Vec3f(0.73f, -0.3f, -0.2f), Vec3f(0, 0, 0.4f), Vec3f(0, 0.6f, 0), 4,
                        0);
     // Object 1: a wall crossing the floor. Object 2: a ceiling touching nothing.
-    AddTessellatedQuad(&scene, Vec3(-0.5f, -0.5f, 0.03f), Vec3(1, 0, 0), Vec3(0, 1, 0), 16, 1);
-    AddTessellatedQuad(&scene, Vec3(-1, 0.8f, -1), Vec3(0, 0, 2), Vec3(2, 0, 0), 8, 2);
+    AddTessellatedQuad(&scene, Vec3f(-0.5f, -0.5f, 0.03f), Vec3f(1, 0, 0), Vec3f(0, 1, 0), 16, 1);
+    AddTessellatedQuad(&scene, Vec3f(-1, 0.8f, -1), Vec3f(0, 0, 2), Vec3f(2, 0, 0), 8, 2);
 
     const SceneView view = scene.View();
     std::vector<uint32_t> expected(view.triangle_count, kNoCollision);
@@ -462,13 +462,13 @@ void TestCollisionDetection() {
     renderer.SetCollisionDetectionEnabled(true);
 
     Camera camera;
-    camera.position = Vec3(0.0f, 0.3f, 2.0f);
+    camera.position = Vec3f(0.0f, 0.3f, 2.0f);
     camera.yaw_deg = -90.0f;
     camera.pitch_deg = -10.0f;
     renderer.ResizeFramebuffer(64, 48);
     renderer.RenderFrame(camera, SimpleIntegrator());
     int red_pixels = 0;
-    for (const Vec3& pixel : renderer.ResolvedPixels()) {
+    for (const Vec3f& pixel : renderer.ResolvedPixels()) {
         if (pixel.x > 0.1f && pixel.y == 0.0f && pixel.z == 0.0f) ++red_pixels;
     }
     HAPPYRAY_CHECK(red_pixels > 0);
@@ -501,7 +501,7 @@ int main(int argc, char** argv) {
     constexpr int kNumFrames = 8;
 
     happyray::Camera camera;
-    camera.position = happyray::Vec3(0.0f, 1.8f, 3.5f);
+    camera.position = happyray::Vec3f(0.0f, 1.8f, 3.5f);
     camera.yaw_deg = -90.0f;
     camera.pitch_deg = -25.0f;
 
@@ -513,8 +513,8 @@ int main(int argc, char** argv) {
     integrator.samples_per_pixel_per_frame = 4;
     integrator.max_distance = 1.5f;
 
-    const std::vector<happyray::Vec2> pixel_jitter = MakePixelJitter(kWidth, kHeight);
-    const std::vector<happyray::Vec3> reference =
+    const std::vector<happyray::Vec2f> pixel_jitter = MakePixelJitter(kWidth, kHeight);
+    const std::vector<happyray::Vec3f> reference =
         RenderBruteForceReference(view, camera, integrator, kWidth, kHeight, pixel_jitter,
                                   kNumFrames, integrator.samples_per_pixel_per_frame);
 
@@ -560,7 +560,7 @@ int main(int argc, char** argv) {
     const happyray::SceneView dense_view = dense_flat_scene.View();
 
     happyray::Camera dense_camera;
-    dense_camera.position = happyray::Vec3(1.6f, 1.2f, 2.2f);
+    dense_camera.position = happyray::Vec3f(1.6f, 1.2f, 2.2f);
     dense_camera.yaw_deg = -145.0f;
     dense_camera.pitch_deg = -20.0f;
 
@@ -568,7 +568,7 @@ int main(int argc, char** argv) {
     dense_settings.samples_per_pixel_per_frame = 4;
     dense_settings.max_distance = 0.6f;
 
-    const std::vector<happyray::Vec3> dense_reference =
+    const std::vector<happyray::Vec3f> dense_reference =
         RenderBruteForceReference(dense_view, dense_camera, dense_settings, kWidth, kHeight,
                                   pixel_jitter, kNumFrames, dense_settings.samples_per_pixel_per_frame);
 

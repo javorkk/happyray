@@ -15,7 +15,7 @@ struct Mat4 {
 
     HAPPYRAY_HD static Mat4 Identity() { return Mat4(); }
 
-    HAPPYRAY_HD static Mat4 Translation(const Vec3& t) {
+    HAPPYRAY_HD static Mat4 Translation(const Vec3f& t) {
         Mat4 result;
         result.m[0][3] = t.x;
         result.m[1][3] = t.y;
@@ -23,7 +23,7 @@ struct Mat4 {
         return result;
     }
 
-    HAPPYRAY_HD static Mat4 Scale(const Vec3& s) {
+    HAPPYRAY_HD static Mat4 Scale(const Vec3f& s) {
         Mat4 result;
         result.m[0][0] = s.x;
         result.m[1][1] = s.y;
@@ -33,10 +33,10 @@ struct Mat4 {
 
     // Right-handed look-at: builds the world-to-camera (view) matrix for a camera at `eye`
     // looking towards `target` with the given `up` hint.
-    HAPPYRAY_HD static Mat4 LookAt(const Vec3& eye, const Vec3& target, const Vec3& up) {
-        const Vec3 forward = Normalize(target - eye);
-        const Vec3 right = Normalize(Cross(forward, up));
-        const Vec3 camera_up = Cross(right, forward);
+    HAPPYRAY_HD static Mat4 LookAt(const Vec3f& eye, const Vec3f& target, const Vec3f& up) {
+        const Vec3f forward = Normalize(target - eye);
+        const Vec3f right = Normalize(Cross(forward, up));
+        const Vec3f camera_up = Cross(right, forward);
 
         Mat4 result;
         result.m[0][0] = right.x;
@@ -77,15 +77,15 @@ HAPPYRAY_HD inline Mat4 operator*(const Mat4& a, const Mat4& b) {
 }
 
 // Transforms a point (implicit w = 1); the result's w is discarded (assumes an affine matrix).
-HAPPYRAY_HD inline Vec3 TransformPoint(const Mat4& m, const Vec3& p) {
-    return Vec3(m.m[0][0] * p.x + m.m[0][1] * p.y + m.m[0][2] * p.z + m.m[0][3],
+HAPPYRAY_HD inline Vec3f TransformPoint(const Mat4& m, const Vec3f& p) {
+    return Vec3f(m.m[0][0] * p.x + m.m[0][1] * p.y + m.m[0][2] * p.z + m.m[0][3],
                 m.m[1][0] * p.x + m.m[1][1] * p.y + m.m[1][2] * p.z + m.m[1][3],
                 m.m[2][0] * p.x + m.m[2][1] * p.y + m.m[2][2] * p.z + m.m[2][3]);
 }
 
 // Transforms a direction (implicit w = 0); unaffected by translation.
-HAPPYRAY_HD inline Vec3 TransformVector(const Mat4& m, const Vec3& v) {
-    return Vec3(m.m[0][0] * v.x + m.m[0][1] * v.y + m.m[0][2] * v.z,
+HAPPYRAY_HD inline Vec3f TransformVector(const Mat4& m, const Vec3f& v) {
+    return Vec3f(m.m[0][0] * v.x + m.m[0][1] * v.y + m.m[0][2] * v.z,
                 m.m[1][0] * v.x + m.m[1][1] * v.y + m.m[1][2] * v.z,
                 m.m[2][0] * v.x + m.m[2][1] * v.y + m.m[2][2] * v.z);
 }
@@ -117,8 +117,8 @@ HAPPYRAY_HD inline Mat4 Inverse(const Mat4& a) {
     result.m[1][2] = (a02 * a10 - a00 * a12) * inv_det;
     result.m[2][2] = (a00 * a11 - a01 * a10) * inv_det;
 
-    const Vec3 t(a.m[0][3], a.m[1][3], a.m[2][3]);
-    const Vec3 inv_t = TransformVector(result, -t);
+    const Vec3f t(a.m[0][3], a.m[1][3], a.m[2][3]);
+    const Vec3f inv_t = TransformVector(result, -t);
     result.m[0][3] = inv_t.x;
     result.m[1][3] = inv_t.y;
     result.m[2][3] = inv_t.z;

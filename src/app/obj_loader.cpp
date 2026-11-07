@@ -72,8 +72,8 @@ std::string ResolveSiblingPath(const std::string& base_path, const std::string& 
 // Parses a minimal subset of the Wavefront MTL format: "newmtl <name>" starts a material block,
 // and "Kd r g b" sets its flat Lambertian diffuse color. Everything else (Ka, Ks, Ns, map_Kd,
 // illum, ...) is intentionally ignored -- this project only needs flat diffuse colors for now.
-std::unordered_map<std::string, Vec3> ParseMtlFile(const std::string& path) {
-    std::unordered_map<std::string, Vec3> diffuse_colors;
+std::unordered_map<std::string, Vec3f> ParseMtlFile(const std::string& path) {
+    std::unordered_map<std::string, Vec3f> diffuse_colors;
     std::FILE* file = std::fopen(path.c_str(), "r");
     if (!file) {
         std::fprintf(stderr, "LoadObj: failed to open mtllib '%s'\n", path.c_str());
@@ -90,7 +90,7 @@ std::unordered_map<std::string, Vec3> ParseMtlFile(const std::string& path) {
         if (keyword == "newmtl") {
             line >> current_material_name;
         } else if (keyword == "Kd" && !current_material_name.empty()) {
-            Vec3 kd;
+            Vec3f kd;
             line >> kd.x >> kd.y >> kd.z;
             diffuse_colors[current_material_name] = kd;
         }
@@ -109,15 +109,15 @@ bool LoadObj(const std::string& path, Scene* scene) {
         return false;
     }
 
-    std::vector<Vec3> positions;
-    std::vector<Vec3> normals;
-    std::vector<Vec2> uvs;
+    std::vector<Vec3f> positions;
+    std::vector<Vec3f> normals;
+    std::vector<Vec2f> uvs;
 
     Mesh mesh;
     mesh.name = path;
 
     std::unordered_map<FaceVertexKey, uint32_t, FaceVertexKeyHash> vertex_cache;
-    std::unordered_map<std::string, Vec3> mtllib_diffuse_colors;
+    std::unordered_map<std::string, Vec3f> mtllib_diffuse_colors;
     uint32_t current_material_id = 0;
     bool have_material = false;
     // Objects are the distinct (`o` name, `g` name) pairs; a new `o` resets the group. Repeated
@@ -152,21 +152,21 @@ bool LoadObj(const std::string& path, Scene* scene) {
         line >> keyword;
 
         if (keyword == "v") {
-            Vec3 p;
+            Vec3f p;
             line >> p.x >> p.y >> p.z;
             positions.push_back(p);
         } else if (keyword == "vn") {
-            Vec3 n;
+            Vec3f n;
             line >> n.x >> n.y >> n.z;
             normals.push_back(n);
         } else if (keyword == "vt") {
-            Vec2 uv;
+            Vec2f uv;
             line >> uv.x >> uv.y;
             uvs.push_back(uv);
         } else if (keyword == "mtllib") {
             std::string mtl_filename;
             line >> mtl_filename;
-            const std::unordered_map<std::string, Vec3> parsed =
+            const std::unordered_map<std::string, Vec3f> parsed =
                 ParseMtlFile(ResolveSiblingPath(path, mtl_filename));
             mtllib_diffuse_colors.insert(parsed.begin(), parsed.end());
         } else if (keyword == "usemtl") {
@@ -209,7 +209,7 @@ bool LoadObj(const std::string& path, Scene* scene) {
                     continue;
                 }
 
-                Vec3 position;
+                Vec3f position;
                 VertexAttributes attributes;
                 if (key.position_index >= 0 &&
                     key.position_index < static_cast<int>(positions.size())) {
@@ -246,17 +246,17 @@ bool LoadObj(const std::string& path, Scene* scene) {
     if (normals.empty() && !mesh.positions.empty()) {
         // The file supplied no normals at all: derive smooth, area-weighted vertex normals
         // from the (already deduplicated) triangle list.
-        std::vector<Vec3> accumulated(mesh.positions.size(), Vec3(0.0f, 0.0f, 0.0f));
+        std::vector<Vec3f> accumulated(mesh.positions.size(), Vec3f(0.0f, 0.0f, 0.0f));
         for (size_t tri = 0; tri < mesh.indices.size(); tri += 3) {
             const uint32_t i0 = mesh.indices[tri];
             const uint32_t i1 = mesh.indices[tri + 1];
             const uint32_t i2 = mesh.indices[tri + 2];
-            const Vec3& p0 = mesh.positions[i0];
-            const Vec3& p1 = mesh.positions[i1];
-            const Vec3& p2 = mesh.positions[i2];
+            const Vec3f& p0 = mesh.positions[i0];
+            const Vec3f& p1 = mesh.positions[i1];
+            const Vec3f& p2 = mesh.positions[i2];
             // Unnormalized cross product: its magnitude is proportional to triangle area, which
             // naturally area-weights the contribution to each shared vertex.
-            const Vec3 face_normal = Cross(p1 - p0, p2 - p0);
+            const Vec3f face_normal = Cross(p1 - p0, p2 - p0);
             accumulated[i0] += face_normal;
             accumulated[i1] += face_normal;
             accumulated[i2] += face_normal;

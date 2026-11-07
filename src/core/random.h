@@ -64,8 +64,8 @@ HAPPYRAY_HD inline float HaltonRadicalInverse(uint32_t index, uint32_t base) {
 
 // The 2D Halton sample at `index`, using the standard base-2/base-3 pair (the lowest two
 // primes, which is sufficient for a 2D hemisphere-direction sample).
-HAPPYRAY_HD inline Vec2 Halton2D(uint32_t index) {
-    return Vec2(HaltonRadicalInverse(index, 2u), HaltonRadicalInverse(index, 3u));
+HAPPYRAY_HD inline Vec2f Halton2D(uint32_t index) {
+    return Vec2f(HaltonRadicalInverse(index, 2u), HaltonRadicalInverse(index, 3u));
 }
 
 HAPPYRAY_HD inline float Frac(float v) { return v - static_cast<float>(static_cast<int>(v)) + (v < 0.0f ? 1.0f : 0.0f); }
@@ -76,35 +76,35 @@ HAPPYRAY_HD inline float Frac(float v) { return v - static_cast<float>(static_ca
 // exactly what a progressive per-pixel accumulator needs.
 HAPPYRAY_HD inline float CranleyPattersonRotate(float value, float offset) { return Frac(value + offset); }
 
-HAPPYRAY_HD inline Vec2 CranleyPattersonRotate(const Vec2& value, const Vec2& offset) {
-    return Vec2(CranleyPattersonRotate(value.x, offset.x), CranleyPattersonRotate(value.y, offset.y));
+HAPPYRAY_HD inline Vec2f CranleyPattersonRotate(const Vec2f& value, const Vec2f& offset) {
+    return Vec2f(CranleyPattersonRotate(value.x, offset.x), CranleyPattersonRotate(value.y, offset.y));
 }
 
 // Convenience: the Cranley-Patterson-rotated 2D Halton sample at `index`, decorrelated per
 // pixel by `pixel_offset`.
-HAPPYRAY_HD inline Vec2 Halton2D(uint32_t index, const Vec2& pixel_offset) {
+HAPPYRAY_HD inline Vec2f Halton2D(uint32_t index, const Vec2f& pixel_offset) {
     return CranleyPattersonRotate(Halton2D(index), pixel_offset);
 }
 
 // Builds an orthonormal basis around unit vector `n` (Duff et al., "Building an Orthonormal
 // Basis, Revisited"), used to transform hemisphere samples from local space into world space.
-HAPPYRAY_HD inline void MakeOrthonormalBasis(const Vec3& n, Vec3* tangent, Vec3* bitangent) {
+HAPPYRAY_HD inline void MakeOrthonormalBasis(const Vec3f& n, Vec3f* tangent, Vec3f* bitangent) {
     const float sign = n.z >= 0.0f ? 1.0f : -1.0f;
     const float a = -1.0f / (sign + n.z);
     const float b = n.x * n.y * a;
-    *tangent = Vec3(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x);
-    *bitangent = Vec3(b, sign + n.y * n.y * a, -n.y);
+    *tangent = Vec3f(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x);
+    *bitangent = Vec3f(b, sign + n.y * n.y * a, -n.y);
 }
 
 // Cosine-weighted sample over the hemisphere around normal `n`.
-HAPPYRAY_HD inline Vec3 SampleCosineHemisphere(const Vec3& n, float u1, float u2) {
+HAPPYRAY_HD inline Vec3f SampleCosineHemisphere(const Vec3f& n, float u1, float u2) {
     const float r = std::sqrt(u1);
     const float theta = 2.0f * 3.14159265358979323846f * u2;
     const float local_x = r * std::cos(theta);
     const float local_y = r * std::sin(theta);
     const float local_z = std::sqrt(1.0f - u1);
 
-    Vec3 tangent, bitangent;
+    Vec3f tangent, bitangent;
     MakeOrthonormalBasis(n, &tangent, &bitangent);
     return tangent * local_x + bitangent * local_y + n * local_z;
 }

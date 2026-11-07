@@ -8,7 +8,7 @@ namespace happyray {
 template <int kNumVerticesT>
 struct Primitive {
     static constexpr int kNumVertices = kNumVerticesT;
-    Vec3 vtx[kNumVerticesT];
+    Vec3f vtx[kNumVerticesT];
 };
 
 }  // namespace happyray

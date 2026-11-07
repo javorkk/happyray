@@ -13,8 +13,8 @@
 namespace happyray {
 
 struct VertexAttributes {
-    Vec3 normal;
-    Vec2 uv;
+    Vec3f normal;
+    Vec2f uv;
 };
 
 struct Material {
@@ -22,12 +22,12 @@ struct Material {
     // Flat Lambertian diffuse color, parsed from the OBJ's mtllib ("Kd r g b"). Defaults to
     // white (full albedo) when no material/Kd is available, so AO shading multiplied by this
     // color is a no-op for un-textured/material-less geometry.
-    Vec3 diffuse_color = Vec3(1.0f, 1.0f, 1.0f);
+    Vec3f diffuse_color = Vec3f(1.0f, 1.0f, 1.0f);
 };
 
 struct Mesh {
     std::string name;
-    std::vector<Vec3> positions;
+    std::vector<Vec3f> positions;
     std::vector<VertexAttributes> attributes;  // One entry per position, including at seams.
     std::vector<uint32_t> indices;       // 3 per triangle, indexing positions and attributes.
     std::vector<uint32_t> material_ids;  // One entry per triangle, indexing into Scene::materials.
@@ -45,7 +45,7 @@ struct Scene {
     BBox WorldBounds() const {
         BBox bounds;
         for (const Mesh& mesh : meshes) {
-            for (const Vec3& position : mesh.positions) {
+            for (const Vec3f& position : mesh.positions) {
                 bounds.Grow(position);
             }
         }

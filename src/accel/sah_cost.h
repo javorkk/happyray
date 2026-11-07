@@ -47,7 +47,7 @@ void PrintSahCalibration(const SahCalibration& calibration);
 // Half of a box's own surface area (x*y + y*z + z*x) -- the common per-cell weight every
 // ComputeSahCost() implementation sums, normalized by the scene bounding box's own half surface
 // area.
-HAPPYRAY_HD inline float HalfSurfaceArea(const Vec3& extent) {
+HAPPYRAY_HD inline float HalfSurfaceArea(const Vec3f& extent) {
     return extent.x * extent.y + extent.y * extent.z + extent.z * extent.x;
 }
 

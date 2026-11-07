@@ -69,7 +69,7 @@ const happyray::SahCostConstants &SahCostConstantsFor(happyray::AccelType type,
   }
 }
 
-uint32_t ToPackedRgba(const happyray::Vec3 &color) {
+uint32_t ToPackedRgba(const happyray::Vec3f &color) {
   auto to_byte = [](float c) {
     const float clamped = c < 0.0f ? 0.0f : (c > 1.0f ? 1.0f : c);
     return static_cast<uint8_t>(clamped * 255.0f + 0.5f);
@@ -86,7 +86,7 @@ uint32_t ToPackedRgba(const happyray::Vec3 &color) {
 // HAPPYRAY_SCREENSHOT_FRAME in the environment, so the renderer can be checked
 // visually (or diffed) without a human driving the interactive window.
 void WritePpmScreenshot(const std::string &path, int width, int height,
-                        const std::vector<happyray::Vec3> &resolved) {
+                        const std::vector<happyray::Vec3f> &resolved) {
   std::FILE *file = std::fopen(path.c_str(), "wb");
   if (!file) {
     std::fprintf(stderr, "WritePpmScreenshot: failed to open '%s'\n",
@@ -95,7 +95,7 @@ void WritePpmScreenshot(const std::string &path, int width, int height,
   }
   std::fprintf(file, "P6\n%d %d\n255\n", width, height);
   for (int i = 0; i < width * height; ++i) {
-    const happyray::Vec3 &c = resolved[i];
+    const happyray::Vec3f &c = resolved[i];
     auto to_byte = [](float v) {
       const float clamped = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
       return static_cast<unsigned char>(clamped * 255.0f + 0.5f);
@@ -138,7 +138,7 @@ void PrintControlsHelp() {
 // resolution (resX/resY) so a dumped config reproduces the exact viewpoint
 // *and* framing it was captured at, not just the camera's orientation.
 void PrintCameraConfig(const happyray::Camera &camera, int width, int height) {
-  const happyray::Vec3 forward = camera.Forward();
+  const happyray::Vec3f forward = camera.Forward();
   std::printf("#camera parameters\n");
   std::printf("position\t\t%g %g %g\n", camera.position.x, camera.position.y,
               camera.position.z);
@@ -642,7 +642,7 @@ int main(int argc, char **argv) {
       // Search/rebuild time is not camera-motion time.
       last_ticks = SDL_GetTicks();
     }
-    const std::vector<happyray::Vec3> &resolved = renderer.ResolvedPixels();
+    const std::vector<happyray::Vec3f> &resolved = renderer.ResolvedPixels();
 
     for (int y = 0; y < height; ++y) {
       for (int x = 0; x < width; ++x) {

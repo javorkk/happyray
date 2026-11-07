@@ -20,10 +20,10 @@
 namespace happyray {
 
 struct GridBoundsView {
-  Vec3 bounds_min;
-  Vec3 bounds_max;
-  Vec3 cell_size;
-  Vec3 inv_cell_size;
+  Vec3f bounds_min;
+  Vec3f bounds_max;
+  Vec3f cell_size;
+  Vec3f inv_cell_size;
   int resolution_x = 1;
   int resolution_y = 1;
   int resolution_z = 1;
@@ -68,17 +68,17 @@ HAPPYRAY_HD inline GridRangeView SecondLevelView(const TwoLevelGridView &grid,
   const int rem = static_cast<int>(cell_index) % res_xy;
   const int cy = rem / top.resolution_x;
   const int cx = rem % top.resolution_x;
-  const Vec3 bounds_min(top.bounds_min.x + cx * top.cell_size.x,
+  const Vec3f bounds_min(top.bounds_min.x + cx * top.cell_size.x,
                         top.bounds_min.y + cy * top.cell_size.y,
                         top.bounds_min.z + cz * top.cell_size.z);
-  const Vec3 cell_size(top.cell_size.x / resolution,
+  const Vec3f cell_size(top.cell_size.x / resolution,
                        top.cell_size.y / resolution,
                        top.cell_size.z / resolution);
   GridRangeView view;
   view.bounds_min = bounds_min;
   view.bounds_max = bounds_min + top.cell_size;
   view.cell_size = cell_size;
-  view.inv_cell_size = Vec3(1.0f / cell_size.x, 1.0f / cell_size.y,
+  view.inv_cell_size = Vec3f(1.0f / cell_size.x, 1.0f / cell_size.y,
                             1.0f / cell_size.z);
   view.resolution_x = resolution;
   view.resolution_y = resolution;
@@ -104,7 +104,7 @@ HAPPYRAY_HD inline bool TraverseTwoLevelGrid(const TwoLevelGridView &grid,
                                              VisitTopFn &&visit_top,
                                              VisitLeafFn &&visit_leaf) {
   const GridBoundsView &top = grid.top_level;
-  const Vec3 inv_dir = SafeRcp(ray.direction);
+  const Vec3f inv_dir = SafeRcp(ray.direction);
   float t_near, t_far;
   if (!IntersectRayBoxRcp(ray.origin, ray.direction, inv_dir, top.bounds_min,
                           top.bounds_max, ray.t_min, ray.t_max, &t_near,
@@ -112,7 +112,7 @@ HAPPYRAY_HD inline bool TraverseTwoLevelGrid(const TwoLevelGridView &grid,
     return false;
   }
   float ray_t_max = ray.t_max;
-  const Vec3 top_entry =
+  const Vec3f top_entry =
       (ray.origin + ray.direction * t_near - top.bounds_min) * top.inv_cell_size;
   int cx = ClampInt(static_cast<int>(top_entry.x), 0, top.resolution_x - 1);
   int cy = ClampInt(static_cast<int>(top_entry.y), 0, top.resolution_y - 1);
@@ -154,16 +154,16 @@ HAPPYRAY_HD inline bool TraverseTwoLevelGrid(const TwoLevelGridView &grid,
       const int res_x = resolution;
       const int res_y = resolution;
       const int res_z = resolution;
-      const Vec3 cell_min(top.bounds_min.x + cx * top.cell_size.x,
+      const Vec3f cell_min(top.bounds_min.x + cx * top.cell_size.x,
                           top.bounds_min.y + cy * top.cell_size.y,
                           top.bounds_min.z + cz * top.cell_size.z);
-      const Vec3 sub_inv(top.inv_cell_size.x * res_x,
+      const Vec3f sub_inv(top.inv_cell_size.x * res_x,
                          top.inv_cell_size.y * res_y,
                          top.inv_cell_size.z * res_z);
-      const Vec3 sub_cell_size(top.cell_size.x / res_x,
+      const Vec3f sub_cell_size(top.cell_size.x / res_x,
                                top.cell_size.y / res_y,
                                top.cell_size.z / res_z);
-      const Vec3 leaf_entry =
+      const Vec3f leaf_entry =
           (ray.origin + ray.direction * t_cell - cell_min) * sub_inv;
       int leaf_x = ClampInt(static_cast<int>(leaf_entry.x), 0, res_x - 1);
       int leaf_y = ClampInt(static_cast<int>(leaf_entry.y), 0, res_y - 1);

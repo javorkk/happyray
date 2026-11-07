@@ -15,80 +15,86 @@ namespace happyray {
 
 HAPPYRAY_HD inline int ClampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-struct Vec2 {
-    float x = 0.0f;
-    float y = 0.0f;
+template <typename T> struct Vec2 {
+    T x = T{};
+    T y = T{};
 
     HAPPYRAY_HD Vec2() = default;
-    HAPPYRAY_HD Vec2(float x_, float y_) : x(x_), y(y_) {}
+    HAPPYRAY_HD Vec2(T x_, T y_) : x(x_), y(y_) {}
 };
 
-HAPPYRAY_HD inline Vec2 operator+(const Vec2& a, const Vec2& b) { return Vec2(a.x + b.x, a.y + b.y); }
-HAPPYRAY_HD inline Vec2 operator-(const Vec2& a, const Vec2& b) { return Vec2(a.x - b.x, a.y - b.y); }
-HAPPYRAY_HD inline Vec2 operator*(const Vec2& a, float s) { return Vec2(a.x * s, a.y * s); }
-HAPPYRAY_HD inline Vec2 operator/(const Vec2& a, float s) { return a * (1.0f / s); }
-HAPPYRAY_HD inline Vec2& operator+=(Vec2& a, const Vec2& b) { a = a + b; return a; }
+template <typename T> HAPPYRAY_HD inline Vec2<T> operator+(const Vec2<T>& a, const Vec2<T>& b) { return Vec2<T>(a.x + b.x, a.y + b.y); }
+template <typename T> HAPPYRAY_HD inline Vec2<T> operator-(const Vec2<T>& a, const Vec2<T>& b) { return Vec2<T>(a.x - b.x, a.y - b.y); }
+template <typename T, typename S> HAPPYRAY_HD inline Vec2<T> operator*(const Vec2<T>& a, S s) { return Vec2<T>(a.x * s, a.y * s); }
+template <typename T, typename S> HAPPYRAY_HD inline Vec2<T> operator/(const Vec2<T>& a, S s) { return Vec2<T>(a.x / s, a.y / s); }
+template <typename T> HAPPYRAY_HD inline Vec2<T>& operator+=(Vec2<T>& a, const Vec2<T>& b) { a = a + b; return a; }
 
-struct Vec3 {
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
+template <typename T> struct Vec3 {
+    T x = T{};
+    T y = T{};
+    T z = T{};
 
     HAPPYRAY_HD Vec3() = default;
-    HAPPYRAY_HD Vec3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
-    HAPPYRAY_HD explicit Vec3(float s) : x(s), y(s), z(s) {}
+    HAPPYRAY_HD Vec3(T x_, T y_, T z_) : x(x_), y(y_), z(z_) {}
+    HAPPYRAY_HD explicit Vec3(T s) : x(s), y(s), z(s) {}
 };
 
-struct Vec4 {
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-    float w = 0.0f;
+template <typename T> struct Vec4 {
+    T x = T{};
+    T y = T{};
+    T z = T{};
+    T w = T{};
 
     HAPPYRAY_HD Vec4() = default;
-    HAPPYRAY_HD Vec4(float x_, float y_, float z_, float w_) : x(x_), y(y_), z(z_), w(w_) {}
-    HAPPYRAY_HD Vec4(const Vec3& v, float w_) : x(v.x), y(v.y), z(v.z), w(w_) {}
+    HAPPYRAY_HD Vec4(T x_, T y_, T z_, T w_) : x(x_), y(y_), z(z_), w(w_) {}
+    HAPPYRAY_HD Vec4(const Vec3<T>& v, T w_) : x(v.x), y(v.y), z(v.z), w(w_) {}
 };
 
-// --- Vec3 arithmetic ---
+using Vec2f = Vec2<float>;
+using Vec2i = Vec2<int>;
+using Vec3f = Vec3<float>;
+using Vec3i = Vec3<int>;
+using Vec4f = Vec4<float>;
 
-HAPPYRAY_HD inline Vec3 operator+(const Vec3& a, const Vec3& b) {
-    return Vec3(a.x + b.x, a.y + b.y, a.z + b.z);
-}
-HAPPYRAY_HD inline Vec3 operator-(const Vec3& a, const Vec3& b) {
-    return Vec3(a.x - b.x, a.y - b.y, a.z - b.z);
-}
-HAPPYRAY_HD inline Vec3 operator-(const Vec3& a) { return Vec3(-a.x, -a.y, -a.z); }
-HAPPYRAY_HD inline Vec3 operator*(const Vec3& a, const Vec3& b) {
-    return Vec3(a.x * b.x, a.y * b.y, a.z * b.z);
-}
-HAPPYRAY_HD inline Vec3 operator*(const Vec3& a, float s) { return Vec3(a.x * s, a.y * s, a.z * s); }
-HAPPYRAY_HD inline Vec3 operator*(float s, const Vec3& a) { return a * s; }
-HAPPYRAY_HD inline Vec3 operator/(const Vec3& a, float s) { return a * (1.0f / s); }
-HAPPYRAY_HD inline Vec3& operator+=(Vec3& a, const Vec3& b) { a = a + b; return a; }
-HAPPYRAY_HD inline Vec3& operator-=(Vec3& a, const Vec3& b) { a = a - b; return a; }
-HAPPYRAY_HD inline Vec3& operator*=(Vec3& a, float s) { a = a * s; return a; }
+// --- Vec3f arithmetic ---
 
-HAPPYRAY_HD inline float Dot(const Vec3& a, const Vec3& b) {
+template <typename T> HAPPYRAY_HD inline Vec3<T> operator+(const Vec3<T>& a, const Vec3<T>& b) {
+    return Vec3<T>(a.x + b.x, a.y + b.y, a.z + b.z);
+}
+template <typename T> HAPPYRAY_HD inline Vec3<T> operator-(const Vec3<T>& a, const Vec3<T>& b) {
+    return Vec3<T>(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+template <typename T> HAPPYRAY_HD inline Vec3<T> operator-(const Vec3<T>& a) { return Vec3<T>(-a.x, -a.y, -a.z); }
+template <typename T> HAPPYRAY_HD inline Vec3<T> operator*(const Vec3<T>& a, const Vec3<T>& b) {
+    return Vec3<T>(a.x * b.x, a.y * b.y, a.z * b.z);
+}
+template <typename T, typename S> HAPPYRAY_HD inline Vec3<T> operator*(const Vec3<T>& a, S s) { return Vec3<T>(a.x * s, a.y * s, a.z * s); }
+template <typename S, typename T> HAPPYRAY_HD inline Vec3<T> operator*(S s, const Vec3<T>& a) { return a * s; }
+template <typename T, typename S> HAPPYRAY_HD inline Vec3<T> operator/(const Vec3<T>& a, S s) { return Vec3<T>(a.x / s, a.y / s, a.z / s); }
+template <typename T> HAPPYRAY_HD inline Vec3<T>& operator+=(Vec3<T>& a, const Vec3<T>& b) { a = a + b; return a; }
+template <typename T> HAPPYRAY_HD inline Vec3<T>& operator-=(Vec3<T>& a, const Vec3<T>& b) { a = a - b; return a; }
+template <typename T, typename S> HAPPYRAY_HD inline Vec3<T>& operator*=(Vec3<T>& a, S s) { a = a * s; return a; }
+
+template <typename T> HAPPYRAY_HD inline T Dot(const Vec3<T>& a, const Vec3<T>& b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
-HAPPYRAY_HD inline Vec3 Cross(const Vec3& a, const Vec3& b) {
-    return Vec3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+template <typename T> HAPPYRAY_HD inline Vec3<T> Cross(const Vec3<T>& a, const Vec3<T>& b) {
+    return Vec3<T>(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 }
-HAPPYRAY_HD inline float LengthSquared(const Vec3& a) { return Dot(a, a); }
-HAPPYRAY_HD inline float Length(const Vec3& a) { return std::sqrt(LengthSquared(a)); }
-HAPPYRAY_HD inline Vec3 Normalize(const Vec3& a) {
+HAPPYRAY_HD inline float LengthSquared(const Vec3f& a) { return Dot(a, a); }
+HAPPYRAY_HD inline float Length(const Vec3f& a) { return std::sqrt(LengthSquared(a)); }
+HAPPYRAY_HD inline Vec3f Normalize(const Vec3f& a) {
     const float len = Length(a);
-    return len > 0.0f ? a / len : Vec3(0.0f, 0.0f, 0.0f);
+    return len > 0.0f ? a / len : Vec3f(0.0f, 0.0f, 0.0f);
 }
-HAPPYRAY_HD inline Vec3 Min(const Vec3& a, const Vec3& b) {
-    return Vec3(a.x < b.x ? a.x : b.x, a.y < b.y ? a.y : b.y, a.z < b.z ? a.z : b.z);
+template <typename T> HAPPYRAY_HD inline Vec3<T> Min(const Vec3<T>& a, const Vec3<T>& b) {
+    return Vec3<T>(a.x < b.x ? a.x : b.x, a.y < b.y ? a.y : b.y, a.z < b.z ? a.z : b.z);
 }
-HAPPYRAY_HD inline Vec3 Max(const Vec3& a, const Vec3& b) {
-    return Vec3(a.x > b.x ? a.x : b.x, a.y > b.y ? a.y : b.y, a.z > b.z ? a.z : b.z);
+template <typename T> HAPPYRAY_HD inline Vec3<T> Max(const Vec3<T>& a, const Vec3<T>& b) {
+    return Vec3<T>(a.x > b.x ? a.x : b.x, a.y > b.y ? a.y : b.y, a.z > b.z ? a.z : b.z);
 }
-HAPPYRAY_HD inline Vec3 Lerp(const Vec3& a, const Vec3& b, float t) { return a + (b - a) * t; }
-HAPPYRAY_HD inline Vec3 Reflect(const Vec3& incident, const Vec3& normal) {
+HAPPYRAY_HD inline Vec3f Lerp(const Vec3f& a, const Vec3f& b, float t) { return a + (b - a) * t; }
+HAPPYRAY_HD inline Vec3f Reflect(const Vec3f& incident, const Vec3f& normal) {
     return incident - normal * (2.0f * Dot(incident, normal));
 }
 

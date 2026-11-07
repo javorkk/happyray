@@ -30,7 +30,7 @@ void Check(bool condition, const char* message) {
 }
 
 struct OverlapCase {
-    happyray::Vec3 a, b, c;
+    happyray::Vec3f a, b, c;
     bool expected;
 };
 
@@ -40,30 +40,30 @@ struct CheckOverlapFunctor {
 
     HAPPYRAY_HD void operator()(uint32_t i) const {
         results[i] = happyray::detail::TriangleCellIntersection(scene, i)(
-            happyray::Vec3(0, 0, 0), happyray::Vec3(2, 2, 2));
+            happyray::Vec3f(0, 0, 0), happyray::Vec3f(2, 2, 2));
     }
 };
 
 void CheckTriangleCellIntersection() {
-    using happyray::Vec3;
+    using happyray::Vec3f;
     const std::vector<OverlapCase> cases = {
-        {Vec3(0, 0, 0), Vec3(0.5f, 0, 0), Vec3(0, 0.5f, 0), true},
-        {Vec3(2, 0, 0), Vec3(2, 1, 0), Vec3(2, 0, 1), false},  // Box axis.
-        {Vec3(4, 0, 0), Vec3(0, 4, 0), Vec3(0, 0, 4), false},  // Plane.
-        {Vec3(2.5f, 0, 0), Vec3(0, 2.5f, 0), Vec3(2.5f, 0, 1), false},  // Edge axis.
-        {Vec3(-4, 0, 0), Vec3(4, 0, 0), Vec3(0, 4, 0), true},  // All vertices outside.
-        {Vec3(1, 0, 0), Vec3(1, 1, 0), Vec3(1, 0, 1), true},  // Face contact.
-        {Vec3(1, 1, 1), Vec3(2, 1, 1), Vec3(1, 2, 1), true},  // Corner contact.
-        {Vec3(1.005f, 0, 0), Vec3(1.005f, 1, 0), Vec3(1.005f, 0, 1), true},
-        {Vec3(0, 0, 0), Vec3(0, 0, 0), Vec3(0, 0, 0), true},  // Point.
-        {Vec3(2, 2, 2), Vec3(2, 2, 2), Vec3(2, 2, 2), false},
-        {Vec3(-2, 0, 0), Vec3(0, 0, 0), Vec3(2, 0, 0), true},  // Line.
-        {Vec3(2, 0, 0), Vec3(3, 0, 0), Vec3(4, 0, 0), false},
+        {Vec3f(0, 0, 0), Vec3f(0.5f, 0, 0), Vec3f(0, 0.5f, 0), true},
+        {Vec3f(2, 0, 0), Vec3f(2, 1, 0), Vec3f(2, 0, 1), false},  // Box axis.
+        {Vec3f(4, 0, 0), Vec3f(0, 4, 0), Vec3f(0, 0, 4), false},  // Plane.
+        {Vec3f(2.5f, 0, 0), Vec3f(0, 2.5f, 0), Vec3f(2.5f, 0, 1), false},  // Edge axis.
+        {Vec3f(-4, 0, 0), Vec3f(4, 0, 0), Vec3f(0, 4, 0), true},  // All vertices outside.
+        {Vec3f(1, 0, 0), Vec3f(1, 1, 0), Vec3f(1, 0, 1), true},  // Face contact.
+        {Vec3f(1, 1, 1), Vec3f(2, 1, 1), Vec3f(1, 2, 1), true},  // Corner contact.
+        {Vec3f(1.005f, 0, 0), Vec3f(1.005f, 1, 0), Vec3f(1.005f, 0, 1), true},
+        {Vec3f(0, 0, 0), Vec3f(0, 0, 0), Vec3f(0, 0, 0), true},  // Point.
+        {Vec3f(2, 2, 2), Vec3f(2, 2, 2), Vec3f(2, 2, 2), false},
+        {Vec3f(-2, 0, 0), Vec3f(0, 0, 0), Vec3f(2, 0, 0), true},  // Line.
+        {Vec3f(2, 0, 0), Vec3f(3, 0, 0), Vec3f(4, 0, 0), false},
     };
-    std::vector<Vec3> positions;
+    std::vector<Vec3f> positions;
     std::vector<uint32_t> indices;
     for (const auto& test : cases) {
-        for (const Vec3& vertex : {test.a, test.b, test.c}) {
+        for (const Vec3f& vertex : {test.a, test.b, test.c}) {
             indices.push_back(static_cast<uint32_t>(positions.size()));
             positions.push_back(vertex);
         }
@@ -72,7 +72,7 @@ void CheckTriangleCellIntersection() {
     host_scene.positions = positions.data();
     host_scene.indices = indices.data();
     host_scene.triangle_count = static_cast<uint32_t>(cases.size());
-    const thrust::device_vector<Vec3> device_positions(positions.begin(), positions.end());
+    const thrust::device_vector<Vec3f> device_positions(positions.begin(), positions.end());
     const thrust::device_vector<uint32_t> device_indices(indices.begin(), indices.end());
     happyray::SceneView scene = host_scene;
     scene.positions = thrust::raw_pointer_cast(device_positions.data());
@@ -84,7 +84,7 @@ void CheckTriangleCellIntersection() {
         CheckOverlapFunctor{scene, thrust::raw_pointer_cast(results.data())});
     const thrust::host_vector<uint32_t> actual = results;
     for (uint32_t i = 0; i < cases.size(); ++i) {
-        Check(happyray::detail::TriangleCellIntersection(host_scene, i)(Vec3(0, 0, 0), Vec3(2, 2, 2)) ==
+        Check(happyray::detail::TriangleCellIntersection(host_scene, i)(Vec3f(0, 0, 0), Vec3f(2, 2, 2)) ==
                   cases[i].expected, "host triangle/cell overlap");
         Check(actual[i] == cases[i].expected, "backend triangle/cell overlap");
     }
@@ -105,9 +105,11 @@ void CheckFilteredFragments(const happyray::SceneView& scene, const happyray::Un
     }
     const auto refs = Download(grid.triangle_indices, reference_count);
     const happyray::BBox box = happyray::ComputeTriangleBBox(scene, 0);
-    int x0, x1, y0, y1, z0, z1;
-    happyray::ComputeCellRange(box, grid.bounds_min, grid.inv_cell_size, grid.resolution_x,
-                          grid.resolution_y, grid.resolution_z, &x0, &x1, &y0, &y1, &z0, &z1);
+    happyray::Vec2i x_range, y_range, z_range;
+    happyray::ComputeCellRange(
+        box, grid.bounds_min, grid.inv_cell_size,
+        happyray::Vec3i(grid.resolution_x, grid.resolution_y, grid.resolution_z),
+        &x_range, &y_range, &z_range);
     const happyray::detail::TriangleCellIntersection intersects(scene, 0);
     uint32_t expected_refs = 0;
     for (int z = 0; z < grid.resolution_z; ++z) {
@@ -115,9 +117,10 @@ void CheckFilteredFragments(const happyray::SceneView& scene, const happyray::Un
             for (int x = 0; x < grid.resolution_x; ++x) {
                 const uint32_t cell = happyray::FlattenCellIndex(x, y, z, grid.resolution_x,
                                                             grid.resolution_y);
-                const bool expected = x >= x0 && x <= x1 && y >= y0 && y <= y1 &&
-                    z >= z0 && z <= z1 &&
-                    intersects(grid.bounds_min + happyray::Vec3(x + 0.5f, y + 0.5f, z + 0.5f) *
+                const bool expected = x >= x_range.x && x <= x_range.y &&
+                    y >= y_range.x && y <= y_range.y && z >= z_range.x &&
+                    z <= z_range.y &&
+                    intersects(grid.bounds_min + happyray::Vec3f(x + 0.5f, y + 0.5f, z + 0.5f) *
                                    grid.cell_size, grid.cell_size);
                 Check(ranges[cell].end - ranges[cell].start ==
                           static_cast<uint32_t>(expected),
@@ -138,10 +141,11 @@ void CheckSatCellRanges(const happyray::SceneView& scene,
     const auto ranges = Download(grid.cell_ranges, num_cells);
     const auto refs = Download(grid.triangle_indices, reference_count);
     const happyray::BBox box = happyray::ComputeTriangleBBox(scene, 0);
-    int x0, x1, y0, y1, z0, z1;
+    happyray::Vec2i x_range, y_range, z_range;
     happyray::ComputeCellRange(box, grid.bounds_min, grid.inv_cell_size,
-                               grid.resolution_x, grid.resolution_y,
-                               grid.resolution_z, &x0, &x1, &y0, &y1, &z0, &z1);
+                               happyray::Vec3i(grid.resolution_x, grid.resolution_y,
+                                               grid.resolution_z),
+                               &x_range, &y_range, &z_range);
     const happyray::detail::TriangleCellIntersection intersects(scene, 0);
     uint32_t expected_refs = 0;
     uint32_t aabb_candidates = 0;
@@ -150,13 +154,14 @@ void CheckSatCellRanges(const happyray::SceneView& scene,
             for (int x = 0; x < grid.resolution_x; ++x) {
                 const uint32_t cell = happyray::FlattenCellIndex(
                     x, y, z, grid.resolution_x, grid.resolution_y);
-                const bool in_aabb_range = x >= x0 && x <= x1 && y >= y0 && y <= y1 &&
-                                           z >= z0 && z <= z1;
+                const bool in_aabb_range =
+                    x >= x_range.x && x <= x_range.y && y >= y_range.x &&
+                    y <= y_range.y && z >= z_range.x && z <= z_range.y;
                 aabb_candidates += in_aabb_range;
                 const bool expected =
                     in_aabb_range && intersects(
                         grid.bounds_min +
-                            happyray::Vec3(x + 0.5f, y + 0.5f, z + 0.5f) *
+                            happyray::Vec3f(x + 0.5f, y + 0.5f, z + 0.5f) *
                                 grid.cell_size,
                         grid.cell_size);
                 Check(ranges[cell].end - ranges[cell].start ==
@@ -172,14 +177,14 @@ void CheckSatCellRanges(const happyray::SceneView& scene,
 }
 
 void CheckFragmentWriters() {
-    using happyray::Vec3;
-    const std::vector<Vec3> positions = {Vec3(0, 0, 0), Vec3(1, 1, 0), Vec3(0, 1, 1)};
+    using happyray::Vec3f;
+    const std::vector<Vec3f> positions = {Vec3f(0, 0, 0), Vec3f(1, 1, 0), Vec3f(0, 1, 1)};
     const std::vector<uint32_t> indices = {0, 1, 2};
     happyray::SceneView host_scene;
     host_scene.positions = positions.data();
     host_scene.indices = indices.data();
     host_scene.triangle_count = 1;
-    const thrust::device_vector<Vec3> device_positions(positions.begin(), positions.end());
+    const thrust::device_vector<Vec3f> device_positions(positions.begin(), positions.end());
     const thrust::device_vector<uint32_t> device_indices(indices.begin(), indices.end());
     happyray::SceneView scene = host_scene;
     scene.positions = thrust::raw_pointer_cast(device_positions.data());

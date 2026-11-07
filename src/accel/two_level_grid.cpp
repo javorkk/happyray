@@ -36,7 +36,7 @@ struct BBoxUnionFunctor {
 
 struct TopPairCounter {
     SceneView scene;
-    Vec3 bounds_min, inv_cell_size, cell_size;
+    Vec3f bounds_min, inv_cell_size, cell_size;
     int res_x, res_y, res_z;
     HAPPYRAY_HD uint32_t operator()(uint32_t tri) const {
         const Triangle triangle = FetchTriangle(scene, tri);
@@ -51,7 +51,7 @@ struct TopPairWriter {
     SceneView scene;
     const BBox* triangle_bboxes;
     const uint32_t* inclusive_offsets;
-    Vec3 bounds_min, inv_cell_size, cell_size;
+    Vec3f bounds_min, inv_cell_size, cell_size;
     int res_x, res_y, res_z;
     uint32_t invalid_cell_index;
     uint32_t* cell_keys;
@@ -92,8 +92,8 @@ struct CellRangeExtractor {
 
 // Computes each top-level cell's cubic second-level resolution.
 struct ComputeTopLevelCellFunctor {
-    Vec3 top_bounds_min;
-    Vec3 top_cell_size;
+    Vec3f top_bounds_min;
+    Vec3f top_cell_size;
     int top_resolution_x;
     int top_resolution_y;
     const CellRange* top_ranges;
@@ -105,15 +105,15 @@ struct ComputeTopLevelCellFunctor {
         const int rem = static_cast<int>(c) % (top_resolution_x * top_resolution_y);
         const int cy = rem / top_resolution_x;
         const int cx = rem % top_resolution_x;
-        const Vec3 cell_min(top_bounds_min.x + cx * top_cell_size.x,
+        const Vec3f cell_min(top_bounds_min.x + cx * top_cell_size.x,
                             top_bounds_min.y + cy * top_cell_size.y,
                             top_bounds_min.z + cz * top_cell_size.z);
-        const Vec3 cell_max = cell_min + top_cell_size;
+        const Vec3f cell_max = cell_min + top_cell_size;
         const uint32_t triangle_count = top_ranges[c].end - top_ranges[c].start;
 
-        const GridResolution computed_res =
+        const Vec3i computed_res =
             (triangle_count <= dense_cell_threshold)
-                ? GridResolution{1, 1, 1}
+            ? Vec3i(1, 1, 1)
                 : ComputeGridResolution(BBox(cell_min, cell_max), triangle_count,
                                         second_level_density);
 
@@ -148,7 +148,7 @@ struct FragmentCounter {
     const uint32_t* top_cell_keys;
     const uint32_t* top_triangle_indices;
     const TopLevelCell* top_level_cells;
-    Vec3 top_bounds_min, top_cell_size, top_inv_cell_size;
+    Vec3f top_bounds_min, top_cell_size, top_inv_cell_size;
     int top_resolution_x, top_resolution_y;
     uint32_t top_cell_count;
 
@@ -159,14 +159,14 @@ struct FragmentCounter {
         const int cx = static_cast<int>(owner % top_resolution_x);
         const int cy = static_cast<int>((owner / top_resolution_x) % top_resolution_y);
         const int cz = static_cast<int>(owner / (top_resolution_x * top_resolution_y));
-        const Vec3 cell_min(top_bounds_min.x + cx * top_cell_size.x,
+        const Vec3f cell_min(top_bounds_min.x + cx * top_cell_size.x,
                             top_bounds_min.y + cy * top_cell_size.y,
                             top_bounds_min.z + cz * top_cell_size.z);
         const int resolution = info.Resolution();
-        const Vec3 sub_inv(top_inv_cell_size.x * resolution,
+        const Vec3f sub_inv(top_inv_cell_size.x * resolution,
                        top_inv_cell_size.y * resolution,
                        top_inv_cell_size.z * resolution);
-        const Vec3 sub_cell_size(top_cell_size.x / resolution,
+        const Vec3f sub_cell_size(top_cell_size.x / resolution,
                            top_cell_size.y / resolution,
                            top_cell_size.z / resolution);
         const uint32_t tri = top_triangle_indices[i];
@@ -189,7 +189,7 @@ struct FragmentWriter {
     uint32_t invalid_cell_index;
     uint32_t* out_cell_indices;
     uint32_t* out_triangle_indices;
-    Vec3 top_bounds_min, top_cell_size, top_inv_cell_size;
+    Vec3f top_bounds_min, top_cell_size, top_inv_cell_size;
     int top_resolution_x, top_resolution_y;
     uint32_t top_cell_count;
 
@@ -203,17 +203,17 @@ struct FragmentWriter {
         const int cx = static_cast<int>(owner % top_resolution_x);
         const int cy = static_cast<int>((owner / top_resolution_x) % top_resolution_y);
         const int cz = static_cast<int>(owner / (top_resolution_x * top_resolution_y));
-        const Vec3 cell_min(top_bounds_min.x + cx * top_cell_size.x,
+        const Vec3f cell_min(top_bounds_min.x + cx * top_cell_size.x,
                             top_bounds_min.y + cy * top_cell_size.y,
                             top_bounds_min.z + cz * top_cell_size.z);
         const int resolution = info.Resolution();
-        const Vec3 sub_inv(top_inv_cell_size.x * resolution,
+        const Vec3f sub_inv(top_inv_cell_size.x * resolution,
                            top_inv_cell_size.y * resolution,
                            top_inv_cell_size.z * resolution);
         const uint32_t tri = top_triangle_indices[i];
         const uint32_t write_begin = i == 0 ? 0u : inclusive_offsets[i - 1];
         const uint32_t write_end = inclusive_offsets[i];
-        const Vec3 sub_cell_size(top_cell_size.x / resolution,
+        const Vec3f sub_cell_size(top_cell_size.x / resolution,
                                  top_cell_size.y / resolution,
                                  top_cell_size.z / resolution);
         uint32_t offset = write_begin;
@@ -252,7 +252,7 @@ struct ComputeTopLevelCellRefCountFunctor {
 struct TwoLevelGridSahFunctor {
     const TopLevelCell* top_level_cells;
     const uint32_t* top_level_triangle_ref_counts;
-    Vec3 top_cell_size;
+    Vec3f top_cell_size;
     SahCostConstants costs;
 
     HAPPYRAY_HD float operator()(uint32_t t) const {
@@ -261,7 +261,7 @@ struct TwoLevelGridSahFunctor {
         const int resolution = cell.Resolution();
         const auto num_local = static_cast<uint32_t>(resolution) *
                                                              resolution * resolution;
-        const Vec3 cell_size(top_cell_size.x / resolution,
+        const Vec3f cell_size(top_cell_size.x / resolution,
                                                          top_cell_size.y / resolution,
                                                          top_cell_size.z / resolution);
         return HalfSurfaceArea(cell_size) *
@@ -307,21 +307,21 @@ TwoLevelGrid::TwoLevelGrid(const SceneView& scene, float top_level_density,
                       : BBox();
     const float diagonal = Length(bounds.Extent());
     const float epsilon = diagonal > 0.0f ? diagonal * 1e-4f : 1e-4f;
-    bounds.min_bound -= Vec3(epsilon, epsilon, epsilon);
-    bounds.max_bound += Vec3(epsilon, epsilon, epsilon);
+    bounds.min_bound -= Vec3f(epsilon, epsilon, epsilon);
+    bounds.max_bound += Vec3f(epsilon, epsilon, epsilon);
 
-    const GridResolution top_resolution =
+    const Vec3i top_resolution =
         ComputeGridResolution(bounds, triangle_count, top_level_density);
     impl_->top_level.bounds_min = bounds.min_bound;
     impl_->top_level.bounds_max = bounds.max_bound;
     impl_->top_level.resolution_x = top_resolution.x;
     impl_->top_level.resolution_y = top_resolution.y;
     impl_->top_level.resolution_z = top_resolution.z;
-    impl_->top_level.cell_size = Vec3(bounds.Extent().x / top_resolution.x,
+    impl_->top_level.cell_size = Vec3f(bounds.Extent().x / top_resolution.x,
                                       bounds.Extent().y / top_resolution.y,
                                       bounds.Extent().z / top_resolution.z);
     impl_->top_level.inv_cell_size =
-        Vec3(1.0f / impl_->top_level.cell_size.x,
+        Vec3f(1.0f / impl_->top_level.cell_size.x,
              1.0f / impl_->top_level.cell_size.y,
              1.0f / impl_->top_level.cell_size.z);
 

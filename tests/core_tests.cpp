@@ -42,7 +42,7 @@ int g_failures = 0;
     } while (0)
 
 bool NearlyEqual(float a, float b, float eps = 1e-4f) { return std::fabs(a - b) < eps; }
-bool NearlyEqual(const happyray::Vec3& a, const happyray::Vec3& b, float eps = 1e-4f) {
+bool NearlyEqual(const happyray::Vec3f& a, const happyray::Vec3f& b, float eps = 1e-4f) {
     return NearlyEqual(a.x, b.x, eps) && NearlyEqual(a.y, b.y, eps) && NearlyEqual(a.z, b.z, eps);
 }
 
@@ -67,10 +67,10 @@ void TestTriangleSubdivision() {
     SubdivideLargeTriangles(&scene);
     HAPPYRAY_CHECK(scene.meshes.empty());
     Mesh mesh;
-    mesh.positions = {Vec3(0, 0, 0), Vec3(1, 0, 0), Vec3(0, 1, 0)};
-    mesh.attributes = {{Vec3(0, 0, 1), Vec2(0, 0)},
-                       {Vec3(0, 0, 3), Vec2(1, 0)},
-                       {Vec3(0, 0, 2), Vec2(0, 1)}};
+    mesh.positions = {Vec3f(0, 0, 0), Vec3f(1, 0, 0), Vec3f(0, 1, 0)};
+    mesh.attributes = {{Vec3f(0, 0, 1), Vec2f(0, 0)},
+                       {Vec3f(0, 0, 3), Vec2f(1, 0)},
+                       {Vec3f(0, 0, 2), Vec2f(0, 1)}};
     mesh.indices = {0, 1, 2};
     mesh.material_ids = {7};
     scene.meshes.push_back(mesh);
@@ -88,17 +88,17 @@ void TestTriangleSubdivision() {
     HAPPYRAY_CHECK(result.material_ids.size() == result.TriangleCount());
     double area = 0;
     for (size_t tri = 0; tri < result.indices.size(); tri += 3) {
-        const Vec3 a = result.positions[result.indices[tri]];
-        const Vec3 b = result.positions[result.indices[tri + 1]];
-        const Vec3 c = result.positions[result.indices[tri + 2]];
-        const Vec3 normal = Cross(b - a, c - a);
+        const Vec3f a = result.positions[result.indices[tri]];
+        const Vec3f b = result.positions[result.indices[tri + 1]];
+        const Vec3f c = result.positions[result.indices[tri + 2]];
+        const Vec3f normal = Cross(b - a, c - a);
         HAPPYRAY_CHECK(normal.z > 0);
         area += Length(normal) * 0.5;
         HAPPYRAY_CHECK(result.material_ids[tri / 3] == 7);
     }
     HAPPYRAY_CHECK(std::fabs(area - 0.5) < 1e-6);
     for (size_t i = 0; i < result.positions.size(); ++i) {
-        const Vec3& position = result.positions[i];
+        const Vec3f& position = result.positions[i];
         const VertexAttributes& attributes = result.attributes[i];
         HAPPYRAY_CHECK(NearlyEqual(attributes.uv.x, position.x));
         HAPPYRAY_CHECK(NearlyEqual(attributes.uv.y, position.y));
@@ -113,8 +113,8 @@ void TestTriangleSubdivision() {
     HAPPYRAY_CHECK(scene.meshes.front().attributes.size() == vertices);
 
     Scene point;
-    mesh.positions = {Vec3(1, 2, 3)};
-    mesh.attributes = {{Vec3(), Vec2()}};
+    mesh.positions = {Vec3f(1, 2, 3)};
+    mesh.attributes = {{Vec3f(), Vec2f()}};
     mesh.indices = {0, 0, 0};
     point.meshes.push_back(mesh);
     SubdivideLargeTriangles(&point);
@@ -123,135 +123,139 @@ void TestTriangleSubdivision() {
 
 void TestVecMath() {
     using namespace happyray;
-    const Vec3 a(1.0f, 0.0f, 0.0f);
-    const Vec3 b(0.0f, 1.0f, 0.0f);
+    const Vec3f a(1.0f, 0.0f, 0.0f);
+    const Vec3f b(0.0f, 1.0f, 0.0f);
 
     HAPPYRAY_CHECK(NearlyEqual(Dot(a, b), 0.0f));
-    HAPPYRAY_CHECK(NearlyEqual(Cross(a, b), Vec3(0.0f, 0.0f, 1.0f)));
-    HAPPYRAY_CHECK(NearlyEqual(Length(Vec3(3.0f, 4.0f, 0.0f)), 5.0f));
-    HAPPYRAY_CHECK(NearlyEqual(Normalize(Vec3(5.0f, 0.0f, 0.0f)), Vec3(1.0f, 0.0f, 0.0f)));
-    HAPPYRAY_CHECK(NearlyEqual(Lerp(a, b, 0.5f), Vec3(0.5f, 0.5f, 0.0f)));
+    HAPPYRAY_CHECK(NearlyEqual(Cross(a, b), Vec3f(0.0f, 0.0f, 1.0f)));
+    HAPPYRAY_CHECK(NearlyEqual(Length(Vec3f(3.0f, 4.0f, 0.0f)), 5.0f));
+    HAPPYRAY_CHECK(NearlyEqual(Normalize(Vec3f(5.0f, 0.0f, 0.0f)), Vec3f(1.0f, 0.0f, 0.0f)));
+    HAPPYRAY_CHECK(NearlyEqual(Lerp(a, b, 0.5f), Vec3f(0.5f, 0.5f, 0.0f)));
+    const Vec2i half2 = Vec2i(6, 8) / 2;
+    const Vec3i half3 = Vec3i(6, 8, 10) / 2;
+    HAPPYRAY_CHECK(half2.x == 3 && half2.y == 4);
+    HAPPYRAY_CHECK(half3.x == 3 && half3.y == 4 && half3.z == 5);
 
-    const Vec3 incident(1.0f, -1.0f, 0.0f);
-    const Vec3 normal(0.0f, 1.0f, 0.0f);
-    HAPPYRAY_CHECK(NearlyEqual(Reflect(incident, normal), Vec3(1.0f, 1.0f, 0.0f)));
+    const Vec3f incident(1.0f, -1.0f, 0.0f);
+    const Vec3f normal(0.0f, 1.0f, 0.0f);
+    HAPPYRAY_CHECK(NearlyEqual(Reflect(incident, normal), Vec3f(1.0f, 1.0f, 0.0f)));
 }
 
 void TestMat4() {
     using namespace happyray;
-    const Mat4 t = Mat4::Translation(Vec3(1.0f, 2.0f, 3.0f));
-    HAPPYRAY_CHECK(NearlyEqual(TransformPoint(t, Vec3(0.0f, 0.0f, 0.0f)), Vec3(1.0f, 2.0f, 3.0f)));
-    HAPPYRAY_CHECK(NearlyEqual(TransformVector(t, Vec3(1.0f, 0.0f, 0.0f)), Vec3(1.0f, 0.0f, 0.0f)));
+    const Mat4 t = Mat4::Translation(Vec3f(1.0f, 2.0f, 3.0f));
+    HAPPYRAY_CHECK(NearlyEqual(TransformPoint(t, Vec3f(0.0f, 0.0f, 0.0f)), Vec3f(1.0f, 2.0f, 3.0f)));
+    HAPPYRAY_CHECK(NearlyEqual(TransformVector(t, Vec3f(1.0f, 0.0f, 0.0f)), Vec3f(1.0f, 0.0f, 0.0f)));
 
-    const Mat4 s = Mat4::Scale(Vec3(2.0f, 2.0f, 2.0f));
-    HAPPYRAY_CHECK(NearlyEqual(TransformPoint(s, Vec3(1.0f, 1.0f, 1.0f)), Vec3(2.0f, 2.0f, 2.0f)));
+    const Mat4 s = Mat4::Scale(Vec3f(2.0f, 2.0f, 2.0f));
+    HAPPYRAY_CHECK(NearlyEqual(TransformPoint(s, Vec3f(1.0f, 1.0f, 1.0f)), Vec3f(2.0f, 2.0f, 2.0f)));
 
     const Mat4 combined = t * s;
-    HAPPYRAY_CHECK(NearlyEqual(TransformPoint(combined, Vec3(1.0f, 1.0f, 1.0f)), Vec3(3.0f, 4.0f, 5.0f)));
+    HAPPYRAY_CHECK(NearlyEqual(TransformPoint(combined, Vec3f(1.0f, 1.0f, 1.0f)), Vec3f(3.0f, 4.0f, 5.0f)));
 
     const Mat4 inv_t = Inverse(t);
-    HAPPYRAY_CHECK(NearlyEqual(TransformPoint(inv_t, Vec3(1.0f, 2.0f, 3.0f)), Vec3(0.0f, 0.0f, 0.0f)));
+    HAPPYRAY_CHECK(NearlyEqual(TransformPoint(inv_t, Vec3f(1.0f, 2.0f, 3.0f)), Vec3f(0.0f, 0.0f, 0.0f)));
 
-    const Mat4 view = Mat4::LookAt(Vec3(0.0f, 0.0f, 5.0f), Vec3(0.0f, 0.0f, 0.0f),
-                                   Vec3(0.0f, 1.0f, 0.0f));
+    const Mat4 view = Mat4::LookAt(Vec3f(0.0f, 0.0f, 5.0f), Vec3f(0.0f, 0.0f, 0.0f),
+                                   Vec3f(0.0f, 1.0f, 0.0f));
     // The camera looks down -Z in its own space, so the world origin (5 units in front of the
     // eye along +Z) should map to camera-space (0, 0, -5).
-    HAPPYRAY_CHECK(NearlyEqual(TransformPoint(view, Vec3(0.0f, 0.0f, 0.0f)), Vec3(0.0f, 0.0f, -5.0f)));
+    HAPPYRAY_CHECK(NearlyEqual(TransformPoint(view, Vec3f(0.0f, 0.0f, 0.0f)), Vec3f(0.0f, 0.0f, -5.0f)));
 }
 
 void TestBBox() {
     using namespace happyray;
     BBox box;
-    box.Grow(Vec3(-1.0f, -1.0f, -1.0f));
-    box.Grow(Vec3(1.0f, 1.0f, 1.0f));
+    box.Grow(Vec3f(-1.0f, -1.0f, -1.0f));
+    box.Grow(Vec3f(1.0f, 1.0f, 1.0f));
     HAPPYRAY_CHECK(!box.IsEmpty());
-    HAPPYRAY_CHECK(NearlyEqual(box.Center(), Vec3(0.0f, 0.0f, 0.0f)));
+    HAPPYRAY_CHECK(NearlyEqual(box.Center(), Vec3f(0.0f, 0.0f, 0.0f)));
 
-    const Ray ray(Vec3(-5.0f, 0.0f, 0.0f), Vec3(1.0f, 0.0f, 0.0f));
+    const Ray ray(Vec3f(-5.0f, 0.0f, 0.0f), Vec3f(1.0f, 0.0f, 0.0f));
     float t_near = 0.0f, t_far = 0.0f;
     HAPPYRAY_CHECK(IntersectRayBBox(ray, box, &t_near, &t_far));
     HAPPYRAY_CHECK(NearlyEqual(t_near, 4.0f));
     HAPPYRAY_CHECK(NearlyEqual(t_far, 6.0f));
 
-    const Ray miss_ray(Vec3(-5.0f, 5.0f, 0.0f), Vec3(1.0f, 0.0f, 0.0f));
+    const Ray miss_ray(Vec3f(-5.0f, 5.0f, 0.0f), Vec3f(1.0f, 0.0f, 0.0f));
     HAPPYRAY_CHECK(!IntersectRayBBox(miss_ray, box, &t_near, &t_far));
 }
 
 void TestBBoxExtractor() {
     using namespace happyray;
-    const Triangle triangle{{Vec3(-2, 3, 1), Vec3(4, -1, 2), Vec3(0, 2, -3)}};
+    const Triangle triangle{{Vec3f(-2, 3, 1), Vec3f(4, -1, 2), Vec3f(0, 2, -3)}};
     const BBox triangle_bounds = BBoxExtractor<Triangle>::Get(triangle);
-    HAPPYRAY_CHECK(NearlyEqual(triangle_bounds.min_bound, Vec3(-2, -1, -3)));
-    HAPPYRAY_CHECK(NearlyEqual(triangle_bounds.max_bound, Vec3(4, 3, 2)));
+    HAPPYRAY_CHECK(NearlyEqual(triangle_bounds.min_bound, Vec3f(-2, -1, -3)));
+    HAPPYRAY_CHECK(NearlyEqual(triangle_bounds.max_bound, Vec3f(4, 3, 2)));
 
-    const Primitive<4> quad{{triangle.vtx[0], triangle.vtx[1], triangle.vtx[2], Vec3(5, 6, 7)}};
+    const Primitive<4> quad{{triangle.vtx[0], triangle.vtx[1], triangle.vtx[2], Vec3f(5, 6, 7)}};
     const BBox quad_bounds = BBoxExtractor<Primitive<4>>::Get(quad);
-    HAPPYRAY_CHECK(NearlyEqual(quad_bounds.min_bound, Vec3(-2, -1, -3)));
-    HAPPYRAY_CHECK(NearlyEqual(quad_bounds.max_bound, Vec3(5, 6, 7)));
+    HAPPYRAY_CHECK(NearlyEqual(quad_bounds.min_bound, Vec3f(-2, -1, -3)));
+    HAPPYRAY_CHECK(NearlyEqual(quad_bounds.max_bound, Vec3f(5, 6, 7)));
 }
 
 void TestAdditionalPrimitiveBounds() {
     using namespace happyray;
-    const Point point{Vec3(1, -2, 3)};
+    const Point point{Vec3f(1, -2, 3)};
     const BBox point_bounds = BBoxExtractor<Point>::Get(point);
     HAPPYRAY_CHECK(NearlyEqual(point_bounds.min_bound, point.vtx[0]));
     HAPPYRAY_CHECK(NearlyEqual(point_bounds.max_bound, point.vtx[0]));
 
-    const Sphere sphere{Vec3(1, 2, 3), 2.0f};
+    const Sphere sphere{Vec3f(1, 2, 3), 2.0f};
     const BBox sphere_bounds = BBoxExtractor<Sphere>::Get(sphere);
-    HAPPYRAY_CHECK(NearlyEqual(sphere_bounds.min_bound, Vec3(-1, 0, 1)));
-    HAPPYRAY_CHECK(NearlyEqual(sphere_bounds.max_bound, Vec3(3, 4, 5)));
+    HAPPYRAY_CHECK(NearlyEqual(sphere_bounds.min_bound, Vec3f(-1, 0, 1)));
+    HAPPYRAY_CHECK(NearlyEqual(sphere_bounds.max_bound, Vec3f(3, 4, 5)));
 
-    const BezierCurve curve(Vec3(-2, 0, 1), Vec3(1, 3, -1), Vec3(4, -2, 2),
-                            Vec3(0, 1, 5), 0.5f);
+    const BezierCurve curve(Vec3f(-2, 0, 1), Vec3f(1, 3, -1), Vec3f(4, -2, 2),
+                            Vec3f(0, 1, 5), 0.5f);
     const BBox curve_bounds = BBoxExtractor<BezierCurve>::Get(curve);
-    HAPPYRAY_CHECK(NearlyEqual(curve_bounds.min_bound, Vec3(-2.5f, -2.5f, -1.5f)));
-    HAPPYRAY_CHECK(NearlyEqual(curve_bounds.max_bound, Vec3(4.5f, 3.5f, 5.5f)));
+    HAPPYRAY_CHECK(NearlyEqual(curve_bounds.min_bound, Vec3f(-2.5f, -2.5f, -1.5f)));
+    HAPPYRAY_CHECK(NearlyEqual(curve_bounds.max_bound, Vec3f(4.5f, 3.5f, 5.5f)));
 }
 
 void TestPrimitiveIntersections() {
     using namespace happyray;
     float t = 0.0f;
-    const Ray x_ray(Vec3(0, 0, 0), Vec3(1, 0, 0));
-    HAPPYRAY_CHECK(IntersectRayPoint(x_ray, Point{Vec3(2, 5e-5f, 0)}, &t));
+    const Ray x_ray(Vec3f(0, 0, 0), Vec3f(1, 0, 0));
+    HAPPYRAY_CHECK(IntersectRayPoint(x_ray, Point{Vec3f(2, 5e-5f, 0)}, &t));
     HAPPYRAY_CHECK(NearlyEqual(t, 2.0f));
-    HAPPYRAY_CHECK(!IntersectRayPoint(x_ray, Point{Vec3(2, 0.01f, 0)}, &t));
+    HAPPYRAY_CHECK(!IntersectRayPoint(x_ray, Point{Vec3f(2, 0.01f, 0)}, &t));
 
-    HAPPYRAY_CHECK(IntersectRaySphere(x_ray, Sphere{Vec3(4, 0, 0), 1.0f}, &t));
+    HAPPYRAY_CHECK(IntersectRaySphere(x_ray, Sphere{Vec3f(4, 0, 0), 1.0f}, &t));
     HAPPYRAY_CHECK(NearlyEqual(t, 3.0f));
-    const Ray tangent_ray(Vec3(0, 1, 0), Vec3(1, 0, 0));
-    HAPPYRAY_CHECK(IntersectRaySphere(tangent_ray, Sphere{Vec3(4, 0, 0), 1.0f}, &t));
+    const Ray tangent_ray(Vec3f(0, 1, 0), Vec3f(1, 0, 0));
+    HAPPYRAY_CHECK(IntersectRaySphere(tangent_ray, Sphere{Vec3f(4, 0, 0), 1.0f}, &t));
     HAPPYRAY_CHECK(NearlyEqual(t, 4.0f));
-    HAPPYRAY_CHECK(!IntersectRaySphere(x_ray, Sphere{Vec3(4, 0, 0), -1.0f}, &t));
+    HAPPYRAY_CHECK(!IntersectRaySphere(x_ray, Sphere{Vec3f(4, 0, 0), -1.0f}, &t));
 
-    const BezierCurve line_curve(Vec3(4, 0, 0), Vec3(5, 0, 0), Vec3(6, 0, 0),
-                                 Vec3(7, 0, 0), 0.5f);
-    const Ray tube_ray(Vec3(5.5f, 0, -2), Vec3(0, 0, 1));
+    const BezierCurve line_curve(Vec3f(4, 0, 0), Vec3f(5, 0, 0), Vec3f(6, 0, 0),
+                                 Vec3f(7, 0, 0), 0.5f);
+    const Ray tube_ray(Vec3f(5.5f, 0, -2), Vec3f(0, 0, 1));
     HAPPYRAY_CHECK(IntersectRayBezierCurve(tube_ray, line_curve, &t));
     HAPPYRAY_CHECK(t > 1.49f && t < 1.51f);
-    const Ray tube_miss(Vec3(5.5f, 0.7f, -2), Vec3(0, 0, 1));
+    const Ray tube_miss(Vec3f(5.5f, 0.7f, -2), Vec3f(0, 0, 1));
     HAPPYRAY_CHECK(!IntersectRayBezierCurve(tube_miss, line_curve, &t));
-    const BezierCurve curved_tube(Vec3(0, 0, 0), Vec3(0, 1, 0), Vec3(1, 1, 0),
-                                  Vec3(1, 0, 0), 0.05f);
-    const Ray curved_tube_ray(Vec3(0.5f, 0.75f, -1), Vec3(0, 0, 1));
+    const BezierCurve curved_tube(Vec3f(0, 0, 0), Vec3f(0, 1, 0), Vec3f(1, 1, 0),
+                                  Vec3f(1, 0, 0), 0.05f);
+    const Ray curved_tube_ray(Vec3f(0.5f, 0.75f, -1), Vec3f(0, 0, 1));
     HAPPYRAY_CHECK(IntersectRayBezierCurve(curved_tube_ray, curved_tube, &t));
 
-    const BBox box(Vec3(-1, -1, -1), Vec3(1, 1, 1));
-    HAPPYRAY_CHECK(Intersects(Point{Vec3(1, 0, 0)}, box));
-    HAPPYRAY_CHECK(!Intersects(Point{Vec3(1.01f, 0, 0)}, box));
-    HAPPYRAY_CHECK(Intersects(Sphere{Vec3(1.5f, 0, 0), 0.5f}, box));
-    HAPPYRAY_CHECK(!Intersects(Sphere{Vec3(1.51f, 0, 0), 0.5f}, box));
-    HAPPYRAY_CHECK(Intersects(line_curve, BBox(Vec3(5, -0.5f, -0.5f), Vec3(6, 0.5f, 0.5f))));
+    const BBox box(Vec3f(-1, -1, -1), Vec3f(1, 1, 1));
+    HAPPYRAY_CHECK(Intersects(Point{Vec3f(1, 0, 0)}, box));
+    HAPPYRAY_CHECK(!Intersects(Point{Vec3f(1.01f, 0, 0)}, box));
+    HAPPYRAY_CHECK(Intersects(Sphere{Vec3f(1.5f, 0, 0), 0.5f}, box));
+    HAPPYRAY_CHECK(!Intersects(Sphere{Vec3f(1.51f, 0, 0), 0.5f}, box));
+    HAPPYRAY_CHECK(Intersects(line_curve, BBox(Vec3f(5, -0.5f, -0.5f), Vec3f(6, 0.5f, 0.5f))));
 
-    const Triangle flat{{Vec3(0, 0, 0), Vec3(2, 0, 0), Vec3(0, 2, 0)}};
-    const Triangle crossing{{Vec3(0.5f, -1, -1), Vec3(0.5f, 2, -1), Vec3(0.5f, 0, 1)}};
-    const Triangle separated{{Vec3(3, 0, 0), Vec3(4, 0, 0), Vec3(3, 1, 0)}};
-    const Triangle coplanar_overlap{{Vec3(0.5f, 0.5f, 0), Vec3(2, 0.5f, 0),
-                                    Vec3(0.5f, 2, 0)}};
-    const Triangle coplanar_separated{{Vec3(3, 3, 0), Vec3(4, 3, 0), Vec3(3, 4, 0)}};
-    const Triangle degenerate_inside{{Vec3(0.5f, 0.5f, 0), Vec3(0.5f, 0.5f, 0),
-                                      Vec3(0.5f, 0.5f, 0)}};
-    const Triangle degenerate_outside{{Vec3(3, 3, 0), Vec3(3, 3, 0), Vec3(3, 3, 0)}};
+    const Triangle flat{{Vec3f(0, 0, 0), Vec3f(2, 0, 0), Vec3f(0, 2, 0)}};
+    const Triangle crossing{{Vec3f(0.5f, -1, -1), Vec3f(0.5f, 2, -1), Vec3f(0.5f, 0, 1)}};
+    const Triangle separated{{Vec3f(3, 0, 0), Vec3f(4, 0, 0), Vec3f(3, 1, 0)}};
+    const Triangle coplanar_overlap{{Vec3f(0.5f, 0.5f, 0), Vec3f(2, 0.5f, 0),
+                                    Vec3f(0.5f, 2, 0)}};
+    const Triangle coplanar_separated{{Vec3f(3, 3, 0), Vec3f(4, 3, 0), Vec3f(3, 4, 0)}};
+    const Triangle degenerate_inside{{Vec3f(0.5f, 0.5f, 0), Vec3f(0.5f, 0.5f, 0),
+                                      Vec3f(0.5f, 0.5f, 0)}};
+    const Triangle degenerate_outside{{Vec3f(3, 3, 0), Vec3f(3, 3, 0), Vec3f(3, 3, 0)}};
     HAPPYRAY_CHECK(IntersectTriangles(flat, crossing));
     HAPPYRAY_CHECK(!IntersectTriangles(flat, separated));
     HAPPYRAY_CHECK(IntersectTriangles(flat, coplanar_overlap));
@@ -265,36 +269,36 @@ void TestQuaternion() {
     constexpr float kPi = 3.14159265358979323846f;
 
     // Identity leaves every vector untouched.
-    HAPPYRAY_CHECK(NearlyEqual(RotateVector(Quaternion::Identity(), Vec3(1.0f, 2.0f, 3.0f)),
-                            Vec3(1.0f, 2.0f, 3.0f)));
+    HAPPYRAY_CHECK(NearlyEqual(RotateVector(Quaternion::Identity(), Vec3f(1.0f, 2.0f, 3.0f)),
+                            Vec3f(1.0f, 2.0f, 3.0f)));
 
     // A 90-degree rotation around +Z takes +X to +Y.
-    const Quaternion rot_z90 = Quaternion::FromAxisAngle(Vec3(0.0f, 0.0f, 1.0f), kPi * 0.5f);
-    HAPPYRAY_CHECK(NearlyEqual(RotateVector(rot_z90, Vec3(1.0f, 0.0f, 0.0f)), Vec3(0.0f, 1.0f, 0.0f),
+    const Quaternion rot_z90 = Quaternion::FromAxisAngle(Vec3f(0.0f, 0.0f, 1.0f), kPi * 0.5f);
+    HAPPYRAY_CHECK(NearlyEqual(RotateVector(rot_z90, Vec3f(1.0f, 0.0f, 0.0f)), Vec3f(0.0f, 1.0f, 0.0f),
                            1e-3f));
 
     // A 90-degree rotation around +Y takes +Z to +X.
-    const Quaternion rot_y90 = Quaternion::FromAxisAngle(Vec3(0.0f, 1.0f, 0.0f), kPi * 0.5f);
-    HAPPYRAY_CHECK(NearlyEqual(RotateVector(rot_y90, Vec3(0.0f, 0.0f, 1.0f)), Vec3(1.0f, 0.0f, 0.0f),
+    const Quaternion rot_y90 = Quaternion::FromAxisAngle(Vec3f(0.0f, 1.0f, 0.0f), kPi * 0.5f);
+    HAPPYRAY_CHECK(NearlyEqual(RotateVector(rot_y90, Vec3f(0.0f, 0.0f, 1.0f)), Vec3f(1.0f, 0.0f, 0.0f),
                            1e-3f));
 
     // Composition: a * b applies b first, then a.
     const Quaternion composed = rot_y90 * rot_z90;
-    HAPPYRAY_CHECK(NearlyEqual(RotateVector(composed, Vec3(1.0f, 0.0f, 0.0f)),
-                           RotateVector(rot_y90, RotateVector(rot_z90, Vec3(1.0f, 0.0f, 0.0f))), 1e-3f));
+    HAPPYRAY_CHECK(NearlyEqual(RotateVector(composed, Vec3f(1.0f, 0.0f, 0.0f)),
+                           RotateVector(rot_y90, RotateVector(rot_z90, Vec3f(1.0f, 0.0f, 0.0f))), 1e-3f));
 
     // Slerp endpoints reproduce the inputs, and the midpoint is still a unit quaternion.
-    HAPPYRAY_CHECK(NearlyEqual(RotateVector(Slerp(rot_z90, rot_y90, 0.0f), Vec3(1.0f, 0.0f, 0.0f)),
-                           RotateVector(rot_z90, Vec3(1.0f, 0.0f, 0.0f)), 1e-3f));
-    HAPPYRAY_CHECK(NearlyEqual(RotateVector(Slerp(rot_z90, rot_y90, 1.0f), Vec3(1.0f, 0.0f, 0.0f)),
-                           RotateVector(rot_y90, Vec3(1.0f, 0.0f, 0.0f)), 1e-3f));
+    HAPPYRAY_CHECK(NearlyEqual(RotateVector(Slerp(rot_z90, rot_y90, 0.0f), Vec3f(1.0f, 0.0f, 0.0f)),
+                           RotateVector(rot_z90, Vec3f(1.0f, 0.0f, 0.0f)), 1e-3f));
+    HAPPYRAY_CHECK(NearlyEqual(RotateVector(Slerp(rot_z90, rot_y90, 1.0f), Vec3f(1.0f, 0.0f, 0.0f)),
+                           RotateVector(rot_y90, Vec3f(1.0f, 0.0f, 0.0f)), 1e-3f));
     const Quaternion mid = Slerp(rot_z90, rot_y90, 0.5f);
     HAPPYRAY_CHECK(NearlyEqual(Length(mid), 1.0f, 1e-3f));
 
     // ToMat4 should agree with RotateVector for the same rotation.
     const Mat4 rot_z90_mat = ToMat4(rot_z90);
-    HAPPYRAY_CHECK(NearlyEqual(TransformVector(rot_z90_mat, Vec3(1.0f, 0.0f, 0.0f)),
-                           RotateVector(rot_z90, Vec3(1.0f, 0.0f, 0.0f)), 1e-3f));
+    HAPPYRAY_CHECK(NearlyEqual(TransformVector(rot_z90_mat, Vec3f(1.0f, 0.0f, 0.0f)),
+                           RotateVector(rot_z90, Vec3f(1.0f, 0.0f, 0.0f)), 1e-3f));
 }
 
 void TestHalton() {
@@ -312,20 +316,20 @@ void TestHalton() {
 
     // Every sample stays inside [0, 1), for a reasonable range of indices.
     for (uint32_t i = 0; i < 1000; ++i) {
-        const Vec2 sample = Halton2D(i);
+        const Vec2f sample = Halton2D(i);
         HAPPYRAY_CHECK(sample.x >= 0.0f && sample.x < 1.0f);
         HAPPYRAY_CHECK(sample.y >= 0.0f && sample.y < 1.0f);
     }
 
     // Low discrepancy: the first N samples' mean should be close to (0.5, 0.5), much closer
     // than a handful of independent random draws would typically land.
-    Vec2 sum(0.0f, 0.0f);
+    Vec2f sum(0.0f, 0.0f);
     constexpr int kN = 256;
     for (int i = 1; i <= kN; ++i) {
-        const Vec2 sample = Halton2D(static_cast<uint32_t>(i));
+        const Vec2f sample = Halton2D(static_cast<uint32_t>(i));
         sum += sample;
     }
-    const Vec2 mean = sum / static_cast<float>(kN);
+    const Vec2f mean = sum / static_cast<float>(kN);
     HAPPYRAY_CHECK(NearlyEqual(mean.x, 0.5f, 0.05f));
     HAPPYRAY_CHECK(NearlyEqual(mean.y, 0.5f, 0.05f));
 
@@ -352,7 +356,7 @@ void TestObjLoaderTriangleNoNormals(const std::string& assets_dir) {
     // No vn lines were present, so LoadObj must have derived a flat normal of +Z for every
     // vertex of this single, counter-clockwise-when-viewed-from+Z triangle.
     for (const VertexAttributes& attributes : mesh.attributes) {
-        HAPPYRAY_CHECK(NearlyEqual(attributes.normal, Vec3(0.0f, 0.0f, 1.0f)));
+        HAPPYRAY_CHECK(NearlyEqual(attributes.normal, Vec3f(0.0f, 0.0f, 1.0f)));
         HAPPYRAY_CHECK(NearlyEqual(attributes.uv.x, 0.0f));
         HAPPYRAY_CHECK(NearlyEqual(attributes.uv.y, 0.0f));
     }
@@ -363,7 +367,7 @@ void TestObjLoaderTriangleNoNormals(const std::string& assets_dir) {
     HAPPYRAY_CHECK(scene.materials.empty());
     const FlatScene flat = FlattenScene(scene);
     HAPPYRAY_CHECK(!flat.material_diffuse_colors.empty());
-    HAPPYRAY_CHECK(NearlyEqual(flat.material_diffuse_colors[0], Vec3(1.0f, 1.0f, 1.0f)));
+    HAPPYRAY_CHECK(NearlyEqual(flat.material_diffuse_colors[0], Vec3f(1.0f, 1.0f, 1.0f)));
 }
 
 void TestObjLoaderAttributeSeam(const std::string& assets_dir) {
@@ -376,11 +380,11 @@ void TestObjLoaderAttributeSeam(const std::string& assets_dir) {
     CheckSubdivisionLimit(scene);
     HAPPYRAY_CHECK(mesh.positions.size() >= 6);
     if (mesh.positions.size() < 6 || mesh.attributes.size() < 6) return;
-    const Vec2 expected_uvs[] = {Vec2(0, 0), Vec2(1, 0), Vec2(0, 1),
-                                Vec2(1, 1), Vec2(0, 1), Vec2(1, 0)};
+    const Vec2f expected_uvs[] = {Vec2f(0, 0), Vec2f(1, 0), Vec2f(0, 1),
+                                Vec2f(1, 1), Vec2f(0, 1), Vec2f(1, 0)};
     for (size_t i = 0; i < 6; ++i) {
         HAPPYRAY_CHECK(NearlyEqual(mesh.positions[i], mesh.positions[i % 3]));
-        HAPPYRAY_CHECK(NearlyEqual(mesh.attributes[i].normal, Vec3(0, 0, i < 3 ? 1 : -1)));
+        HAPPYRAY_CHECK(NearlyEqual(mesh.attributes[i].normal, Vec3f(0, 0, i < 3 ? 1 : -1)));
         HAPPYRAY_CHECK(NearlyEqual(mesh.attributes[i].uv.x, expected_uvs[i].x));
         HAPPYRAY_CHECK(NearlyEqual(mesh.attributes[i].uv.y, expected_uvs[i].y));
     }
@@ -389,7 +393,7 @@ void TestObjLoaderAttributeSeam(const std::string& assets_dir) {
 void TestDefaultMaxDistance() {
     happyray::Scene scene;
     happyray::Mesh mesh;
-    mesh.positions = {happyray::Vec3(-2, 1, 0), happyray::Vec3(8, 5, 3)};
+    mesh.positions = {happyray::Vec3f(-2, 1, 0), happyray::Vec3f(8, 5, 3)};
     scene.meshes.push_back(mesh);
     HAPPYRAY_CHECK(NearlyEqual(happyray::DefaultMaxDistance(scene), 1.0f));
 
@@ -402,10 +406,10 @@ void TestFlattenScene() {
     HAPPYRAY_CHECK(FlattenScene(scene).positions.empty());
     for (int i = 0; i < 2; ++i) {
         Mesh mesh;
-        mesh.positions = {Vec3(i, 0, 0), Vec3(i, 1, 0), Vec3(i, 0, 1)};
-        mesh.attributes = {{Vec3(1, i, 0), Vec2(0, 0)},
-                           {Vec3(0, 1, i), Vec2(1, 0)},
-                           {Vec3(i, 0, 1), Vec2(0, 1)}};
+        mesh.positions = {Vec3f(i, 0, 0), Vec3f(i, 1, 0), Vec3f(i, 0, 1)};
+        mesh.attributes = {{Vec3f(1, i, 0), Vec2f(0, 0)},
+                           {Vec3f(0, 1, i), Vec2f(1, 0)},
+                           {Vec3f(i, 0, 1), Vec2f(0, 1)}};
         mesh.indices = {2, 0, 1};
         mesh.material_ids = {0};
         scene.meshes.push_back(mesh);
@@ -493,9 +497,9 @@ void TestObjLoaderCubeWithMaterialsAndQuads(const std::string& assets_dir) {
     HAPPYRAY_CHECK(mesh.material_ids[4] != red_id);
     double red_area = 0, blue_area = 0;
     for (size_t tri = 0; tri < mesh.indices.size(); tri += 3) {
-        const Vec3 a = mesh.positions[mesh.indices[tri]];
-        const Vec3 b = mesh.positions[mesh.indices[tri + 1]];
-        const Vec3 c = mesh.positions[mesh.indices[tri + 2]];
+        const Vec3f a = mesh.positions[mesh.indices[tri]];
+        const Vec3f b = mesh.positions[mesh.indices[tri + 1]];
+        const Vec3f c = mesh.positions[mesh.indices[tri + 2]];
         const double area = 0.5 * Length(Cross(b - a, c - a));
         if (mesh.material_ids[tri / 3] == red_id) red_area += area;
         else blue_area += area;
@@ -505,22 +509,22 @@ void TestObjLoaderCubeWithMaterialsAndQuads(const std::string& assets_dir) {
 
     // cube.mtl's Kd lines should have been parsed into the matching materials via mtllib.
     const uint32_t blue_id = red_id == 0 ? 1 : 0;
-    HAPPYRAY_CHECK(NearlyEqual(scene.materials[red_id].diffuse_color, Vec3(0.8f, 0.1f, 0.1f)));
-    HAPPYRAY_CHECK(NearlyEqual(scene.materials[blue_id].diffuse_color, Vec3(0.1f, 0.1f, 0.8f)));
+    HAPPYRAY_CHECK(NearlyEqual(scene.materials[red_id].diffuse_color, Vec3f(0.8f, 0.1f, 0.1f)));
+    HAPPYRAY_CHECK(NearlyEqual(scene.materials[blue_id].diffuse_color, Vec3f(0.1f, 0.1f, 0.8f)));
 
     const BBox bounds = scene.WorldBounds();
-    HAPPYRAY_CHECK(NearlyEqual(bounds.Extent(), Vec3(1.0f, 1.0f, 1.0f)));
+    HAPPYRAY_CHECK(NearlyEqual(bounds.Extent(), Vec3f(1.0f, 1.0f, 1.0f)));
 }
 
 void TestKeyframeAnimation() {
     using namespace happyray;
     FlatScene first;
-    first.positions = {Vec3(0, 0, 0), Vec3(2, 0, 0)};
-    first.normals = {Vec3(1, 0, 0), Vec3(1, 0, 0)};
+    first.positions = {Vec3f(0, 0, 0), Vec3f(2, 0, 0)};
+    first.normals = {Vec3f(1, 0, 0), Vec3f(1, 0, 0)};
     first.indices = {0, 0, 0};
     FlatScene second;
-    second.positions = {Vec3(10, 0, 0), Vec3(12, 0, 0)};
-    second.normals = {Vec3(0, 1, 0), Vec3(0, 1, 0)};
+    second.positions = {Vec3f(10, 0, 0), Vec3f(12, 0, 0)};
+    second.normals = {Vec3f(0, 1, 0), Vec3f(0, 1, 0)};
     second.indices = {1, 0, 1};
 
     KeyframeAnimation animation({first, second}, 0.5f);
@@ -530,18 +534,18 @@ void TestKeyframeAnimation() {
 
     animation.Advance();
     frame = animation.InterpolatedScene();
-    HAPPYRAY_CHECK(NearlyEqual(frame.positions[0], Vec3(5, 0, 0)));
-    HAPPYRAY_CHECK(NearlyEqual(frame.normals[0], Normalize(Vec3(1, 1, 0))));
+    HAPPYRAY_CHECK(NearlyEqual(frame.positions[0], Vec3f(5, 0, 0)));
+    HAPPYRAY_CHECK(NearlyEqual(frame.normals[0], Normalize(Vec3f(1, 1, 0))));
     animation.TogglePause();
     animation.Advance();
-    HAPPYRAY_CHECK(NearlyEqual(animation.InterpolatedScene().positions[0], Vec3(5, 0, 0)));
+    HAPPYRAY_CHECK(NearlyEqual(animation.InterpolatedScene().positions[0], Vec3f(5, 0, 0)));
 
     animation.TogglePause();
     animation.Advance();
-    HAPPYRAY_CHECK(NearlyEqual(animation.InterpolatedScene().positions[0], Vec3(10, 0, 0)));
+    HAPPYRAY_CHECK(NearlyEqual(animation.InterpolatedScene().positions[0], Vec3f(10, 0, 0)));
     animation.Advance();
     animation.Advance();
-    HAPPYRAY_CHECK(NearlyEqual(animation.InterpolatedScene().positions[0], Vec3(0, 0, 0)));
+    HAPPYRAY_CHECK(NearlyEqual(animation.InterpolatedScene().positions[0], Vec3f(0, 0, 0)));
 }
 
 }  // namespace

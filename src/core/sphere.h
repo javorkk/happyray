@@ -10,7 +10,7 @@ struct Sphere : Primitive<1> {
     float radius = 0.0f;
 
     HAPPYRAY_HD Sphere() = default;
-    HAPPYRAY_HD Sphere(const Vec3& center, float radius_) : radius(radius_) {
+    HAPPYRAY_HD Sphere(const Vec3f& center, float radius_) : radius(radius_) {
         vtx[0] = center;
     }
 };
@@ -19,7 +19,7 @@ template <>
 struct BBoxExtractor<Sphere> {
     HAPPYRAY_HD static BBox Get(const Sphere& sphere) {
         const float radius = sphere.radius > 0.0f ? sphere.radius : 0.0f;
-        const Vec3 extent(radius);
+        const Vec3f extent(radius);
         return BBox(sphere.vtx[0] - extent, sphere.vtx[0] + extent);
     }
 };
@@ -28,7 +28,7 @@ HAPPYRAY_HD inline bool IntersectRaySphere(const Ray& ray, const Sphere& sphere,
     if (sphere.radius < 0.0f) return false;
     const float direction_length_squared = LengthSquared(ray.direction);
     if (direction_length_squared == 0.0f) return false;
-    const Vec3 offset = ray.origin - sphere.vtx[0];
+    const Vec3f offset = ray.origin - sphere.vtx[0];
     const float half_b = Dot(offset, ray.direction);
     const float c = LengthSquared(offset) - sphere.radius * sphere.radius;
     const float discriminant = half_b * half_b - direction_length_squared * c;
@@ -49,7 +49,7 @@ HAPPYRAY_HD inline bool IntersectRaySphere(const Ray& ray, const Sphere& sphere,
 
 HAPPYRAY_HD inline bool Intersects(const Sphere& sphere, const BBox& box) {
     if (sphere.radius < 0.0f || box.IsEmpty()) return false;
-    const Vec3 closest(
+    const Vec3f closest(
         sphere.vtx[0].x < box.min_bound.x ? box.min_bound.x
         : sphere.vtx[0].x > box.max_bound.x ? box.max_bound.x : sphere.vtx[0].x,
         sphere.vtx[0].y < box.min_bound.y ? box.min_bound.y

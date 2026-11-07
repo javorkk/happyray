@@ -86,8 +86,8 @@ std::vector<Ray> GenerateUnitCubeRays(uint64_t seed, uint32_t count) {
     float far_t[3] = {rng.NextFloat(), rng.NextFloat(), rng.NextFloat()};
     near_t[axis] = 0.0f;
     far_t[axis] = 1.0f;
-    const Vec3 near_point(near_t[0], near_t[1], near_t[2]);
-    const Vec3 far_point(far_t[0], far_t[1], far_t[2]);
+    const Vec3f near_point(near_t[0], near_t[1], near_t[2]);
+    const Vec3f far_point(far_t[0], far_t[1], far_t[2]);
     Ray ray(near_point, far_point - near_point);
     ray.t_min = -1.0e-3f; // The origin sits exactly on the entry face; a hair
                           // of negative t_min keeps it unambiguously "inside"
@@ -113,10 +113,10 @@ struct MockUniformGrid {
         static_cast<uint32_t>(resolution) * resolution * resolution;
     view.bounds_min = bounds.min_bound;
     view.bounds_max = bounds.max_bound;
-    const Vec3 extent = bounds.Extent();
-    view.cell_size = Vec3(extent.x / resolution, extent.y / resolution,
+    const Vec3f extent = bounds.Extent();
+    view.cell_size = Vec3f(extent.x / resolution, extent.y / resolution,
                           extent.z / resolution);
-    view.inv_cell_size = Vec3(1.0f / view.cell_size.x, 1.0f / view.cell_size.y,
+    view.inv_cell_size = Vec3f(1.0f / view.cell_size.x, 1.0f / view.cell_size.y,
                               1.0f / view.cell_size.z);
     view.resolution_x = view.resolution_y = view.resolution_z = resolution;
     cell_ranges.assign(num_cells, CellRange{0u, 0u});
@@ -157,15 +157,15 @@ struct MockTwoLevelGrid {
         static_cast<uint32_t>(top_resolution) * top_resolution * top_resolution;
     const auto num_local = static_cast<uint32_t>(second_resolution) *
                            second_resolution * second_resolution;
-    const Vec3 extent = bounds.Extent();
-    const Vec3 top_cell_size(extent.x / top_resolution,
+    const Vec3f extent = bounds.Extent();
+    const Vec3f top_cell_size(extent.x / top_resolution,
                              extent.y / top_resolution,
                              extent.z / top_resolution);
 
     view.top_level.bounds_min = bounds.min_bound;
     view.top_level.bounds_max = bounds.max_bound;
     view.top_level.cell_size = top_cell_size;
-    view.top_level.inv_cell_size = Vec3(
+    view.top_level.inv_cell_size = Vec3f(
         1.0f / top_cell_size.x, 1.0f / top_cell_size.y, 1.0f / top_cell_size.z);
     view.top_level.resolution_x = view.top_level.resolution_y =
         view.top_level.resolution_z = top_resolution;
@@ -235,8 +235,8 @@ struct MakeMockIrregularCellFunctor {
 // coarsest-common-refinement rounding needed, unlike the real density-driven
 // construction).
 struct MakeMockIrregularCellInfoFunctor {
-  Vec3 top_bounds_min;
-  Vec3 top_cell_size;
+  Vec3f top_bounds_min;
+  Vec3f top_cell_size;
   int top_resolution_x, top_resolution_y;
   int local_resolution;
 
@@ -246,16 +246,16 @@ struct MakeMockIrregularCellInfoFunctor {
     const int rem = static_cast<int>(t) % res_xy;
     const int ty = rem / top_resolution_x;
     const int tx = rem % top_resolution_x;
-    const Vec3 cell_min(top_bounds_min.x + tx * top_cell_size.x,
+    const Vec3f cell_min(top_bounds_min.x + tx * top_cell_size.x,
                         top_bounds_min.y + ty * top_cell_size.y,
                         top_bounds_min.z + tz * top_cell_size.z);
 
     IrregularCellInfo info;
     info.bounds_min = cell_min;
-    info.cell_size = Vec3(top_cell_size.x / local_resolution,
+    info.cell_size = Vec3f(top_cell_size.x / local_resolution,
                           top_cell_size.y / local_resolution,
                           top_cell_size.z / local_resolution);
-    info.inv_cell_size = Vec3(1.0f / info.cell_size.x, 1.0f / info.cell_size.y,
+    info.inv_cell_size = Vec3f(1.0f / info.cell_size.x, 1.0f / info.cell_size.y,
                               1.0f / info.cell_size.z);
     info.resolution_x = info.resolution_y = info.resolution_z =
         local_resolution;
@@ -296,15 +296,15 @@ struct MockIrregularGrid {
     const auto num_local_per_top = static_cast<uint32_t>(local_resolution) *
                                    local_resolution * local_resolution;
     const uint32_t num_entries = num_top_cells * num_local_per_top;
-    const Vec3 extent = bounds.Extent();
-    const Vec3 top_cell_size(extent.x / top_resolution,
+    const Vec3f extent = bounds.Extent();
+    const Vec3f top_cell_size(extent.x / top_resolution,
                              extent.y / top_resolution,
                              extent.z / top_resolution);
 
     view.top_level.bounds_min = bounds.min_bound;
     view.top_level.bounds_max = bounds.max_bound;
     view.top_level.cell_size = top_cell_size;
-    view.top_level.inv_cell_size = Vec3(
+    view.top_level.inv_cell_size = Vec3f(
         1.0f / top_cell_size.x, 1.0f / top_cell_size.y, 1.0f / top_cell_size.z);
     view.top_level.resolution_x = view.top_level.resolution_y =
         view.top_level.resolution_z = top_resolution;
@@ -337,13 +337,13 @@ struct MockIrregularGrid {
     view.local_entries = thrust::raw_pointer_cast(entries.data());
     view.local_cells = thrust::raw_pointer_cast(cells.data());
     view.triangle_indices = nullptr;
-    view.global_cell_size = Vec3(top_cell_size.x / local_resolution,
+    view.global_cell_size = Vec3f(top_cell_size.x / local_resolution,
                                  top_cell_size.y / local_resolution,
                                  top_cell_size.z / local_resolution);
     view.global_resolution_x = view.global_resolution_y =
         view.global_resolution_z = local_resolution;
     view.global_inv_cell_size =
-        Vec3(1.0f / view.global_cell_size.x, 1.0f / view.global_cell_size.y,
+        Vec3f(1.0f / view.global_cell_size.x, 1.0f / view.global_cell_size.y,
              1.0f / view.global_cell_size.z);
     view.global_shift_x = view.global_shift_y = view.global_shift_z =
         IrregularLog2(local_resolution);
@@ -455,7 +455,7 @@ float TimePerUnitNs(Functor functor, uint32_t count,
 // One triangle of the diagonal-blocking mesh (see BuildIntersectionMesh below),
 // used only while building it on the host.
 struct HostTriangle {
-  Vec3 a, b, c;
+  Vec3f a, b, c;
 };
 
 // Appends the 6 "diagonal" quads connecting opposite edges of `bounds`, each
@@ -468,12 +468,12 @@ struct HostTriangle {
 // just ones aimed at one specific plane -- hit at least one, without needing to
 // bias ray generation toward them at all.
 void AppendDiagonalQuads(const BBox &bounds, std::vector<HostTriangle> *out) {
-  const Vec3 &lo = bounds.min_bound;
-  const Vec3 &hi = bounds.max_bound;
+  const Vec3f &lo = bounds.min_bound;
+  const Vec3f &hi = bounds.max_bound;
   auto corner = [&](int bx, int by, int bz) {
-    return Vec3(bx ? hi.x : lo.x, by ? hi.y : lo.y, bz ? hi.z : lo.z);
+    return Vec3f(bx ? hi.x : lo.x, by ? hi.y : lo.y, bz ? hi.z : lo.z);
   };
-  auto add_quad = [&](Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3) {
+  auto add_quad = [&](Vec3f p0, Vec3f p1, Vec3f p2, Vec3f p3) {
     out->push_back({p0, p1, p2});
     out->push_back({p0, p2, p3});
   };
@@ -511,15 +511,15 @@ void SubdivideTriangles(std::vector<HostTriangle> *triangles,
     const float ca = LengthSquared(t.c - t.a);
     HostTriangle t1, t2;
     if (ab >= bc && ab >= ca) {
-      const Vec3 m = (t.a + t.b) * 0.5f;
+      const Vec3f m = (t.a + t.b) * 0.5f;
       t1 = {t.a, m, t.c};
       t2 = {m, t.b, t.c};
     } else if (bc >= ca) {
-      const Vec3 m = (t.b + t.c) * 0.5f;
+      const Vec3f m = (t.b + t.c) * 0.5f;
       t1 = {t.a, t.b, m};
       t2 = {t.a, m, t.c};
     } else {
-      const Vec3 m = (t.c + t.a) * 0.5f;
+      const Vec3f m = (t.c + t.a) * 0.5f;
       t1 = {t.a, t.b, m};
       t2 = {m, t.b, t.c};
     }
@@ -532,7 +532,7 @@ void SubdivideTriangles(std::vector<HostTriangle> *triangles,
 // needed for a benchmark mesh this small), matching the same layout real scene
 // triangle data uses (SceneView::positions/indices).
 struct HostMesh {
-  std::vector<Vec3> positions;
+  std::vector<Vec3f> positions;
   std::vector<uint32_t> indices;
 };
 
@@ -579,16 +579,16 @@ HostMesh BuildIntersectionMesh(const BBox &bounds) {
 // meaningful substitute for a test count.
 struct IntersectionTestFunctor {
   const Ray *rays;
-  const Vec3 *positions;
+  const Vec3f *positions;
   const uint32_t *indices;
 
   HAPPYRAY_HD float operator()(uint32_t i) const {
     const Ray &ray = rays[i];
     float closest_t = ray.t_max;
     for (int tri = 0; tri < kIntersectionTriangleCount; ++tri) {
-      const Vec3 &v0 = positions[indices[tri * 3 + 0]];
-      const Vec3 &v1 = positions[indices[tri * 3 + 1]];
-      const Vec3 &v2 = positions[indices[tri * 3 + 2]];
+      const Vec3f &v0 = positions[indices[tri * 3 + 0]];
+      const Vec3f &v1 = positions[indices[tri * 3 + 1]];
+      const Vec3f &v2 = positions[indices[tri * 3 + 2]];
       float t, u, v;
       if (IntersectRayTriangle(ray, v0, v1, v2, &t, &u, &v) && t < closest_t)
         closest_t = t;
@@ -604,9 +604,9 @@ struct IntersectionTestFunctor {
 // structure's true marginal intersection cost was itself small relative to its
 // own (possibly much larger) traversal cost.
 float MeasureIntersectionCostNs(const thrust::device_vector<Ray> &rays) {
-  const BBox bounds(Vec3(0, 0, 0), Vec3(1, 1, 1));
+  const BBox bounds(Vec3f(0, 0, 0), Vec3f(1, 1, 1));
   const HostMesh mesh = BuildIntersectionMesh(bounds);
-  const thrust::device_vector<Vec3> positions(mesh.positions);
+  const thrust::device_vector<Vec3f> positions(mesh.positions);
   const thrust::device_vector<uint32_t> indices(mesh.indices);
   const auto ray_count = static_cast<uint32_t>(rays.size());
   const float intersection_ns = TimePerUnitNs(
@@ -626,7 +626,7 @@ float MeasureIntersectionCostNs(const thrust::device_vector<Ray> &rays) {
 // lack of it) shows up as a genuinely different cost rather than being averaged
 // away.
 float MeasureUniformTraversalNs(const thrust::device_vector<Ray> &rays) {
-  const BBox bounds(Vec3(0, 0, 0), Vec3(1, 1, 1));
+  const BBox bounds(Vec3f(0, 0, 0), Vec3f(1, 1, 1));
   const MockUniformGrid grid(bounds, kMockResolution);
   return TimePerUnitNs(
       UniformStepFunctor{grid.view, thrust::raw_pointer_cast(rays.data())},
@@ -634,7 +634,7 @@ float MeasureUniformTraversalNs(const thrust::device_vector<Ray> &rays) {
 }
 
 float MeasureTwoLevelTraversalNs(const thrust::device_vector<Ray> &rays) {
-  const BBox bounds(Vec3(0, 0, 0), Vec3(1, 1, 1));
+  const BBox bounds(Vec3f(0, 0, 0), Vec3f(1, 1, 1));
   const MockTwoLevelGrid grid(bounds, kMockTopLevelResolution,
                               kMockSecondLevelResolution);
   return TimePerUnitNs(
@@ -643,7 +643,7 @@ float MeasureTwoLevelTraversalNs(const thrust::device_vector<Ray> &rays) {
 }
 
 float MeasureIrregularTraversalNs(const thrust::device_vector<Ray> &rays) {
-  const BBox bounds(Vec3(0, 0, 0), Vec3(1, 1, 1));
+  const BBox bounds(Vec3f(0, 0, 0), Vec3f(1, 1, 1));
   const MockIrregularGrid grid(bounds, kMockTopLevelResolution,
                                kMockSecondLevelResolution);
   return TimePerUnitNs(

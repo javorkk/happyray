@@ -107,7 +107,7 @@ public:
   void RenderProgressiveFrame(const Camera &camera, const AOIntegrator &ao,
                               const SimpleIntegrator &simple);
 
-  const std::vector<Vec3> &ResolvedPixels() const;
+  const std::vector<Vec3f> &ResolvedPixels() const;
 
   // Every Build*Grid call (including the on-demand builds of SetAccelType,
   // UpdateScene and RebuildGridDensities) runs exact collision detection

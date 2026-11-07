@@ -38,8 +38,8 @@ struct RenderPixelFunctor {
     AccelStructures accel;
     Camera camera;
     Integrator integrator;
-    const Vec2* pixel_jitter;
-    Vec3* accumulated;
+    const Vec2f* pixel_jitter;
+    Vec3f* accumulated;
     uint32_t sample_offset;
     int width;
     int height;
@@ -49,7 +49,7 @@ struct RenderPixelFunctor {
         const int y = static_cast<int>(pixel_index / width);
         const Ray primary_ray =
             camera.GenerateRay(static_cast<float>(x), static_cast<float>(y), width, height);
-        const Vec3 sample = integrator.Integrate(scene, accel, primary_ray, sample_offset,
+        const Vec3f sample = integrator.Integrate(scene, accel, primary_ray, sample_offset,
                                                 pixel_jitter[pixel_index]);
         accumulated[pixel_index] += sample;
     }
@@ -58,13 +58,13 @@ struct RenderPixelFunctor {
 // Resolves the frame average, optionally fading it over a separate preview.
 struct ResolveFunctor {
     float inv_sample_count;
-    const Vec3* accumulated;
-    Vec3* resolved;
-    const Vec3* preview;
+    const Vec3f* accumulated;
+    Vec3f* resolved;
+    const Vec3f* preview;
     float ao_weight;
 
     HAPPYRAY_HD void operator()(uint32_t pixel) const {
-        const Vec3 average = accumulated[pixel] * inv_sample_count;
+        const Vec3f average = accumulated[pixel] * inv_sample_count;
         resolved[pixel] = preview ? Lerp(preview[pixel], average, ao_weight) : average;
     }
 };
@@ -72,11 +72,11 @@ struct ResolveFunctor {
 }  // namespace
 
 struct Renderer::Impl {
-    thrust::device_vector<Vec3> positions;
-    thrust::device_vector<Vec3> normals;
+    thrust::device_vector<Vec3f> positions;
+    thrust::device_vector<Vec3f> normals;
     thrust::device_vector<uint32_t> indices;
     thrust::device_vector<uint32_t> material_ids;
-    thrust::device_vector<Vec3> material_diffuse_colors;  // Ends with the collided material.
+    thrust::device_vector<Vec3f> material_diffuse_colors;  // Ends with the collided material.
     thrust::device_vector<uint32_t> object_ids;
     thrust::device_vector<uint32_t> collision_ids;
     uint32_t object_count = 1;
@@ -84,11 +84,11 @@ struct Renderer::Impl {
     CollisionStats collision_stats;
     bool collision_detection_enabled = true;
 
-    thrust::device_vector<Vec3> accumulated;
-    thrust::device_vector<Vec2> pixel_jitter;
-    thrust::device_vector<Vec3> resolved_device;
-    thrust::device_vector<Vec3> preview;
-    std::vector<Vec3> resolved_host;
+    thrust::device_vector<Vec3f> accumulated;
+    thrust::device_vector<Vec2f> pixel_jitter;
+    thrust::device_vector<Vec3f> resolved_device;
+    thrust::device_vector<Vec3f> preview;
+    std::vector<Vec3f> resolved_host;
 
     std::unique_ptr<UniformGrid> uniform_grid;
     std::unique_ptr<TwoLevelGrid> two_level_grid;
@@ -123,7 +123,7 @@ struct Renderer::Impl {
 
     template <typename Integrator>
     void RenderFrame(const Camera& camera, const Integrator& integrator, uint32_t sample_offset,
-                     uint32_t accumulated_frames, const Vec3* preview_pixels = nullptr,
+                     uint32_t accumulated_frames, const Vec3f* preview_pixels = nullptr,
                      float ao_weight = 1.0f);
 
     SceneView View() const {
@@ -155,7 +155,7 @@ struct Renderer::Impl {
 };
 
 // Red diffuse color that replaces the material of triangles colliding with another object.
-const Vec3 kCollidedDiffuseColor(1.0f, 0.0f, 0.0f);
+const Vec3f kCollidedDiffuseColor(1.0f, 0.0f, 0.0f);
 
 void Renderer::Impl::UploadScene(const FlatScene& scene) {
     const size_t triangle_count = scene.indices.size() / 3;
@@ -163,7 +163,7 @@ void Renderer::Impl::UploadScene(const FlatScene& scene) {
     normals.assign(scene.normals.begin(), scene.normals.end());
     indices.assign(scene.indices.begin(), scene.indices.end());
     material_ids.assign(scene.material_ids.begin(), scene.material_ids.end());
-    std::vector<Vec3> colors = scene.material_diffuse_colors;
+    std::vector<Vec3f> colors = scene.material_diffuse_colors;
     colors.push_back(kCollidedDiffuseColor);
     material_diffuse_colors.assign(colors.begin(), colors.end());
 
@@ -192,19 +192,19 @@ void Renderer::ResizeFramebuffer(int width, int height) {
     impl_->height = height;
     const size_t pixel_count = static_cast<size_t>(width) * height;
 
-    impl_->accumulated.assign(pixel_count, Vec3(0.0f, 0.0f, 0.0f));
+    impl_->accumulated.assign(pixel_count, Vec3f(0.0f, 0.0f, 0.0f));
     impl_->resolved_device.resize(pixel_count);
     impl_->resolved_host.resize(pixel_count);
     impl_->sample_count = 0;
 
     // A stable per-pixel random offset that decorrelates the otherwise pixel-independent Halton
     // sequence (see random.h); generated once per resolution on the host, then uploaded.
-    std::vector<Vec2> jitter(pixel_count);
+    std::vector<Vec2f> jitter(pixel_count);
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
             Rng rng(HashSeed(static_cast<uint32_t>(x), static_cast<uint32_t>(y), 0u),
                    static_cast<uint64_t>(y) * width + x);
-            jitter[static_cast<size_t>(y) * width + x] = Vec2(rng.NextFloat(), rng.NextFloat());
+            jitter[static_cast<size_t>(y) * width + x] = Vec2f(rng.NextFloat(), rng.NextFloat());
         }
     }
     impl_->pixel_jitter.assign(jitter.begin(), jitter.end());
@@ -247,7 +247,7 @@ void Renderer::UpdateScene(const FlatScene& scene) {
 }
 
 void Renderer::ResetAccumulation() {
-    thrust::fill(impl_->accumulated.begin(), impl_->accumulated.end(), Vec3(0.0f, 0.0f, 0.0f));
+    thrust::fill(impl_->accumulated.begin(), impl_->accumulated.end(), Vec3f(0.0f, 0.0f, 0.0f));
     impl_->sample_count = 0;
 }
 
@@ -388,7 +388,7 @@ float Renderer::ComputeCurrentGridSahCost(const BBox& scene_bounds,
 template <typename Integrator>
 void Renderer::Impl::RenderFrame(const Camera& camera, const Integrator& integrator,
                                  uint32_t sample_offset, uint32_t accumulated_frames,
-                                 const Vec3* preview_pixels, float ao_weight) {
+                                 const Vec3f* preview_pixels, float ao_weight) {
     if (width <= 0 || height <= 0) {
         return;
     }
@@ -433,7 +433,7 @@ void Renderer::RenderProgressiveFrame(const Camera& camera, const AOIntegrator& 
     if (impl_->sample_count == 0) {
         RenderFrame(camera, simple);
         impl_->preview = impl_->resolved_device;
-        thrust::fill(impl_->accumulated.begin(), impl_->accumulated.end(), Vec3());
+        thrust::fill(impl_->accumulated.begin(), impl_->accumulated.end(), Vec3f());
         return;
     }
     const uint32_t ao_frames = impl_->sample_count;
@@ -443,7 +443,7 @@ void Renderer::RenderProgressiveFrame(const Camera& camera, const AOIntegrator& 
                        ao_frames, thrust::raw_pointer_cast(impl_->preview.data()), ao_weight);
 }
 
-const std::vector<Vec3>& Renderer::ResolvedPixels() const { return impl_->resolved_host; }
+const std::vector<Vec3f>& Renderer::ResolvedPixels() const { return impl_->resolved_host; }
 
 std::vector<uint32_t> Renderer::CollisionIds() const {
     std::vector<uint32_t> ids(impl_->collision_ids.size());

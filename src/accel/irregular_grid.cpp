@@ -150,8 +150,8 @@ HAPPYRAY_HD inline void CellMaxArr(const IrregularCell& cell, int out[3]) {
 // 2) -- everything except `entries_offset`, filled in afterwards once every cell's voxel count
 // is known.
 struct ComputeCellInfoFunctor {
-    Vec3 top_bounds_min;
-    Vec3 top_cell_size;
+    Vec3f top_bounds_min;
+    Vec3f top_cell_size;
     int top_resolution_x;
     int top_resolution_y;
     const CellRange* top_cell_ranges;
@@ -163,15 +163,15 @@ struct ComputeCellInfoFunctor {
         const int rem = static_cast<int>(c) % (top_resolution_x * top_resolution_y);
         const int cy = rem / top_resolution_x;
         const int cx = rem % top_resolution_x;
-        const Vec3 cell_min(top_bounds_min.x + cx * top_cell_size.x,
+        const Vec3f cell_min(top_bounds_min.x + cx * top_cell_size.x,
                             top_bounds_min.y + cy * top_cell_size.y,
                             top_bounds_min.z + cz * top_cell_size.z);
-        const Vec3 cell_max = cell_min + top_cell_size;
+        const Vec3f cell_max = cell_min + top_cell_size;
         const uint32_t triangle_count =
             top_cell_ranges[c].end - top_cell_ranges[c].start;
 
-        GridResolution res = (triangle_count <= dense_cell_threshold)
-                                 ? GridResolution{1, 1, 1}
+        Vec3i res = (triangle_count <= dense_cell_threshold)
+                     ? Vec3i(1, 1, 1)
                                  : ComputeGridResolution(BBox(cell_min, cell_max), triangle_count,
                                                         second_level_density);
         res.x = RoundUpPow2(res.x);
@@ -180,10 +180,10 @@ struct ComputeCellInfoFunctor {
 
         IrregularCellInfo info;
         info.bounds_min = cell_min;
-        info.cell_size = Vec3((cell_max.x - cell_min.x) / res.x, (cell_max.y - cell_min.y) / res.y,
+        info.cell_size = Vec3f((cell_max.x - cell_min.x) / res.x, (cell_max.y - cell_min.y) / res.y,
                               (cell_max.z - cell_min.z) / res.z);
         info.inv_cell_size =
-            Vec3(1.0f / info.cell_size.x, 1.0f / info.cell_size.y, 1.0f / info.cell_size.z);
+            Vec3f(1.0f / info.cell_size.x, 1.0f / info.cell_size.y, 1.0f / info.cell_size.z);
         info.resolution_x = res.x;
         info.resolution_y = res.y;
         info.resolution_z = res.z;
@@ -418,7 +418,7 @@ struct MergeCandidateFunctor {
     const uint32_t* entries;
     const uint32_t* triangle_indices;
     int axis;
-    Vec3 global_cell_size;
+    Vec3f global_cell_size;
     int global_resolution_x, global_resolution_y, global_resolution_z;
     int top_resolution_x, top_resolution_y, top_resolution_z;
 
@@ -462,10 +462,10 @@ struct MergeCandidateFunctor {
         }
 
         const uint32_t next_count = next_cell.references.end - next_cell.references.start;
-        const Vec3 extent1((cell_max[0] - cell_min[0]) * global_cell_size.x,
+        const Vec3f extent1((cell_max[0] - cell_min[0]) * global_cell_size.x,
                            (cell_max[1] - cell_min[1]) * global_cell_size.y,
                            (cell_max[2] - cell_min[2]) * global_cell_size.z);
-        const Vec3 extent2((next_max[0] - next_min[0]) * global_cell_size.x,
+        const Vec3f extent2((next_max[0] - next_min[0]) * global_cell_size.x,
                            (next_max[1] - next_min[1]) * global_cell_size.y,
                            (next_max[2] - next_min[2]) * global_cell_size.z);
         int union_min[3], union_max[3];
@@ -473,7 +473,7 @@ struct MergeCandidateFunctor {
             union_min[a] = cell_min[a] < next_min[a] ? cell_min[a] : next_min[a];
             union_max[a] = cell_max[a] > next_max[a] ? cell_max[a] : next_max[a];
         }
-        const Vec3 union_extent((union_max[0] - union_min[0]) * global_cell_size.x,
+        const Vec3f union_extent((union_max[0] - union_min[0]) * global_cell_size.x,
                                 (union_max[1] - union_min[1]) * global_cell_size.y,
                                 (union_max[2] - union_min[2]) * global_cell_size.z);
 
@@ -626,7 +626,7 @@ struct ApplyRemapFunctor {
 void MergeRound(int axis, const thrust::device_vector<IrregularCellInfo>& cell_infos,
                thrust::device_vector<IrregularCell>* cells,
                thrust::device_vector<uint32_t>* entries,
-               thrust::device_vector<uint32_t>* triangle_indices, const Vec3& global_cell_size,
+               thrust::device_vector<uint32_t>* triangle_indices, const Vec3f& global_cell_size,
                int global_resolution_x, int global_resolution_y, int global_resolution_z,
                int top_resolution_x, int top_resolution_y, int top_resolution_z) {
     const uint32_t n = static_cast<uint32_t>(cells->size());
@@ -769,7 +769,7 @@ struct IrregularGridSahFunctor {
 
     HAPPYRAY_HD float operator()(uint32_t i) const {
         const IrregularCell& cell = grid.local_cells[i];
-        const Vec3 extent((cell.max_x - cell.min_x) * grid.global_cell_size.x,
+        const Vec3f extent((cell.max_x - cell.min_x) * grid.global_cell_size.x,
                           (cell.max_y - cell.min_y) * grid.global_cell_size.y,
                           (cell.max_z - cell.min_z) * grid.global_cell_size.z);
         const uint32_t ref_count = cell.references.end - cell.references.start;
@@ -793,7 +793,7 @@ struct IrregularGrid::Impl {
     thrust::device_vector<uint32_t> entries;
     thrust::device_vector<IrregularCell> cells;
     thrust::device_vector<uint32_t> triangle_indices;
-    Vec3 global_cell_size;
+    Vec3f global_cell_size;
     int global_resolution_x = 1, global_resolution_y = 1, global_resolution_z = 1;
 
     explicit Impl(const SceneView& scene, float top_level_density)
@@ -811,7 +811,7 @@ struct IrregularGrid::Impl {
         view.global_resolution_x = global_resolution_x;
         view.global_resolution_y = global_resolution_y;
         view.global_resolution_z = global_resolution_z;
-        view.global_inv_cell_size = Vec3(1.0f / global_cell_size.x, 1.0f / global_cell_size.y,
+        view.global_inv_cell_size = Vec3f(1.0f / global_cell_size.x, 1.0f / global_cell_size.y,
                                          1.0f / global_cell_size.z);
         view.global_shift_x = Log2Ceil(global_resolution_x);
         view.global_shift_y = Log2Ceil(global_resolution_y);
@@ -852,7 +852,7 @@ IrregularGrid::IrregularGrid(const SceneView& scene, float top_level_density,
             global_resolution_z = std::max(global_resolution_z, info.resolution_z);
         }
     }
-    impl_->global_cell_size = Vec3(top_view.cell_size.x / global_resolution_x,
+    impl_->global_cell_size = Vec3f(top_view.cell_size.x / global_resolution_x,
                                    top_view.cell_size.y / global_resolution_y,
                                    top_view.cell_size.z / global_resolution_z);
     impl_->global_resolution_x = global_resolution_x;

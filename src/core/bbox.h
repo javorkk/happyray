@@ -10,21 +10,21 @@
 namespace happyray {
 
 struct BBox {
-    Vec3 min_bound = Vec3(1e30f, 1e30f, 1e30f);
-    Vec3 max_bound = Vec3(-1e30f, -1e30f, -1e30f);
+    Vec3f min_bound = Vec3f(1e30f, 1e30f, 1e30f);
+    Vec3f max_bound = Vec3f(-1e30f, -1e30f, -1e30f);
 
     HAPPYRAY_HD BBox() = default;
-    HAPPYRAY_HD BBox(const Vec3& min_b, const Vec3& max_b) : min_bound(min_b), max_bound(max_b) {}
+    HAPPYRAY_HD BBox(const Vec3f& min_b, const Vec3f& max_b) : min_bound(min_b), max_bound(max_b) {}
 
     HAPPYRAY_HD bool IsEmpty() const {
         return min_bound.x > max_bound.x || min_bound.y > max_bound.y ||
                min_bound.z > max_bound.z;
     }
 
-    HAPPYRAY_HD Vec3 Extent() const { return max_bound - min_bound; }
-    HAPPYRAY_HD Vec3 Center() const { return (min_bound + max_bound) * 0.5f; }
+    HAPPYRAY_HD Vec3f Extent() const { return max_bound - min_bound; }
+    HAPPYRAY_HD Vec3f Center() const { return (min_bound + max_bound) * 0.5f; }
 
-    HAPPYRAY_HD void Grow(const Vec3& p) {
+    HAPPYRAY_HD void Grow(const Vec3f& p) {
         min_bound = Min(min_bound, p);
         max_bound = Max(max_bound, p);
     }

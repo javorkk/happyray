@@ -24,12 +24,12 @@ constexpr uint32_t kNoCollision = 0xffffffffu;
 
 // Non-owning triangle-soup view over either host or device memory.
 struct SceneView {
-    const Vec3* positions = nullptr;
-    const Vec3* normals = nullptr;
+    const Vec3f* positions = nullptr;
+    const Vec3f* normals = nullptr;
     const uint32_t* indices = nullptr;       // 3 per triangle, indexing positions/normals.
     const uint32_t* material_ids = nullptr;  // 1 per triangle.
     // FlattenScene supplies a default-white entry for scenes with no materials.
-    const Vec3* material_diffuse_colors = nullptr;
+    const Vec3f* material_diffuse_colors = nullptr;
     uint32_t triangle_count = 0;
     const uint32_t* object_ids = nullptr;  // 1 per triangle; may be null.
     // 1 per triangle (the smallest id of another object it intersects, or kNoCollision); may be
@@ -57,11 +57,11 @@ HAPPYRAY_HD inline uint32_t FetchMaterialId(const SceneView& scene, uint32_t tri
 
 // Host-owned geometry shared by CPU rendering and GPU upload.
 struct FlatScene {
-    std::vector<Vec3> positions;
-    std::vector<Vec3> normals;
+    std::vector<Vec3f> positions;
+    std::vector<Vec3f> normals;
     std::vector<uint32_t> indices;
     std::vector<uint32_t> material_ids;
-    std::vector<Vec3> material_diffuse_colors;
+    std::vector<Vec3f> material_diffuse_colors;
     // 1 per triangle, unique across meshes; empty means a single object.
     std::vector<uint32_t> object_ids;
 
@@ -110,12 +110,12 @@ inline FlatScene FlattenScene(const Scene& scene) {
     }
     if (flat.material_diffuse_colors.empty()) {
         // Material-less OBJ faces still reference material id 0.
-        flat.material_diffuse_colors.push_back(Vec3(1.0f, 1.0f, 1.0f));
+        flat.material_diffuse_colors.push_back(Vec3f(1.0f, 1.0f, 1.0f));
     }
     return flat;
 }
 
-inline double SceneEdgeLengthSquared(const Vec3& a, const Vec3& b) {
+inline double SceneEdgeLengthSquared(const Vec3f& a, const Vec3f& b) {
     const double x = static_cast<double>(a.x) - b.x;
     const double y = static_cast<double>(a.y) - b.y;
     const double z = static_cast<double>(a.z) - b.z;
@@ -125,7 +125,7 @@ inline double SceneEdgeLengthSquared(const Vec3& a, const Vec3& b) {
 // Keep the original scene-wide limit fixed throughout longest-edge bisection.
 inline void SubdivideLargeTriangles(Scene* scene) {
     for (const Mesh& mesh : scene->meshes) {
-        for (const Vec3& p : mesh.positions) {
+        for (const Vec3f& p : mesh.positions) {
             if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z))
                 throw std::runtime_error("Triangle subdivision requires finite vertex positions");
         }
@@ -159,7 +159,7 @@ inline void SubdivideLargeTriangles(Scene* scene) {
 
             const uint32_t a = indices[edge], b = indices[(edge + 1) % 3];
             const uint32_t c = indices[(edge + 2) % 3];
-            const Vec3 midpoint_position = mesh.positions[a] * 0.5f + mesh.positions[b] * 0.5f;
+            const Vec3f midpoint_position = mesh.positions[a] * 0.5f + mesh.positions[b] * 0.5f;
             const VertexAttributes& va = mesh.attributes[a];
             const VertexAttributes& vb = mesh.attributes[b];
             VertexAttributes midpoint;
@@ -198,10 +198,10 @@ inline Camera MakeDefaultCamera(const Scene& scene) {
     if (bounds.IsEmpty()) {
         return camera;
     }
-    const Vec3 center = bounds.Center();
-    const Vec3 extent = bounds.Extent();
+    const Vec3f center = bounds.Center();
+    const Vec3f extent = bounds.Extent();
     const float radius = 0.5f * Length(extent);
-    camera.position = center + Vec3(0.0f, radius * 0.4f, radius * 2.2f + 1e-3f);
+    camera.position = center + Vec3f(0.0f, radius * 0.4f, radius * 2.2f + 1e-3f);
     camera.yaw_deg = -90.0f;
     camera.pitch_deg = -10.0f;
     return camera;
@@ -215,7 +215,7 @@ inline float DefaultMaxDistance(const Scene& scene) {
     if (bounds.IsEmpty()) {
         return 1.0f;
     }
-    const Vec3 extent = bounds.Extent();
+    const Vec3f extent = bounds.Extent();
     const float longest_side = std::fmax(extent.x, std::fmax(extent.y, extent.z));
     return longest_side * 0.1f;
 }
@@ -254,7 +254,7 @@ inline bool LoadCameraConfig(const std::string& path, Camera* camera, int* out_w
     }
 
     bool have_orientation = false;
-    Vec3 orientation(1.0f, 0.0f, 0.0f);
+    Vec3f orientation(1.0f, 0.0f, 0.0f);
     char line_buffer[256];
     while (std::fgets(line_buffer, sizeof(line_buffer), file)) {
         std::istringstream line(line_buffer);
@@ -278,7 +278,7 @@ inline bool LoadCameraConfig(const std::string& path, Camera* camera, int* out_w
     std::fclose(file);
 
     if (have_orientation) {
-        const Vec3 forward = Normalize(orientation);
+        const Vec3f forward = Normalize(orientation);
         constexpr float kRadToDeg = 180.0f / 3.14159265358979323846f;
         camera->pitch_deg = std::asin(forward.y) * kRadToDeg;
         camera->yaw_deg = std::atan2(forward.z, forward.x) * kRadToDeg;

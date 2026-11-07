@@ -41,9 +41,9 @@ struct BBoxUnionFunctor {
 // filters this capacity down to exact SAT intersections.
 struct FragmentCounter {
     SceneView scene;
-    Vec3 bounds_min;
-    Vec3 inv_cell_size;
-    Vec3 cell_size;
+    Vec3f bounds_min;
+    Vec3f inv_cell_size;
+    Vec3f cell_size;
     int resolution_x, resolution_y, resolution_z;
 
     HAPPYRAY_HD uint32_t operator()(uint32_t tri) const {
@@ -62,9 +62,9 @@ struct FragmentWriter {
     const uint32_t* write_offsets;
     uint32_t* candidate_counts;
     uint32_t invalid_cell_index;
-    Vec3 bounds_min;
-    Vec3 inv_cell_size;
-    Vec3 cell_size;
+    Vec3f bounds_min;
+    Vec3f inv_cell_size;
+    Vec3f cell_size;
     int resolution_x, resolution_y, resolution_z;
     uint32_t* out_cell_indices;
     uint32_t* out_triangle_indices;
@@ -92,8 +92,8 @@ struct FragmentWriter {
 }  // namespace
 
 struct UniformGrid::Impl {
-    Vec3 bounds_min;
-    Vec3 bounds_max;
+    Vec3f bounds_min;
+    Vec3f bounds_max;
     int resolution_x = 1;
     int resolution_y = 1;
     int resolution_z = 1;
@@ -105,11 +105,11 @@ struct UniformGrid::Impl {
         UniformGridView view;
         view.bounds_min = bounds_min;
         view.bounds_max = bounds_max;
-        view.cell_size = Vec3((bounds_max.x - bounds_min.x) / resolution_x,
+        view.cell_size = Vec3f((bounds_max.x - bounds_min.x) / resolution_x,
                               (bounds_max.y - bounds_min.y) / resolution_y,
                               (bounds_max.z - bounds_min.z) / resolution_z);
         view.inv_cell_size =
-            Vec3(1.0f / view.cell_size.x, 1.0f / view.cell_size.y, 1.0f / view.cell_size.z);
+            Vec3f(1.0f / view.cell_size.x, 1.0f / view.cell_size.y, 1.0f / view.cell_size.z);
         view.resolution_x = resolution_x;
         view.resolution_y = resolution_y;
         view.resolution_z = resolution_z;
@@ -137,10 +137,10 @@ UniformGrid::UniformGrid(const SceneView& scene, float target_triangles_per_cell
                       : BBox();
     const float diagonal = Length(bounds.Extent());
     const float eps = diagonal > 0.0f ? diagonal * 1e-4f : 1e-4f;
-    bounds.min_bound -= Vec3(eps, eps, eps);
-    bounds.max_bound += Vec3(eps, eps, eps);
+    bounds.min_bound -= Vec3f(eps, eps, eps);
+    bounds.max_bound += Vec3f(eps, eps, eps);
 
-    const GridResolution resolution =
+    const Vec3i resolution =
         ComputeGridResolution(bounds, triangle_count, target_triangles_per_cell);
     impl_->bounds_min = bounds.min_bound;
     impl_->bounds_max = bounds.max_bound;
@@ -148,10 +148,10 @@ UniformGrid::UniformGrid(const SceneView& scene, float target_triangles_per_cell
     impl_->resolution_y = resolution.y;
     impl_->resolution_z = resolution.z;
 
-    const Vec3 cell_size((bounds.max_bound.x - bounds.min_bound.x) / resolution.x,
+    const Vec3f cell_size((bounds.max_bound.x - bounds.min_bound.x) / resolution.x,
                         (bounds.max_bound.y - bounds.min_bound.y) / resolution.y,
                         (bounds.max_bound.z - bounds.min_bound.z) / resolution.z);
-    const Vec3 inv_cell_size(1.0f / cell_size.x, 1.0f / cell_size.y, 1.0f / cell_size.z);
+    const Vec3f inv_cell_size(1.0f / cell_size.x, 1.0f / cell_size.y, 1.0f / cell_size.z);
     const uint32_t num_cells = static_cast<uint32_t>(resolution.x) * resolution.y * resolution.z;
 
     // 2. Per-triangle AABB cell counts, exclusive-scanned into write offsets.

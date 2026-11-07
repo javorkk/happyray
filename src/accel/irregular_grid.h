@@ -74,9 +74,9 @@ namespace happyray {
 // shared lattice (`(cx, cy, cz) * global_resolution`, `(cx, cy, cz)` being
 // this cell's own position in the top-level grid).
 struct IrregularCellInfo {
-  Vec3 bounds_min;
-  Vec3 cell_size; // Of one *finest* local voxel (pre-merge granularity).
-  Vec3 inv_cell_size;
+  Vec3f bounds_min;
+  Vec3f cell_size; // Of one *finest* local voxel (pre-merge granularity).
+  Vec3f inv_cell_size;
   int resolution_x = 1; // Already rounded up to a power of 2.
   int resolution_y = 1;
   int resolution_z = 1;
@@ -155,11 +155,11 @@ struct IrregularGridView {
   // since they're all the same world-space size) -- i.e. for every top-level
   // cell's own IrregularCellInfo, `global_resolution_<axis> ==
   // resolution_<axis> << shift_<axis>`.
-  Vec3 global_cell_size;
+  Vec3f global_cell_size;
   int global_resolution_x = 1, global_resolution_y = 1, global_resolution_z = 1;
   // Traversal helpers derived from the above: 1 / global_cell_size, and log2 of
   // global_resolution_* (always a power of 2).
-  Vec3 global_inv_cell_size;
+  Vec3f global_inv_cell_size;
   int global_shift_x = 0, global_shift_y = 0, global_shift_z = 0;
 };
 
@@ -218,9 +218,9 @@ template <typename VisitFn>
 HAPPYRAY_HD inline bool TraverseIrregularGrid(const IrregularGridView &grid, const Ray &ray,
                                           VisitFn &&visit) {
   const UniformGridView &top = grid.top_level;
-  const Vec3 &org = ray.origin;
-  const Vec3 &dir = ray.direction;
-  const Vec3 inv_dir = SafeRcp(dir);
+  const Vec3f &org = ray.origin;
+  const Vec3f &dir = ray.direction;
+  const Vec3f inv_dir = SafeRcp(dir);
   float t_start, t_end;
   if (!IntersectRayBoxRcp(org, dir, inv_dir, top.bounds_min, top.bounds_max, ray.t_min,
                           ray.t_max, &t_start, &t_end)) {
@@ -229,10 +229,10 @@ HAPPYRAY_HD inline bool TraverseIrregularGrid(const IrregularGridView &grid, con
   const int dims_x = top.resolution_x << grid.global_shift_x;
   const int dims_y = top.resolution_y << grid.global_shift_y;
   const int dims_z = top.resolution_z << grid.global_shift_z;
-  const Vec3 &gmin = top.bounds_min;
-  const Vec3 &gsize = grid.global_cell_size;
-  const Vec3 &ginv = grid.global_inv_cell_size;
-  const Vec3 start = (org + dir * t_start - gmin) * ginv;
+  const Vec3f &gmin = top.bounds_min;
+  const Vec3f &gsize = grid.global_cell_size;
+  const Vec3f &ginv = grid.global_inv_cell_size;
+  const Vec3f start = (org + dir * t_start - gmin) * ginv;
   int vx = ClampInt(static_cast<int>(start.x), 0, dims_x - 1);
   int vy = ClampInt(static_cast<int>(start.y), 0, dims_y - 1);
   int vz = ClampInt(static_cast<int>(start.z), 0, dims_z - 1);

@@ -27,40 +27,40 @@ int g_failures = 0;
     } while (0)
 
 bool NearlyEqual(float a, float b, float eps = 1e-3f) { return std::fabs(a - b) < eps; }
-bool NearlyEqual(const happyray::Vec3& a, const happyray::Vec3& b, float eps = 1e-3f) {
+bool NearlyEqual(const happyray::Vec3f& a, const happyray::Vec3f& b, float eps = 1e-3f) {
     return NearlyEqual(a.x, b.x, eps) && NearlyEqual(a.y, b.y, eps) && NearlyEqual(a.z, b.z, eps);
 }
 
 // Shoots a straight-down primary ray from `origin_above` and averages many AO occlusion
 // samples (not just the 1-per-frame the interactive viewer uses) for a low-noise estimate.
-float MeasureAoAtPoint(const happyray::SceneView& scene, const happyray::Vec3& origin_above,
+float MeasureAoAtPoint(const happyray::SceneView& scene, const happyray::Vec3f& origin_above,
                         float ao_radius) {
     happyray::AOIntegrator integrator;
     integrator.samples_per_pixel_per_frame = 512;
     integrator.max_distance = ao_radius;
 
-    const happyray::Ray down_ray(origin_above, happyray::Vec3(0.0f, -1.0f, 0.0f));
+    const happyray::Ray down_ray(origin_above, happyray::Vec3f(0.0f, -1.0f, 0.0f));
     const happyray::AccelStructures accel;  // Default: brute force.
-    const happyray::Vec3 ao = integrator.Integrate(scene, accel, down_ray,
-                                              /*sample_offset=*/0, happyray::Vec2(0.37f, 0.81f));
+    const happyray::Vec3f ao = integrator.Integrate(scene, accel, down_ray,
+                                              /*sample_offset=*/0, happyray::Vec2f(0.37f, 0.81f));
     return ao.x;  // Grayscale: x == y == z.
 }
 
 void TestAOIntegrator() {
     using namespace happyray;
     FlatScene scene;
-    scene.positions = {Vec3(0, 0, 0), Vec3(1, 0, 0), Vec3(0, 1, 0)};
-    scene.normals = {Vec3(0, 0, 1), Vec3(0, 0, 1), Vec3(0, 0, 1)};
+    scene.positions = {Vec3f(0, 0, 0), Vec3f(1, 0, 0), Vec3f(0, 1, 0)};
+    scene.normals = {Vec3f(0, 0, 1), Vec3f(0, 0, 1), Vec3f(0, 0, 1)};
     scene.indices = {0, 1, 2};
     scene.material_ids = {0};
-    scene.material_diffuse_colors = {Vec3(0.2f, 0.4f, 0.8f)};
+    scene.material_diffuse_colors = {Vec3f(0.2f, 0.4f, 0.8f)};
     AOIntegrator integrator;
     integrator.samples_per_pixel_per_frame = 16;
-    integrator.background_color = Vec3(0.1f, 0.3f, 0.6f);
+    integrator.background_color = Vec3f(0.1f, 0.3f, 0.6f);
     const AccelStructures accel;
-    const Vec2 jitter(0.37f, 0.81f);
-    const Ray hit(Vec3(0.25f, 0.25f, 1), Vec3(0, 0, -1));
-    const Ray miss(Vec3(0.25f, 0.25f, 1), Vec3(0, 0, 1));
+    const Vec2f jitter(0.37f, 0.81f);
+    const Ray hit(Vec3f(0.25f, 0.25f, 1), Vec3f(0, 0, -1));
+    const Ray miss(Vec3f(0.25f, 0.25f, 1), Vec3f(0, 0, 1));
     HAPPYRAY_CHECK(NearlyEqual(integrator.Integrate(scene.View(), accel, hit, 32, jitter),
                            scene.material_diffuse_colors[0]));
     HAPPYRAY_CHECK(NearlyEqual(integrator.Integrate(scene.View(), accel, miss, 32, jitter),
@@ -70,27 +70,27 @@ void TestAOIntegrator() {
 void TestSimpleIntegrator() {
     using namespace happyray;
     FlatScene scene;
-    scene.positions = {Vec3(0, 0, 0), Vec3(1, 0, 0), Vec3(0, 1, 0)};
-    scene.normals = {Vec3(0, 0, 3), Vec3(0, 0, 3), Vec3(0, 0, 3)};
+    scene.positions = {Vec3f(0, 0, 0), Vec3f(1, 0, 0), Vec3f(0, 1, 0)};
+    scene.normals = {Vec3f(0, 0, 3), Vec3f(0, 0, 3), Vec3f(0, 0, 3)};
     scene.indices = {0, 1, 2};
     scene.material_ids = {0};
-    scene.material_diffuse_colors = {Vec3(1.0f, 0.4f, 0.8f)};
+    scene.material_diffuse_colors = {Vec3f(1.0f, 0.4f, 0.8f)};
     SimpleIntegrator integrator;
-    integrator.background_color = Vec3(0.2f, 0.3f, 0.4f);
+    integrator.background_color = Vec3f(0.2f, 0.3f, 0.4f);
     const AccelStructures accel;
-    const Ray hit(Vec3(0.25f, 0.25f, 1), Vec3(0, 0, -1));
-    const Ray miss(Vec3(0.25f, 0.25f, 1), Vec3(0, 0, 1));
+    const Ray hit(Vec3f(0.25f, 0.25f, 1), Vec3f(0, 0, -1));
+    const Ray miss(Vec3f(0.25f, 0.25f, 1), Vec3f(0, 0, 1));
     const float expected_shade = 1.0f / (1.0f + std::exp(-2.0f));
     const float intensities[] = {-1, 0, 0.1f, 0.2499f, 0.25f, 0.2501f,
                                  0.5f, 0.9499f, 0.95f, 0.9501f, 1};
     for (float intensity : intensities) {
-        integrator.light_direction = Vec3(std::sqrt(1 - intensity * intensity), 0, intensity) * 2;
-        HAPPYRAY_CHECK(NearlyEqual(integrator.Integrate(scene.View(), accel, hit, 0, Vec2()),
+        integrator.light_direction = Vec3f(std::sqrt(1 - intensity * intensity), 0, intensity) * 2;
+        HAPPYRAY_CHECK(NearlyEqual(integrator.Integrate(scene.View(), accel, hit, 0, Vec2f()),
                                scene.material_diffuse_colors[0] * expected_shade, 1e-5f));
-        HAPPYRAY_CHECK(NearlyEqual(integrator.Integrate(scene.View(), accel, hit, 100, Vec2(0.3f, 0.7f)),
+        HAPPYRAY_CHECK(NearlyEqual(integrator.Integrate(scene.View(), accel, hit, 100, Vec2f(0.3f, 0.7f)),
                                scene.material_diffuse_colors[0] * expected_shade, 1e-5f));
     }
-    HAPPYRAY_CHECK(NearlyEqual(integrator.Integrate(scene.View(), accel, miss, 0, Vec2()),
+    HAPPYRAY_CHECK(NearlyEqual(integrator.Integrate(scene.View(), accel, miss, 0, Vec2f()),
                            integrator.background_color));
 }
 
@@ -102,13 +102,13 @@ void TestCameraOrientation() {
     auto reference_forward = [](float yaw_deg, float pitch_deg) {
         const float yaw = yaw_deg * kDegToRad;
         const float pitch = pitch_deg * kDegToRad;
-        return Vec3(std::cos(pitch) * std::cos(yaw), std::sin(pitch), std::cos(pitch) * std::sin(yaw));
+        return Vec3f(std::cos(pitch) * std::cos(yaw), std::sin(pitch), std::cos(pitch) * std::sin(yaw));
     };
     auto reference_right = [&](float yaw_deg, float pitch_deg) {
-        return Normalize(Cross(reference_forward(yaw_deg, pitch_deg), Vec3(0.0f, 1.0f, 0.0f)));
+        return Normalize(Cross(reference_forward(yaw_deg, pitch_deg), Vec3f(0.0f, 1.0f, 0.0f)));
     };
     auto reference_up = [&](float yaw_deg, float pitch_deg) {
-        const Vec3 f = reference_forward(yaw_deg, pitch_deg);
+        const Vec3f f = reference_forward(yaw_deg, pitch_deg);
         return Cross(reference_right(yaw_deg, pitch_deg), f);
     };
 
@@ -159,8 +159,8 @@ int main(int argc, char** argv) {
     // at the origin, so its vertical faces sit at |x| = 0.5 / |z| = 0.5) should see significant
     // occlusion from the box within a 1.5-unit AO radius. A point far out on the open floor
     // should see almost none.
-    const float ao_near_box = MeasureAoAtPoint(view, happyray::Vec3(0.55f, 0.01f, 0.0f), 1.5f);
-    const float ao_far_from_box = MeasureAoAtPoint(view, happyray::Vec3(2.5f, 0.01f, 0.0f), 1.5f);
+    const float ao_near_box = MeasureAoAtPoint(view, happyray::Vec3f(0.55f, 0.01f, 0.0f), 1.5f);
+    const float ao_far_from_box = MeasureAoAtPoint(view, happyray::Vec3f(2.5f, 0.01f, 0.0f), 1.5f);
 
     std::printf("AO near box base: %.3f, AO far from box: %.3f\n", ao_near_box, ao_far_from_box);
 
