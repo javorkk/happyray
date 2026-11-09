@@ -111,8 +111,9 @@ namespace happyray
 
 	HAPPYRAY_HD inline uint32_t FlattenCellIndex(int cx, int cy, int cz, int resolution_x, int resolution_y)
 	{
-		return static_cast<uint32_t>(cz) * resolution_y * resolution_x + static_cast<uint32_t>(cy) * resolution_x +
-			   static_cast<uint32_t>(cx);
+		return static_cast<uint32_t>(cx) +
+			   static_cast<uint32_t>(resolution_x) *
+				   (static_cast<uint32_t>(cy) + static_cast<uint32_t>(resolution_y) * static_cast<uint32_t>(cz));
 	}
 
 	HAPPYRAY_HD inline uint32_t FlattenCellIndex(const Vec3i &cell, const Vec3i &resolution)
@@ -199,17 +200,18 @@ namespace happyray
 		// them. Builders may reserve the full AABB range and pad unused output slots;
 		// this helper emits only the exact SAT intersections.
 		template <typename EmitFn>
-		HAPPYRAY_HD inline void ForEachIntersectedCell(const Triangle &triangle,
-													   const BBox	  &box,
-													   const Vec3f	  &bounds_min,
-													   const Vec3f	  &inv_cell_size,
-													   const Vec3f	  &cell_size,
-													   const Vec3i	  &resolution,
-													   EmitFn		 &&emit)
+		HAPPYRAY_HD inline uint32_t ForEachIntersectedCell(const Triangle &triangle,
+														   const BBox	  &box,
+														   const Vec3f	  &bounds_min,
+														   const Vec3f	  &inv_cell_size,
+														   const Vec3f	  &cell_size,
+														   const Vec3i	  &resolution,
+														   EmitFn		 &&emit)
 		{
 			Vec2i x_range, y_range, z_range;
 			ComputeCellRange(box, bounds_min, inv_cell_size, resolution, &x_range, &y_range, &z_range);
 			const TriangleCellIntersection intersects(triangle);
+			uint32_t					   count = 0;
 			for (int cz = z_range.x; cz <= z_range.y; ++cz)
 			{
 				for (int cy = y_range.x; cy <= y_range.y; ++cy)
@@ -220,27 +222,11 @@ namespace happyray
 						if (intersects(center, cell_size))
 						{
 							emit(Vec3i(cx, cy, cz));
+							++count;
 						}
 					}
 				}
 			}
-		}
-
-		HAPPYRAY_HD inline uint32_t CountExactIntersectedCells(const Triangle &triangle,
-															   const BBox	  &box,
-															   const Vec3f	  &bounds_min,
-															   const Vec3f	  &inv_cell_size,
-															   const Vec3f	  &cell_size,
-															   const Vec3i	  &resolution)
-		{
-			uint32_t count = 0;
-			ForEachIntersectedCell(triangle,
-								   box,
-								   bounds_min,
-								   inv_cell_size,
-								   cell_size,
-								   resolution,
-								   [&](const Vec3i &) { ++count; });
 			return count;
 		}
 
@@ -254,7 +240,13 @@ namespace happyray
 #if HAPPYRAY_FAST_CELL_COUNT
 			return CountCandidateCells(box, bounds_min, inv_cell_size, resolution);
 #else
-			return CountExactIntersectedCells(triangle, box, bounds_min, inv_cell_size, cell_size, resolution);
+			return ForEachIntersectedCell(triangle,
+										  box,
+										  bounds_min,
+										  inv_cell_size,
+										  cell_size,
+										  resolution,
+										  [](const Vec3i &) {});
 #endif
 		}
 
@@ -306,92 +298,8 @@ namespace happyray
 			return t_near <= t_far;
 		}
 
-		// Amanatides-Woo 3D-DDA over a res_x*res_y*res_z grid with origin `grid_min`,
-		// starting at ray parameter `t_entry` (which must lie on or inside the grid's
-		// box), ported from happyray's UGridTraverser/TLGridTraverser: reciprocal
-		// direction instead of divisions, tDelta = cellSize * |1/dir|, and scalar
-		// per-axis state (no dynamically indexed arrays, which the CUDA backend would
-		// otherwise spill to local memory). Invokes `visit(cell_index, cx, cy, cz,
-		// t_cell_entry, &ray_t_max)` for each cell in near-to-far order; `visit` may
-		// shrink `ray_t_max` (closest hit), and the walk stops once the next cell
-		// boundary lies beyond it -- i.e. as soon as a hit inside the current cell is
-		// found -- or when `visit` returns true (occlusion), or the ray leaves the
-		// grid. Returns true only if `visit` did.
-		template <typename VisitFn>
-		HAPPYRAY_HD inline bool WalkGridCells(const Vec3f &origin,
-											  const Vec3f &dir,
-											  const Vec3f &inv_dir,
-											  const Vec3f &grid_min,
-											  const Vec3f &cell_size,
-											  const Vec3f &inv_cell_size,
-											  const Vec3i &resolution,
-											  float		   t_entry,
-											  float		  *ray_t_max,
-											  VisitFn	 &&visit)
-		{
-			const Vec3f entry = (origin + dir * t_entry - grid_min) * inv_cell_size;
-			Vec3i		cell(ClampInt(static_cast<int>(entry.x), 0, resolution.x - 1),
-						 ClampInt(static_cast<int>(entry.y), 0, resolution.y - 1),
-						 ClampInt(static_cast<int>(entry.z), 0, resolution.z - 1));
-
-			// Next boundary crossing per axis; zero-direction axes never step.
-			const Vec3i step(dir.x > 0.0f ? 1 : 0, dir.y > 0.0f ? 1 : 0, dir.z > 0.0f ? 1 : 0);
-			Vec3f next(dir.x != 0.0f ? ((cell.x + step.x) * cell_size.x + grid_min.x - origin.x) * inv_dir.x : INFINITY,
-					   dir.y != 0.0f ? ((cell.y + step.y) * cell_size.y + grid_min.y - origin.y) * inv_dir.y : INFINITY,
-					   dir.z != 0.0f ? ((cell.z + step.z) * cell_size.z + grid_min.z - origin.z) * inv_dir.z
-									 : INFINITY);
-			const Vec3f delta(cell_size.x * std::fabs(inv_dir.x),
-							  cell_size.y * std::fabs(inv_dir.y),
-							  cell_size.z * std::fabs(inv_dir.z));
-			const Vec3i increment(dir.x > 0.0f ? 1 : -1, dir.y > 0.0f ? 1 : -1, dir.z > 0.0f ? 1 : -1);
-
-			float t_cell = t_entry;
-			for (;;)
-			{
-				const uint32_t cell_index = static_cast<uint32_t>(cell.x) +
-											static_cast<uint32_t>(resolution.x) *
-												(static_cast<uint32_t>(cell.y) +
-												 static_cast<uint32_t>(resolution.y) * static_cast<uint32_t>(cell.z));
-				if (visit(cell_index, cell.x, cell.y, cell.z, t_cell, ray_t_max))
-				{
-					return true;
-				}
-				if (next.x < next.y && next.x < next.z)
-				{
-					if (next.x > *ray_t_max)
-						return false;
-					cell.x += increment.x;
-					if (static_cast<unsigned>(cell.x) >= static_cast<unsigned>(resolution.x))
-						return false;
-					t_cell = next.x;
-					next.x += delta.x;
-				}
-				else if (next.y < next.z)
-				{
-					if (next.y > *ray_t_max)
-						return false;
-					cell.y += increment.y;
-					if (static_cast<unsigned>(cell.y) >= static_cast<unsigned>(resolution.y))
-						return false;
-					t_cell = next.y;
-					next.y += delta.y;
-				}
-				else
-				{
-					if (next.z > *ray_t_max)
-						return false;
-					cell.z += increment.z;
-					if (static_cast<unsigned>(cell.z) >= static_cast<unsigned>(resolution.z))
-						return false;
-					t_cell = next.z;
-					next.z += delta.z;
-				}
-			}
-		}
-
-		// Uniform-grid traversal (happyray's UGridTraverser): clips `ray` to the grid's
-		// box, then walks it with WalkGridCells above, invoking `visit_cell(cell_index,
-		// &ray_t_max)` per cell.
+		// Clip once, then visit ranges front to back. The visitor may shrink t_max
+		// for a closest hit or return true to stop an occlusion query immediately.
 		template <typename VisitCellFn>
 		HAPPYRAY_HD inline bool TraverseGrid(const UniformGridView &grid, const Ray &ray, VisitCellFn &&visit_cell)
 		{
@@ -409,18 +317,66 @@ namespace happyray
 			{
 				return false;
 			}
-			float ray_t_max = ray.t_max;
-			return WalkGridCells(ray.origin,
-								 ray.direction,
-								 inv_dir,
-								 grid.bounds_min,
-								 grid.cell_size,
-								 grid.inv_cell_size,
-								 grid.resolution,
-								 t_near,
-								 &ray_t_max,
-								 [&](uint32_t cell_index, int, int, int, float, float *t_max)
-								 { return visit_cell(cell_index, t_max); });
+			const Vec3f &origin		   = ray.origin;
+			const Vec3f &dir		   = ray.direction;
+			const Vec3f	 entry		   = (origin + dir * t_near - grid.bounds_min) * grid.inv_cell_size;
+			const int	 resolution[3] = {grid.resolution.x, grid.resolution.y, grid.resolution.z};
+			int			 cell[3]	   = {ClampInt(static_cast<int>(entry.x), 0, resolution[0] - 1),
+										  ClampInt(static_cast<int>(entry.y), 0, resolution[1] - 1),
+										  ClampInt(static_cast<int>(entry.z), 0, resolution[2] - 1)};
+			const int	 increment[3]  = {dir.x > 0.0f ? 1 : -1, dir.y > 0.0f ? 1 : -1, dir.z > 0.0f ? 1 : -1};
+			// Zero-direction axes never step, including when the origin is on a boundary.
+			float next[3] = {
+				dir.x != 0.0f
+					? ((cell[0] + (dir.x > 0.0f)) * grid.cell_size.x + grid.bounds_min.x - origin.x) * inv_dir.x
+					: INFINITY,
+				dir.y != 0.0f
+					? ((cell[1] + (dir.y > 0.0f)) * grid.cell_size.y + grid.bounds_min.y - origin.y) * inv_dir.y
+					: INFINITY,
+				dir.z != 0.0f
+					? ((cell[2] + (dir.z > 0.0f)) * grid.cell_size.z + grid.bounds_min.z - origin.z) * inv_dir.z
+					: INFINITY};
+			const float delta[3]  = {grid.cell_size.x * std::fabs(inv_dir.x),
+									 grid.cell_size.y * std::fabs(inv_dir.y),
+									 grid.cell_size.z * std::fabs(inv_dir.z)};
+			float		ray_t_max = ray.t_max;
+			for (;;)
+			{
+				const uint32_t index = FlattenCellIndex(cell[0], cell[1], cell[2], resolution[0], resolution[1]);
+				if (visit_cell(grid.cell_ranges[index], &ray_t_max))
+					return true;
+
+				// Legacy MIN_DIMENSION ordering: z wins ties, then y, then x.
+				const int axis = next[0] < next[1] ? (next[0] < next[2] ? 0 : 2) : (next[1] < next[2] ? 1 : 2);
+				// Constant indices let the compiler keep DDA state in registers.
+				switch (axis)
+				{
+				case 0:
+					if (next[0] > ray_t_max)
+						return false;
+					cell[0] += increment[0];
+					if (static_cast<unsigned>(cell[0]) >= static_cast<unsigned>(resolution[0]))
+						return false;
+					next[0] += delta[0];
+					break;
+				case 1:
+					if (next[1] > ray_t_max)
+						return false;
+					cell[1] += increment[1];
+					if (static_cast<unsigned>(cell[1]) >= static_cast<unsigned>(resolution[1]))
+						return false;
+					next[1] += delta[1];
+					break;
+				default:
+					if (next[2] > ray_t_max)
+						return false;
+					cell[2] += increment[2];
+					if (static_cast<unsigned>(cell[2]) >= static_cast<unsigned>(resolution[2]))
+						return false;
+					next[2] += delta[2];
+					break;
+				}
+			}
 		}
 
 	} // namespace detail
@@ -514,6 +470,35 @@ namespace happyray
 		return false;
 	}
 
+	namespace detail
+	{
+		struct ClosestHitVisitor
+		{
+			const SceneView	   &scene;
+			const uint32_t	   *triangle_indices;
+			const Ray		   &ray;
+			ClosestTriangleHit &hit;
+
+			HAPPYRAY_HD bool operator()(CellRange range, float *t_max) const
+			{
+				IntersectTrianglesClosest(scene, triangle_indices, range.start, range.end, ray, t_max, &hit);
+				return false;
+			}
+		};
+
+		struct OcclusionVisitor
+		{
+			const SceneView &scene;
+			const uint32_t	*triangle_indices;
+			const Ray		&ray;
+
+			HAPPYRAY_HD bool operator()(CellRange range, float *) const
+			{
+				return TestTrianglesInRangeOccluded(scene, triangle_indices, range.start, range.end, ray);
+			}
+		};
+	} // namespace detail
+
 	// Finds the closest hit across the triangles referenced by `grid`'s cells, in
 	// the same sense as IntersectSceneBruteForce. Returns false if the ray hits
 	// nothing.
@@ -521,20 +506,7 @@ namespace happyray
 	IntersectSceneGrid(const SceneView &scene, const UniformGridView &grid, const Ray &ray, HitRecord *out_hit)
 	{
 		ClosestTriangleHit hit;
-		detail::TraverseGrid(grid,
-							 ray,
-							 [&](uint32_t cell_index, float *ray_t_max) -> bool
-							 {
-								 IntersectTrianglesClosest(scene,
-														   grid.triangle_indices,
-														   grid.cell_ranges[cell_index].start,
-														   grid.cell_ranges[cell_index].end,
-														   ray,
-														   ray_t_max,
-														   &hit);
-								 return false; // The walk itself stops once a hit lies before the next
-											   // cell boundary.
-							 });
+		detail::TraverseGrid(grid, ray, detail::ClosestHitVisitor{scene, grid.triangle_indices, ray, hit});
 		return ResolveClosestHit(scene, ray, hit, out_hit);
 	}
 
@@ -542,16 +514,7 @@ namespace happyray
 	// `ray`.
 	HAPPYRAY_HD inline bool IsOccludedGrid(const SceneView &scene, const UniformGridView &grid, const Ray &ray)
 	{
-		return detail::TraverseGrid(grid,
-									ray,
-									[&](uint32_t cell_index, float *) -> bool
-									{
-										return TestTrianglesInRangeOccluded(scene,
-																			grid.triangle_indices,
-																			grid.cell_ranges[cell_index].start,
-																			grid.cell_ranges[cell_index].end,
-																			ray);
-									});
+		return detail::TraverseGrid(grid, ray, detail::OcclusionVisitor{scene, grid.triangle_indices, ray});
 	}
 
 	class UniformGrid

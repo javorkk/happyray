@@ -236,7 +236,7 @@ namespace happyray
 		// Flat irregular-grid traversal, ported from HAGrid's traverse.cu: a single loop over the
 		// grid-wide shared voxel lattice (irregular_grid.h's file header comment) -- no nested
 		// top-level 3D-DDA -- that per step looks up the owning cell, intersects the ray with that
-		// cell's far planes, jumps straight past its exit, and invokes `visit(cell, &ray_t_max)`.
+		// cell's far planes, jumps straight past its exit, and invokes `visit(range, &ray_t_max)`.
 		// Stops once `visit` returns true (occlusion), once a hit (or the ray's own end) lies inside
 		// the current cell (`ray_t_max <= t_exit`), or when the ray leaves the grid. Returns true only
 		// if `visit` did. Every step strictly advances at least one voxel coordinate monotonically, so
@@ -296,7 +296,7 @@ namespace happyray
 										 : INFINITY;
 				const float t_exit = std::fmin(tcx, std::fmin(tcy, tcz));
 
-				if (visit(cell, &ray_t_max))
+				if (visit(cell.references, &ray_t_max))
 				{
 					return true;
 				}
@@ -331,19 +331,7 @@ namespace happyray
 														HitRecord				*out_hit)
 	{
 		ClosestTriangleHit hit;
-		detail::TraverseIrregularGrid(grid,
-									  ray,
-									  [&](const IrregularCell &cell, float *ray_t_max) -> bool
-									  {
-										  IntersectTrianglesClosest(scene,
-																	grid.triangle_indices,
-																	cell.references.start,
-																	cell.references.end,
-																	ray,
-																	ray_t_max,
-																	&hit);
-										  return false;
-									  });
+		detail::TraverseIrregularGrid(grid, ray, detail::ClosestHitVisitor{scene, grid.triangle_indices, ray, hit});
 		return ResolveClosestHit(scene, ray, hit, out_hit);
 	}
 
@@ -351,16 +339,7 @@ namespace happyray
 	HAPPYRAY_HD inline bool
 	IsOccludedIrregularGrid(const SceneView &scene, const IrregularGridView &grid, const Ray &ray)
 	{
-		return detail::TraverseIrregularGrid(grid,
-											 ray,
-											 [&](const IrregularCell &cell, float *) -> bool
-											 {
-												 return TestTrianglesInRangeOccluded(scene,
-																					 grid.triangle_indices,
-																					 cell.references.start,
-																					 cell.references.end,
-																					 ray);
-											 });
+		return detail::TraverseIrregularGrid(grid, ray, detail::OcclusionVisitor{scene, grid.triangle_indices, ray});
 	}
 
 	class IrregularGrid

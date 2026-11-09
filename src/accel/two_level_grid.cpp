@@ -7,6 +7,7 @@
 #endif
 
 #include "two_level_grid.h"
+#include "grid_common.h"
 
 #include <thrust/device_vector.h>
 #include <thrust/for_each.h>
@@ -22,99 +23,6 @@ namespace happyray
 {
 	namespace
 	{
-
-		struct ComputeTriangleBBoxFunctor
-		{
-			SceneView		 scene;
-			HAPPYRAY_HD BBox operator()(uint32_t tri) const
-			{
-				return ComputeTriangleBBox(scene, tri);
-			}
-		};
-
-		struct BBoxUnionFunctor
-		{
-			HAPPYRAY_HD BBox operator()(const BBox &a, const BBox &b) const
-			{
-				BBox result = a;
-				result.Grow(b);
-				return result;
-			}
-		};
-
-		struct TopPairCounter
-		{
-			SceneView			 scene;
-			Vec3f				 bounds_min, inv_cell_size, cell_size;
-			Vec3i				 resolution;
-			HAPPYRAY_HD uint32_t operator()(uint32_t tri) const
-			{
-				const Triangle triangle = FetchTriangle(scene, tri);
-				const BBox	   box		= BBoxExtractor<Triangle>::Get(triangle);
-				return detail::CountTriangleCellIntersections(triangle,
-															  box,
-															  bounds_min,
-															  inv_cell_size,
-															  cell_size,
-															  resolution);
-			}
-		};
-
-		struct TopPairWriter
-		{
-			SceneView		scene;
-			const BBox	   *triangle_bboxes;
-			const uint32_t *inclusive_offsets;
-			Vec3f			bounds_min, inv_cell_size, cell_size;
-			Vec3i			resolution;
-			uint32_t		invalid_cell_index;
-			uint32_t	   *cell_keys;
-			uint32_t	   *triangle_indices;
-
-			HAPPYRAY_HD void operator()(uint32_t tri) const
-			{
-				uint32_t	   offset	= tri == 0 ? 0u : inclusive_offsets[tri - 1];
-				const Triangle triangle = FetchTriangle(scene, tri);
-				detail::ForEachIntersectedCell(triangle,
-											   triangle_bboxes[tri],
-											   bounds_min,
-											   inv_cell_size,
-											   cell_size,
-											   resolution,
-											   [&](const Vec3i &cell)
-											   {
-												   cell_keys[offset]		= FlattenCellIndex(cell, resolution);
-												   triangle_indices[offset] = tri;
-												   ++offset;
-											   });
-				const uint32_t write_end = inclusive_offsets[tri];
-				while (offset < write_end)
-				{
-					cell_keys[offset]		 = invalid_cell_index;
-					triangle_indices[offset] = tri;
-					++offset;
-				}
-			}
-		};
-
-		struct CellRangeExtractor
-		{
-			const uint32_t *keys;
-			CellRange	   *ranges;
-			uint32_t		pair_count;
-			uint32_t		cell_count;
-
-			HAPPYRAY_HD void operator()(uint32_t i) const
-			{
-				const uint32_t cell = keys[i];
-				if (cell >= cell_count)
-					return;
-				if (i == 0 || keys[i - 1] != cell)
-					ranges[cell].start = i;
-				if (i + 1 == pair_count || keys[i + 1] != cell)
-					ranges[cell].end = i + 1;
-			}
-		};
 
 		// Computes each top-level cell's cubic second-level resolution.
 		struct ComputeTopLevelCellFunctor
@@ -171,7 +79,7 @@ namespace happyray
 			}
 		};
 
-		struct FragmentCounter
+		template <bool Write> struct Fragments
 		{
 			SceneView			scene;
 			const uint32_t	   *top_cell_keys;
@@ -180,12 +88,22 @@ namespace happyray
 			Vec3f				top_bounds_min, top_cell_size, top_inv_cell_size;
 			int					top_resolution_x, top_resolution_y;
 			uint32_t			top_cell_count;
+			const BBox		   *triangle_bboxes;
+			const uint32_t	   *inclusive_offsets	 = nullptr;
+			uint32_t		   *exact_counts		 = nullptr;
+			uint32_t			invalid_cell_index	 = 0;
+			uint32_t		   *out_cell_indices	 = nullptr;
+			uint32_t		   *out_triangle_indices = nullptr;
 
 			HAPPYRAY_HD uint32_t operator()(uint32_t i) const
 			{
 				const uint32_t owner = top_cell_keys[i];
 				if (owner >= top_cell_count)
+				{
+					if constexpr (Write)
+						exact_counts[i] = 0;
 					return 0;
+				}
 				const TopLevelCell &info = top_level_cells[owner];
 				const int			cx	 = static_cast<int>(owner % top_resolution_x);
 				const int			cy	 = static_cast<int>((owner / top_resolution_x) % top_resolution_y);
@@ -202,79 +120,43 @@ namespace happyray
 										  top_cell_size.z / resolution);
 				const uint32_t		tri		 = top_triangle_indices[i];
 				const Triangle		triangle = FetchTriangle(scene, tri);
-				const BBox			box		 = BBoxExtractor<Triangle>::Get(triangle);
-				return detail::CountTriangleCellIntersections(triangle,
-															  box,
-															  cell_min,
-															  sub_inv,
-															  sub_cell_size,
-															  Vec3i(resolution, resolution, resolution));
-			}
-		};
-
-		struct FragmentWriter
-		{
-			SceneView			scene;
-			const BBox		   *triangle_bboxes;
-			const uint32_t	   *top_cell_keys;
-			const uint32_t	   *top_triangle_indices;
-			const TopLevelCell *top_level_cells;
-			const uint32_t	   *inclusive_offsets;
-			uint32_t		   *exact_counts;
-			uint32_t			invalid_cell_index;
-			uint32_t		   *out_cell_indices;
-			uint32_t		   *out_triangle_indices;
-			Vec3f				top_bounds_min, top_cell_size, top_inv_cell_size;
-			int					top_resolution_x, top_resolution_y;
-			uint32_t			top_cell_count;
-
-			HAPPYRAY_HD void operator()(uint32_t i) const
-			{
-				const uint32_t owner = top_cell_keys[i];
-				if (owner >= top_cell_count)
+				const BBox			box		 = Write ? triangle_bboxes[tri] : BBoxExtractor<Triangle>::Get(triangle);
+				if constexpr (!Write)
 				{
-					exact_counts[i] = 0;
-					return;
+					return detail::CountTriangleCellIntersections(triangle,
+																  box,
+																  cell_min,
+																  sub_inv,
+																  sub_cell_size,
+																  Vec3i(resolution, resolution, resolution));
 				}
-				const TopLevelCell &info = top_level_cells[owner];
-				const int			cx	 = static_cast<int>(owner % top_resolution_x);
-				const int			cy	 = static_cast<int>((owner / top_resolution_x) % top_resolution_y);
-				const int			cz	 = static_cast<int>(owner / (top_resolution_x * top_resolution_y));
-				const Vec3f			cell_min(top_bounds_min.x + cx * top_cell_size.x,
-									 top_bounds_min.y + cy * top_cell_size.y,
-									 top_bounds_min.z + cz * top_cell_size.z);
-				const int			resolution = info.Resolution();
-				const Vec3f			sub_inv(top_inv_cell_size.x * resolution,
-									top_inv_cell_size.y * resolution,
-									top_inv_cell_size.z * resolution);
-				const uint32_t		tri			= top_triangle_indices[i];
-				const uint32_t		write_begin = i == 0 ? 0u : inclusive_offsets[i - 1];
-				const uint32_t		write_end	= inclusive_offsets[i];
-				const Vec3f			sub_cell_size(top_cell_size.x / resolution,
-										  top_cell_size.y / resolution,
-										  top_cell_size.z / resolution);
-				uint32_t			offset	 = write_begin;
-				const Triangle		triangle = FetchTriangle(scene, tri);
-				detail::ForEachIntersectedCell(
-					triangle,
-					triangle_bboxes[tri],
-					cell_min,
-					sub_inv,
-					sub_cell_size,
-					Vec3i(resolution, resolution, resolution),
-					[&](const Vec3i &cell)
+				else
+				{
+					const uint32_t write_begin = i == 0 ? 0u : inclusive_offsets[i - 1];
+					const uint32_t write_end   = inclusive_offsets[i];
+					uint32_t	   offset	   = write_begin;
+					exact_counts[i]			   = detail::ForEachIntersectedCell(
+						   triangle,
+						   box,
+						   cell_min,
+						   sub_inv,
+						   sub_cell_size,
+						   Vec3i(resolution, resolution, resolution),
+						   [&](const Vec3i &cell)
+						   {
+							   out_cell_indices[offset] =
+								   info.cell_range_offset +
+								   FlattenCellIndex(cell, Vec3i(resolution, resolution, resolution));
+							   out_triangle_indices[offset] = tri;
+							   ++offset;
+						   });
+					while (offset < write_end)
 					{
-						out_cell_indices[offset] =
-							info.cell_range_offset + FlattenCellIndex(cell, Vec3i(resolution, resolution, resolution));
+						out_cell_indices[offset]	 = invalid_cell_index;
 						out_triangle_indices[offset] = tri;
 						++offset;
-					});
-				exact_counts[i] = offset - write_begin;
-				while (offset < write_end)
-				{
-					out_cell_indices[offset]	 = invalid_cell_index;
-					out_triangle_indices[offset] = tri;
-					++offset;
+					}
+					return exact_counts[i];
 				}
 			}
 		};
@@ -343,67 +225,19 @@ namespace happyray
 							   uint32_t			dense_cell_threshold)
 		: impl_(std::make_unique<Impl>())
 	{
-		const uint32_t				triangle_count = scene.triangle_count;
-		thrust::device_vector<BBox> triangle_bboxes(triangle_count);
-		thrust::transform(thrust::counting_iterator<uint32_t>(0),
-						  thrust::counting_iterator<uint32_t>(triangle_count),
-						  triangle_bboxes.begin(),
-						  ComputeTriangleBBoxFunctor{scene});
-
-		BBox		bounds	 = triangle_count > 0
-								   ? thrust::reduce(triangle_bboxes.begin(), triangle_bboxes.end(), BBox(), BBoxUnionFunctor())
-								   : BBox();
-		const float diagonal = Length(bounds.Extent());
-		const float epsilon	 = diagonal > 0.0f ? diagonal * 1e-4f : 1e-4f;
-		bounds.min_bound -= Vec3f(epsilon, epsilon, epsilon);
-		bounds.max_bound += Vec3f(epsilon, epsilon, epsilon);
-
-		const Vec3i top_resolution	   = ComputeGridResolution(bounds, triangle_count, top_level_density);
-		impl_->top_level.bounds_min	   = bounds.min_bound;
-		impl_->top_level.bounds_max	   = bounds.max_bound;
-		impl_->top_level.resolution	   = top_resolution;
-		impl_->top_level.cell_size	   = Vec3f(bounds.Extent().x / top_resolution.x,
-										   bounds.Extent().y / top_resolution.y,
-										   bounds.Extent().z / top_resolution.z);
-		impl_->top_level.inv_cell_size = Vec3f(1.0f / impl_->top_level.cell_size.x,
-											   1.0f / impl_->top_level.cell_size.y,
-											   1.0f / impl_->top_level.cell_size.z);
-
-		const uint32_t num_top_cells = static_cast<uint32_t>(top_resolution.x) * top_resolution.y * top_resolution.z;
-		thrust::device_vector<uint32_t> top_pair_counts(triangle_count);
-		thrust::transform(thrust::counting_iterator<uint32_t>(0),
-						  thrust::counting_iterator<uint32_t>(triangle_count),
-						  top_pair_counts.begin(),
-						  TopPairCounter{scene,
-										 bounds.min_bound,
-										 impl_->top_level.inv_cell_size,
-										 impl_->top_level.cell_size,
-										 top_resolution});
-		thrust::inclusive_scan(top_pair_counts.begin(), top_pair_counts.end(), top_pair_counts.begin());
-		const uint32_t					total_top_pairs = triangle_count > 0 ? top_pair_counts.back() : 0u;
-		thrust::device_vector<uint32_t> top_cell_keys(total_top_pairs);
-		thrust::device_vector<uint32_t> top_triangle_indices(total_top_pairs);
-		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-						 thrust::counting_iterator<uint32_t>(triangle_count),
-						 TopPairWriter{scene,
-									   thrust::raw_pointer_cast(triangle_bboxes.data()),
-									   thrust::raw_pointer_cast(top_pair_counts.data()),
-									   bounds.min_bound,
-									   impl_->top_level.inv_cell_size,
-									   impl_->top_level.cell_size,
-									   top_resolution,
-									   num_top_cells,
-									   thrust::raw_pointer_cast(top_cell_keys.data()),
-									   thrust::raw_pointer_cast(top_triangle_indices.data())});
-		thrust::sort_by_key(top_cell_keys.begin(), top_cell_keys.end(), top_triangle_indices.begin());
-
-		thrust::device_vector<CellRange> top_cell_ranges(num_top_cells, CellRange{0u, 0u});
-		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-						 thrust::counting_iterator<uint32_t>(total_top_pairs),
-						 CellRangeExtractor{thrust::raw_pointer_cast(top_cell_keys.data()),
-											thrust::raw_pointer_cast(top_cell_ranges.data()),
-											total_top_pairs,
-											num_top_cells});
+		auto		coarse				 = detail::BuildCellReferences(scene, top_level_density);
+		auto	   &triangle_bboxes		 = coarse.boxes;
+		auto	   &top_cell_keys		 = coarse.keys;
+		auto	   &top_triangle_indices = coarse.triangles;
+		auto	   &top_cell_ranges		 = coarse.ranges;
+		const auto &geometry			 = coarse.geometry;
+		impl_->top_level				 = {geometry.bounds_min,
+											geometry.bounds_max,
+											geometry.cell_size,
+											geometry.inv_cell_size,
+											geometry.resolution};
+		const uint32_t num_top_cells	 = static_cast<uint32_t>(top_cell_ranges.size());
+		const uint32_t total_top_pairs	 = static_cast<uint32_t>(top_cell_keys.size());
 
 		const GridBoundsView				top_view = impl_->View().top_level;
 		thrust::device_vector<TopLevelCell> top_level_cells(num_top_cells);
@@ -436,16 +270,17 @@ namespace happyray
 		thrust::transform(thrust::counting_iterator<uint32_t>(0),
 						  thrust::counting_iterator<uint32_t>(total_top_pairs),
 						  second_pair_counts.begin(),
-						  FragmentCounter{scene,
-										  thrust::raw_pointer_cast(top_cell_keys.data()),
-										  thrust::raw_pointer_cast(top_triangle_indices.data()),
-										  thrust::raw_pointer_cast(top_level_cells.data()),
-										  top_view.bounds_min,
-										  top_view.cell_size,
-										  top_view.inv_cell_size,
-										  top_view.resolution.x,
-										  top_view.resolution.y,
-										  num_top_cells});
+						  Fragments<false>{scene,
+										   thrust::raw_pointer_cast(top_cell_keys.data()),
+										   thrust::raw_pointer_cast(top_triangle_indices.data()),
+										   thrust::raw_pointer_cast(top_level_cells.data()),
+										   top_view.bounds_min,
+										   top_view.cell_size,
+										   top_view.inv_cell_size,
+										   top_view.resolution.x,
+										   top_view.resolution.y,
+										   num_top_cells,
+										   thrust::raw_pointer_cast(triangle_bboxes.data())});
 		thrust::inclusive_scan(second_pair_counts.begin(), second_pair_counts.end(), second_pair_counts.begin());
 		const uint32_t					total_second_pairs = total_top_pairs > 0 ? second_pair_counts.back() : 0u;
 		thrust::device_vector<uint32_t> second_cell_keys(total_second_pairs);
@@ -453,22 +288,22 @@ namespace happyray
 		thrust::device_vector<uint32_t> exact_second_pair_counts(total_top_pairs, 0u);
 		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
 						 thrust::counting_iterator<uint32_t>(total_top_pairs),
-						 FragmentWriter{scene,
-										thrust::raw_pointer_cast(triangle_bboxes.data()),
-										thrust::raw_pointer_cast(top_cell_keys.data()),
-										thrust::raw_pointer_cast(top_triangle_indices.data()),
-										thrust::raw_pointer_cast(top_level_cells.data()),
-										thrust::raw_pointer_cast(second_pair_counts.data()),
-										thrust::raw_pointer_cast(exact_second_pair_counts.data()),
-										total_second_cells,
-										thrust::raw_pointer_cast(second_cell_keys.data()),
-										thrust::raw_pointer_cast(second_triangle_indices.data()),
-										top_view.bounds_min,
-										top_view.cell_size,
-										top_view.inv_cell_size,
-										top_view.resolution.x,
-										top_view.resolution.y,
-										num_top_cells});
+						 Fragments<true>{scene,
+										 thrust::raw_pointer_cast(top_cell_keys.data()),
+										 thrust::raw_pointer_cast(top_triangle_indices.data()),
+										 thrust::raw_pointer_cast(top_level_cells.data()),
+										 top_view.bounds_min,
+										 top_view.cell_size,
+										 top_view.inv_cell_size,
+										 top_view.resolution.x,
+										 top_view.resolution.y,
+										 num_top_cells,
+										 thrust::raw_pointer_cast(triangle_bboxes.data()),
+										 thrust::raw_pointer_cast(second_pair_counts.data()),
+										 thrust::raw_pointer_cast(exact_second_pair_counts.data()),
+										 total_second_cells,
+										 thrust::raw_pointer_cast(second_cell_keys.data()),
+										 thrust::raw_pointer_cast(second_triangle_indices.data())});
 		thrust::device_vector<uint32_t> top_level_triangle_ref_counts(num_top_cells);
 		thrust::transform(
 			thrust::counting_iterator<uint32_t>(0),
@@ -480,10 +315,10 @@ namespace happyray
 		impl_->second_level_cell_ranges.assign(total_second_cells, CellRange{0u, 0u});
 		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
 						 thrust::counting_iterator<uint32_t>(total_second_pairs),
-						 CellRangeExtractor{thrust::raw_pointer_cast(second_cell_keys.data()),
-											thrust::raw_pointer_cast(impl_->second_level_cell_ranges.data()),
-											total_second_pairs,
-											total_second_cells});
+						 detail::CellRangeExtractor{thrust::raw_pointer_cast(second_cell_keys.data()),
+													thrust::raw_pointer_cast(impl_->second_level_cell_ranges.data()),
+													total_second_pairs,
+													total_second_cells});
 
 		impl_->top_level_cells				 = std::move(top_level_cells);
 		impl_->top_level_triangle_ref_counts = std::move(top_level_triangle_ref_counts);

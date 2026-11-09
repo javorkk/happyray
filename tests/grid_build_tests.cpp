@@ -32,6 +32,149 @@ namespace
 		}
 	}
 
+	struct CheckTraversalFunctor
+	{
+		happyray::UniformGridView  uniform;
+		happyray::TwoLevelGridView two_level;
+		const happyray::Ray		  *rays;
+		uint32_t				  *results;
+
+		HAPPYRAY_HD void operator()(uint32_t i) const
+		{
+			uint32_t *out	= results + i * 20;
+			uint32_t  count = 0;
+			happyray::detail::TraverseGrid(uniform,
+										   rays[i],
+										   [&](happyray::CellRange range, float *)
+										   {
+											   out[1 + count++] = range.start;
+											   return false;
+										   });
+			out[0] = count;
+			count  = 0;
+			happyray::detail::TraverseTwoLevelGrid(
+				two_level,
+				rays[i],
+				[](uint32_t) {},
+				[&](happyray::CellRange range, float *)
+				{
+					out[11 + count++] = range.start;
+					return false;
+				});
+			out[10] = count;
+		}
+	};
+
+	void CheckTraversalBoundaries()
+	{
+		using namespace happyray;
+		const std::vector<Ray>					 rays	  = {Ray(Vec3f(-1, 0.5f, 0.5f), Vec3f(1, 0, 0)),
+															 Ray(Vec3f(3, 0.5f, 0.5f), Vec3f(-1, -0.0f, 0)),
+															 Ray(Vec3f(-1), Vec3f(1)),
+															 Ray(Vec3f(3), Vec3f(-1)),
+															 Ray(Vec3f(0.5f), Vec3f(0, 1, 0)),
+															 Ray(Vec3f(0.5f), Vec3f(0, 0, 1)),
+															 Ray(Vec3f(-1, 3, 0.5f), Vec3f(1, 0, 0)),
+															 Ray(Vec3f(0.5f), Vec3f(1, 0, 0), 0.0f, 0.49f),
+															 Ray(Vec3f(0.5f), Vec3f(1, 0, 0), 0.0f, 0.5f),
+															 Ray(Vec3f(-1, 0.5f, 0.5f), Vec3f(1, 0, 0), 2.1f, 3.0f)};
+		const std::vector<std::vector<uint32_t>> expected = {
+			{0, 1},
+			{1, 0},
+			{0, 4, 6, 7},
+			{7, 3, 1, 0},
+			{0, 2},
+			{0, 4},
+			{},
+			{0},
+			{0, 1},
+			{1}
+		   };
+		std::vector<CellRange>	  ranges(8);
+		std::vector<TopLevelCell> top_cells(8);
+		for (uint32_t i = 0; i < 8; ++i)
+		{
+			ranges[i]					   = {i, i + 1};
+			top_cells[i].cell_range_offset = i;
+		}
+		thrust::device_vector<CellRange>	device_ranges(ranges);
+		thrust::device_vector<TopLevelCell> device_top(top_cells);
+		thrust::device_vector<Ray>			device_rays(rays);
+		thrust::device_vector<uint32_t>		results(rays.size() * 20, 0u);
+		UniformGridView						uniform;
+		uniform.bounds_min = Vec3f(0);
+		uniform.bounds_max = Vec3f(2);
+		uniform.cell_size = uniform.inv_cell_size = Vec3f(1);
+		uniform.resolution						  = Vec3i(2);
+		uniform.cell_ranges						  = thrust::raw_pointer_cast(device_ranges.data());
+		TwoLevelGridView two;
+		two.top_level				 = {uniform.bounds_min,
+										uniform.bounds_max,
+										uniform.cell_size,
+										uniform.inv_cell_size,
+										uniform.resolution};
+		two.top_level_cells			 = thrust::raw_pointer_cast(device_top.data());
+		two.second_level_cell_ranges = uniform.cell_ranges;
+		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
+						 thrust::counting_iterator<uint32_t>(static_cast<uint32_t>(rays.size())),
+						 CheckTraversalFunctor{uniform,
+											   two,
+											   thrust::raw_pointer_cast(device_rays.data()),
+											   thrust::raw_pointer_cast(results.data())});
+		const thrust::host_vector<uint32_t> host = results;
+		for (size_t i = 0; i < rays.size(); ++i)
+		{
+			for (size_t level : {0u, 10u})
+			{
+				Check(host[i * 20 + level] == expected[i].size(), "DDA boundary visit count");
+				for (size_t j = 0; j < expected[i].size(); ++j)
+					Check(host[i * 20 + level + 1 + j] == expected[i][j], "DDA boundary visit order");
+			}
+		}
+
+		// Exercise indexed stepping within refined leaves, not just 1x1x1 leaves.
+		std::vector<CellRange> refined_ranges(64);
+		for (uint32_t i = 0; i < 64; ++i)
+			refined_ranges[i] = {i, i + 1};
+		for (uint32_t i = 0; i < 8; ++i)
+		{
+			top_cells[i].resolution		   = 2;
+			top_cells[i].cell_range_offset = i * 8;
+		}
+		device_ranges				 = refined_ranges;
+		device_top					 = top_cells;
+		uniform.resolution			 = Vec3i(4);
+		uniform.cell_size			 = Vec3f(0.5f);
+		uniform.inv_cell_size		 = Vec3f(2);
+		uniform.cell_ranges			 = thrust::raw_pointer_cast(device_ranges.data());
+		two.top_level_cells			 = thrust::raw_pointer_cast(device_top.data());
+		two.second_level_cell_ranges = uniform.cell_ranges;
+		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
+						 thrust::counting_iterator<uint32_t>(2),
+						 CheckTraversalFunctor{uniform,
+											   two,
+											   thrust::raw_pointer_cast(device_rays.data()),
+											   thrust::raw_pointer_cast(results.data())});
+		const thrust::host_vector<uint32_t> refined				   = results;
+		const uint32_t						uniform_expected[2][4] = {
+			 {20, 21, 22, 23},
+			 {23, 22, 21, 20}
+		 };
+		const uint32_t two_expected[2][4] = {
+			{6,	7,  14, 15},
+			{15, 14, 7,	6 }
+		  };
+		for (size_t i = 0; i < 2; ++i)
+		{
+			Check(refined[i * 20] == 4 && refined[i * 20 + 10] == 4, "Refined DDA visit count");
+			for (size_t j = 0; j < 4; ++j)
+			{
+				Check(refined[i * 20 + 1 + j] == uniform_expected[i][j], "Refined uniform DDA visit order");
+				Check(refined[i * 20 + 11 + j] == two_expected[i][j], "Refined two-level DDA visit order");
+			}
+		}
+	}
+
 	struct OverlapCase
 	{
 		happyray::Vec3f a, b, c;
@@ -335,6 +478,7 @@ namespace
 
 int main()
 {
+	CheckTraversalBoundaries();
 	CheckTriangleCellIntersection();
 	CheckFragmentWriters();
 	CheckCellStarts({}, 0);

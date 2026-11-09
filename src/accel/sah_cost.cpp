@@ -360,7 +360,7 @@ namespace happyray
 				uint32_t steps = 0;
 				detail::TraverseGrid(grid,
 									 rays[i],
-									 [&](uint32_t, float *) -> bool
+									 [&](CellRange, float *) -> bool
 									 {
 										 ++steps;
 										 return false;
@@ -381,7 +381,7 @@ namespace happyray
 					grid,
 					rays[i],
 					[&](uint32_t) { ++steps; },
-					[&](uint32_t, float *) -> bool
+					[&](CellRange, float *) -> bool
 					{
 						++steps;
 						return false;
@@ -400,7 +400,7 @@ namespace happyray
 				uint32_t steps = 0;
 				detail::TraverseIrregularGrid(grid,
 											  rays[i],
-											  [&](const IrregularCell &, float *) -> bool
+											  [&](CellRange, float *) -> bool
 											  {
 												  steps += kMockIrregularCellsPerLeaf;
 												  return false;

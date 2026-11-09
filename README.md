@@ -204,17 +204,28 @@ backends; it carries the `performance` label and runs serially.
   `uniform_grid.h` provides shared resolution, cell-range, and triangle/cell SAT helpers.
   `UniformGridView` stores one begin/end pair per cell, and its `HAPPYRAY_HD` 3D-DDA traversal
   (`IntersectSceneGrid`/`IsOccludedGrid`) tests the references in that interval.
-  `uniform_grid.cpp` counts exact SAT-overlapped cells, emits and sorts `(cell, triangle)` pairs,
-  then extracts each occupied cell's begin/end directly from adjacent sorted keys; empty cells
-  keep equal zero indices, with no CSR gap-fill scan. `irregular_grid.cpp` uses UniformGrid for
+  The backend-private `grid_common.h` shares the complete coarse construction operation:
+  bounds, count, scan, emit, sort, and range extraction. CUDA counts exact SAT intersections;
+  TBB reserves AABB capacities and sentinel-pads slots not used by exact SAT emission.
+  Empty cells keep equal zero indices, with no CSR gap-fill scan.
+  `uniform_grid.cpp` owns the resulting buffers. `irregular_grid.cpp` uses UniformGrid for
   its top-level layout, then builds a separate local voxel CSR, which its merge/expand passes
-  refine. `two_level_grid.cpp` builds both levels directly rather than constructing a
-  `UniformGrid`; it uses the same exact SAT test and explicit begin/end ranges at both levels,
+  refine. `two_level_grid.cpp` consumes the shared coarse build's sorted keys and ranges,
+  then builds the second level directly; it uses the same exact SAT test and explicit begin/end ranges at both levels,
   with cubic per-top-cell resolutions and 1x1x1 grids for sparse cells, following the legacy
   `TLGridSortBuilder`/`TLGridBuildKernels` model. The SAT test conservatively enlarges cell
   half-extents by 1% and uses a `1e-5` projection tolerance; unnormalized axes handle degenerate
   triangles without division by zero. These builders use Thrust algorithms and compile for the
   CUDA and TBB backends selected by `HAPPYRAY_THRUST_BACKEND`.
+  Traversal keeps one explicit loop per algorithm (nested loops for two-level grids).
+  Uniform and two-level grids deliberately keep independent DDA initialization and stepping
+  so they can be optimized separately. Each selects the next axis using the legacy
+  minimum-dimension expression and uses a `switch` with constant indices into three-element
+  cell/boundary arrays so the compiler can keep state in registers rather than memory.
+  Zero-direction axes never step, and ties
+  retain the legacy z/y/x priority. All three pass a `CellRange` to shared closest-hit
+  or occlusion visitors; SAH calibration uses the same loops with counting visitors.
+  Counting and writing fragments share geometry setup through compile-time specialization.
   `irregular_grid.h`/`.cpp` build an irregular grid the HAGrid way: each top-level cell gets a
   flat, dense, power-of-2-resolution local grid, then two passes ported from HAGrid's
   `merge.cu`/`expand.cu` refine it bottom-up -- SAH-gated neighbor merging (collapsing empty/

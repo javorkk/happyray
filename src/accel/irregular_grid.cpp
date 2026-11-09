@@ -287,12 +287,15 @@ namespace happyray
 		// pair's triangle *actually* intersects (full SAT test via ForEachIntersectedCell above, not
 		// just its AABB-derived cell range -- see that helper's comment for why the distinction matters
 		// for hair-strand-like geometry).
-		struct FragmentCounter
+		template <bool Write> struct Fragments
 		{
 			SceneView				 scene;
 			const uint32_t			*owning_top_cell;
 			const uint32_t			*top_triangle_indices;
 			const IrregularCellInfo *infos;
+			const uint32_t			*write_offsets		  = nullptr;
+			uint32_t				*out_voxel_indices	  = nullptr;
+			uint32_t				*out_triangle_indices = nullptr;
 
 			HAPPYRAY_HD uint32_t operator()(uint32_t i) const
 			{
@@ -300,51 +303,25 @@ namespace happyray
 				const uint32_t			 tri	  = top_triangle_indices[i];
 				const Triangle			 triangle = FetchTriangle(scene, tri);
 				const BBox				 box	  = BBoxExtractor<Triangle>::Get(triangle);
-				uint32_t				 count	  = 0;
-				detail::ForEachIntersectedCell(triangle,
-											   box,
-											   info.bounds_min,
-											   info.inv_cell_size,
-											   info.cell_size,
-											   info.resolution,
-											   [&](const Vec3i &) { ++count; });
-				return count;
-			}
-		};
-
-		// Writes filtered fragments in each owning cell's finest grid -- exactly `FragmentCounter`'s
-		// count for this pair, packed contiguously from `write_offsets[i]` (no invalid/sentinel entries
-		// to filter out afterwards).
-		struct FragmentWriter
-		{
-			SceneView				 scene;
-			const uint32_t			*owning_top_cell;
-			const uint32_t			*top_triangle_indices;
-			const IrregularCellInfo *infos;
-			const uint32_t			*write_offsets;
-			uint32_t				*out_voxel_indices;
-			uint32_t				*out_triangle_indices;
-
-			HAPPYRAY_HD void operator()(uint32_t i) const
-			{
-				const IrregularCellInfo &info	  = infos[owning_top_cell[i]];
-				const uint32_t			 tri	  = top_triangle_indices[i];
-				const Triangle			 triangle = FetchTriangle(scene, tri);
-				const BBox				 box	  = BBoxExtractor<Triangle>::Get(triangle);
-				uint32_t				 offset	  = write_offsets[i];
-				detail::ForEachIntersectedCell(triangle,
-											   box,
-											   info.bounds_min,
-											   info.inv_cell_size,
-											   info.cell_size,
-											   info.resolution,
-											   [&](const Vec3i &cell)
-											   {
-												   out_voxel_indices[offset] =
-													   info.entries_offset + FlattenCellIndex(cell, info.resolution);
-												   out_triangle_indices[offset] = tri;
-												   ++offset;
-											   });
+				uint32_t				 offset	  = 0;
+				if constexpr (Write)
+					offset = write_offsets[i];
+				return detail::ForEachIntersectedCell(
+					triangle,
+					box,
+					info.bounds_min,
+					info.inv_cell_size,
+					info.cell_size,
+					info.resolution,
+					[&](const Vec3i &cell)
+					{
+						if constexpr (Write)
+						{
+							out_voxel_indices[offset] = info.entries_offset + FlattenCellIndex(cell, info.resolution);
+							out_triangle_indices[offset] = tri;
+							++offset;
+						}
+					});
 			}
 		};
 
@@ -1005,10 +982,10 @@ namespace happyray
 		thrust::transform(thrust::counting_iterator<uint32_t>(0),
 						  thrust::counting_iterator<uint32_t>(total_top_level_pairs),
 						  counts.begin(),
-						  FragmentCounter{scene,
-										  thrust::raw_pointer_cast(owning_top_cell.data()),
-										  top_view.triangle_indices,
-										  thrust::raw_pointer_cast(infos.data())});
+						  Fragments<false>{scene,
+										   thrust::raw_pointer_cast(owning_top_cell.data()),
+										   top_view.triangle_indices,
+										   thrust::raw_pointer_cast(infos.data())});
 
 		thrust::device_vector<uint32_t> write_offsets(total_top_level_pairs);
 		thrust::exclusive_scan(counts.begin(), counts.end(), write_offsets.begin());
@@ -1018,13 +995,13 @@ namespace happyray
 		thrust::device_vector<uint32_t> pair_triangle_indices(total_initial_pairs);
 		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
 						 thrust::counting_iterator<uint32_t>(total_top_level_pairs),
-						 FragmentWriter{scene,
-										thrust::raw_pointer_cast(owning_top_cell.data()),
-										top_view.triangle_indices,
-										thrust::raw_pointer_cast(infos.data()),
-										thrust::raw_pointer_cast(write_offsets.data()),
-										thrust::raw_pointer_cast(pair_voxel_indices.data()),
-										thrust::raw_pointer_cast(pair_triangle_indices.data())});
+						 Fragments<true>{scene,
+										 thrust::raw_pointer_cast(owning_top_cell.data()),
+										 top_view.triangle_indices,
+										 thrust::raw_pointer_cast(infos.data()),
+										 thrust::raw_pointer_cast(write_offsets.data()),
+										 thrust::raw_pointer_cast(pair_voxel_indices.data()),
+										 thrust::raw_pointer_cast(pair_triangle_indices.data())});
 
 		thrust::sort_by_key(pair_voxel_indices.begin(), pair_voxel_indices.end(), pair_triangle_indices.begin());
 
