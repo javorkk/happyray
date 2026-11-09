@@ -57,7 +57,7 @@ namespace happyray
 		// Builds a uniform grid over the already-uploaded geometry (reusing it, not
 		// re-uploading it). Select it with SetAccelType(). Safe to call more than
 		// once (rebuilds in place).
-		void BuildUniformGrid(float target_triangles_per_cell = 3.0f);
+		void BuildUniformGrid(float target_prims_per_cell = 3.0f);
 		bool HasUniformGrid() const;
 
 		// Builds a two-level grid over the already-uploaded geometry; see
@@ -112,12 +112,13 @@ namespace happyray
 		const std::vector<Vec3f> &ResolvedPixels() const;
 
 		// Every Build*Grid call (including the on-demand builds of SetAccelType,
-		// UpdateScene and RebuildGridDensities) runs exact collision detection
-		// between the scene's objects (FlatScene::object_ids) over the new grid's
-		// leaf cells (see src/render/collision_detector.h). Colliding triangles are
+		// UpdateScene and RebuildGridDensities) runs collision detection between
+		// the scene's objects (FlatScene::object_ids) over the new grid's leaf
+		// cells (see src/render/collision_detector.h): primitives sharing a cell
+		// collide when their bounding boxes overlap. Colliding primitives are
 		// then rendered with a red "collided" material instead of their own.
-		// CollisionIds() downloads the per-triangle result: the smallest id of
-		// another object each triangle intersects, or kNoCollision.
+		// CollisionIds() downloads the per-primitive result: the smallest id of
+		// another object each primitive collides with, or kNoCollision.
 		std::vector<uint32_t> CollisionIds() const;
 		const CollisionStats &LastCollisionStats() const;
 
@@ -131,11 +132,26 @@ namespace happyray
 		// Runs collision detection on the active grid now, regardless of
 		// CollisionDetectionEnabled() (a no-op for brute force or an unbuilt grid).
 		void DetectCollisions();
-		// Marks every triangle as non-colliding (normal materials) and resets
+		// Marks every primitive as non-colliding (normal materials) and resets
 		// LastCollisionStats().
 		void ClearCollisions();
 
+		// Cell assignment of grid builds; changing it rebuilds the active grid.
+		void			SetCellOverlapMode(CellOverlapMode mode);
+		CellOverlapMode GetCellOverlapMode() const;
+
+		// Point/curve radius in pixels at each primitive's distance from the camera passed to
+		// UpdateViewDependentGeometry; <= 0 keeps the scene's radii. Default: 2.
+		void  SetScreenSpaceRadius(float pixels);
+		float ScreenSpaceRadius() const;
+
+		// Recomputes point/curve radii for `camera` and the current framebuffer height, then
+		// rebuilds the active grid. Returns false (no-op) for other primitive types.
+		bool UpdateViewDependentGeometry(const Camera &camera);
+
 	  private:
+		void RebuildGrids();
+
 		struct Impl;
 		std::unique_ptr<Impl> impl_;
 	};

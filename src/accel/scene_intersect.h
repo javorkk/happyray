@@ -14,47 +14,53 @@
 namespace happyray
 {
 
-	// Finds the closest hit across every triangle in `scene`. Returns false if the ray hits
+	// Finds the closest hit across every primitive in `scene`. Returns false if the ray hits
 	// nothing.
-	HAPPYRAY_HD inline bool IntersectSceneBruteForce(const SceneView &scene, Ray ray, HitRecord *out_hit)
+	template <typename P = DynamicPrimitive>
+	HAPPYRAY_HD inline bool IntersectSceneBruteForce(const SceneView &scene, const Ray &ray, HitRecord *out_hit)
 	{
-		bool hit_anything = false;
-		for (uint32_t tri = 0; tri < scene.triangle_count; ++tri)
+		if constexpr (std::is_same_v<P, DynamicPrimitive>)
 		{
-			const Triangle triangle = FetchTriangle(scene, tri);
-			const uint32_t i0		= scene.indices[tri * 3 + 0];
-			const uint32_t i1		= scene.indices[tri * 3 + 1];
-			const uint32_t i2		= scene.indices[tri * 3 + 2];
-			float		   t, u, v;
-			if (IntersectRayTriangle(ray, triangle.vtx[0], triangle.vtx[1], triangle.vtx[2], &t, &u, &v))
-			{
-				ray.t_max		  = t;
-				out_hit->t		  = t;
-				out_hit->position = ray.At(t);
-				// Barycentric-interpolated shading normal.
-				out_hit->normal =
-					Normalize(scene.normals[i0] * (1.0f - u - v) + scene.normals[i1] * u + scene.normals[i2] * v);
-				out_hit->material_id = FetchMaterialId(scene, tri);
-				hit_anything		 = true;
-			}
+			return DispatchPrimitive(scene.primitive_type,
+									 [&](auto tag)
+									 {
+										 using Q = typename decltype(tag)::type;
+										 return IntersectSceneBruteForce<Q>(scene, ray, out_hit);
+									 });
 		}
-		return hit_anything;
+		else
+		{
+			ClosestHit hit;
+			float	   t_max = ray.t_max;
+			for (uint32_t prim = 0; prim < scene.primitive_count; ++prim)
+				IntersectPrimitivesClosest<P>(scene, &prim, 0, 1, ray, &t_max, &hit);
+			return ResolveClosestHit<P>(scene, ray, hit, out_hit);
+		}
 	}
 
-	// Returns true if any triangle occludes `ray` (no need for the closest hit -- used for AO
+	// Returns true if any primitive occludes `ray` (no need for the closest hit -- used for AO
 	// occlusion tests, where only a boolean "something is in the way" result is needed).
+	template <typename P = DynamicPrimitive>
 	HAPPYRAY_HD inline bool IsOccludedBruteForce(const SceneView &scene, const Ray &ray)
 	{
-		for (uint32_t tri = 0; tri < scene.triangle_count; ++tri)
+		if constexpr (std::is_same_v<P, DynamicPrimitive>)
 		{
-			const Triangle triangle = FetchTriangle(scene, tri);
-			float		   t, u, v;
-			if (IntersectRayTriangle(ray, triangle.vtx[0], triangle.vtx[1], triangle.vtx[2], &t, &u, &v))
-			{
-				return true;
-			}
+			return DispatchPrimitive(scene.primitive_type,
+									 [&](auto tag)
+									 {
+										 using Q = typename decltype(tag)::type;
+										 return IsOccludedBruteForce<Q>(scene, ray);
+									 });
 		}
-		return false;
+		else
+		{
+			for (uint32_t prim = 0; prim < scene.primitive_count; ++prim)
+			{
+				if (TestPrimitivesInRangeOccluded<P>(scene, &prim, 0, 1, ray))
+					return true;
+			}
+			return false;
+		}
 	}
 
 	// Selects which acceleration structure (if any) IntersectScene/IsOccluded
@@ -77,36 +83,39 @@ namespace happyray
 		IrregularGridView irregular_grid; // Valid/meaningful only when type == kIrregularGrid.
 	};
 
+	// `P` selects the primitive type at compile time; DynamicPrimitive dispatches at runtime.
+	template <typename P = DynamicPrimitive>
 	HAPPYRAY_HD inline bool
-	IntersectScene(const SceneView &scene, const AccelStructures &accel, Ray ray, HitRecord *out_hit)
+	IntersectScene(const SceneView &scene, const AccelStructures &accel, const Ray &ray, HitRecord *out_hit)
 	{
 		switch (accel.type)
 		{
 		case AccelType::kUniformGrid:
-			return IntersectSceneGrid(scene, accel.uniform_grid, ray, out_hit);
+			return IntersectSceneGrid<P>(scene, accel.uniform_grid, ray, out_hit);
 		case AccelType::kTwoLevelGrid:
-			return IntersectSceneTwoLevelGrid(scene, accel.two_level_grid, ray, out_hit);
+			return IntersectSceneTwoLevelGrid<P>(scene, accel.two_level_grid, ray, out_hit);
 		case AccelType::kIrregularGrid:
-			return IntersectSceneIrregularGrid(scene, accel.irregular_grid, ray, out_hit);
+			return IntersectSceneIrregularGrid<P>(scene, accel.irregular_grid, ray, out_hit);
 		case AccelType::kBruteForce:
 		default:
-			return IntersectSceneBruteForce(scene, ray, out_hit);
+			return IntersectSceneBruteForce<P>(scene, ray, out_hit);
 		}
 	}
 
+	template <typename P = DynamicPrimitive>
 	HAPPYRAY_HD inline bool IsOccluded(const SceneView &scene, const AccelStructures &accel, const Ray &ray)
 	{
 		switch (accel.type)
 		{
 		case AccelType::kUniformGrid:
-			return IsOccludedGrid(scene, accel.uniform_grid, ray);
+			return IsOccludedGrid<P>(scene, accel.uniform_grid, ray);
 		case AccelType::kTwoLevelGrid:
-			return IsOccludedTwoLevelGrid(scene, accel.two_level_grid, ray);
+			return IsOccludedTwoLevelGrid<P>(scene, accel.two_level_grid, ray);
 		case AccelType::kIrregularGrid:
-			return IsOccludedIrregularGrid(scene, accel.irregular_grid, ray);
+			return IsOccludedIrregularGrid<P>(scene, accel.irregular_grid, ray);
 		case AccelType::kBruteForce:
 		default:
-			return IsOccludedBruteForce(scene, ray);
+			return IsOccludedBruteForce<P>(scene, ray);
 		}
 	}
 

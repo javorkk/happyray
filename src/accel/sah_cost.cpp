@@ -120,7 +120,7 @@ namespace happyray
 				view.resolution		 = Vec3i(resolution, resolution, resolution);
 				cell_ranges.assign(num_cells, CellRange{0u, 0u});
 				view.cell_ranges	  = thrust::raw_pointer_cast(cell_ranges.data());
-				view.triangle_indices = nullptr;
+				view.prim_indices = nullptr;
 			}
 		};
 
@@ -180,7 +180,7 @@ namespace happyray
 
 				view.top_level_cells			   = thrust::raw_pointer_cast(top_level_cells.data());
 				view.second_level_cell_ranges	   = thrust::raw_pointer_cast(cell_ranges.data());
-				view.second_level_triangle_indices = nullptr;
+				view.second_level_prim_indices = nullptr;
 			}
 		};
 
@@ -301,7 +301,7 @@ namespace happyray
 					Vec3f(1.0f / top_cell_size.x, 1.0f / top_cell_size.y, 1.0f / top_cell_size.z);
 				view.top_level.resolution		= Vec3i(top_resolution, top_resolution, top_resolution);
 				view.top_level.cell_ranges		= nullptr;
-				view.top_level.triangle_indices = nullptr;
+				view.top_level.prim_indices = nullptr;
 
 				infos.resize(num_top_cells);
 				thrust::transform(thrust::counting_iterator<uint32_t>(0),
@@ -328,7 +328,7 @@ namespace happyray
 				view.top_cells			  = thrust::raw_pointer_cast(top_cells.data());
 				view.local_entries		  = thrust::raw_pointer_cast(entries.data());
 				view.local_cells		  = thrust::raw_pointer_cast(cells.data());
-				view.triangle_indices	  = nullptr;
+				view.prim_indices	  = nullptr;
 				view.global_cell_size	  = Vec3f(top_cell_size.x / local_resolution,
 											  top_cell_size.y / local_resolution,
 											  top_cell_size.z / local_resolution);

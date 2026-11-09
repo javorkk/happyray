@@ -45,18 +45,18 @@ namespace happyray
 										top_bounds_min.y + cy * top_cell_size.y,
 										top_bounds_min.z + cz * top_cell_size.z);
 				const Vec3f	   cell_max		  = cell_min + top_cell_size;
-				const uint32_t triangle_count = top_ranges[c].end - top_ranges[c].start;
+				const uint32_t primitive_count = top_ranges[c].end - top_ranges[c].start;
 
 				const Vec3i computed_res =
-					(triangle_count <= dense_cell_threshold)
+					(primitive_count <= dense_cell_threshold)
 						? Vec3i(1, 1, 1)
-						: ComputeGridResolution(BBox(cell_min, cell_max), triangle_count, second_level_density);
+						: ComputeGridResolution(BBox(cell_min, cell_max), primitive_count, second_level_density);
 
 				TopLevelCell info;
 				const int	 resolution = computed_res.x > computed_res.y
 											  ? (computed_res.x > computed_res.z ? computed_res.x : computed_res.z)
 											  : (computed_res.y > computed_res.z ? computed_res.y : computed_res.z);
-				info.resolution			= triangle_count == 0 ? -resolution : resolution;
+				info.resolution			= primitive_count == 0 ? -resolution : resolution;
 				return info;
 			}
 		};
@@ -79,21 +79,21 @@ namespace happyray
 			}
 		};
 
-		template <bool Write> struct Fragments
+		template <typename P, CellOverlapMode Mode, bool Write> struct Fragments
 		{
 			SceneView			scene;
 			const uint32_t	   *top_cell_keys;
-			const uint32_t	   *top_triangle_indices;
+			const uint32_t	   *top_prim_indices;
 			const TopLevelCell *top_level_cells;
 			Vec3f				top_bounds_min, top_cell_size, top_inv_cell_size;
 			int					top_resolution_x, top_resolution_y;
 			uint32_t			top_cell_count;
-			const BBox		   *triangle_bboxes;
+			const BBox		   *prim_bboxes;
 			const uint32_t	   *inclusive_offsets	 = nullptr;
 			uint32_t		   *exact_counts		 = nullptr;
 			uint32_t			invalid_cell_index	 = 0;
 			uint32_t		   *out_cell_indices	 = nullptr;
-			uint32_t		   *out_triangle_indices = nullptr;
+			uint32_t		   *out_prim_indices = nullptr;
 
 			HAPPYRAY_HD uint32_t operator()(uint32_t i) const
 			{
@@ -118,25 +118,27 @@ namespace happyray
 				const Vec3f			sub_cell_size(top_cell_size.x / resolution,
 										  top_cell_size.y / resolution,
 										  top_cell_size.z / resolution);
-				const uint32_t		tri		 = top_triangle_indices[i];
-				const Triangle		triangle = FetchTriangle(scene, tri);
-				const BBox			box		 = Write ? triangle_bboxes[tri] : BBoxExtractor<Triangle>::Get(triangle);
+				const uint32_t		tri = top_prim_indices[i];
+				P					primitive;
+				if constexpr (Mode != CellOverlapMode::kAabb)
+					primitive = PrimitiveTraits<P>::Fetch(scene, tri);
+				const BBox &box = prim_bboxes[tri];
 				if constexpr (!Write)
 				{
-					return detail::CountTriangleCellIntersections(triangle,
-																  box,
-																  cell_min,
-																  sub_inv,
-																  sub_cell_size,
-																  Vec3i(resolution, resolution, resolution));
+					return detail::CountOverlappedCells<P, Mode>(primitive,
+																 box,
+																 cell_min,
+																 sub_inv,
+																 sub_cell_size,
+																 Vec3i(resolution, resolution, resolution));
 				}
 				else
 				{
 					const uint32_t write_begin = i == 0 ? 0u : inclusive_offsets[i - 1];
 					const uint32_t write_end   = inclusive_offsets[i];
 					uint32_t	   offset	   = write_begin;
-					exact_counts[i]			   = detail::ForEachIntersectedCell(
-						   triangle,
+					exact_counts[i]			   = detail::ForEachOverlappedCell<P, Mode>(
+						   primitive,
 						   box,
 						   cell_min,
 						   sub_inv,
@@ -147,13 +149,13 @@ namespace happyray
 							   out_cell_indices[offset] =
 								   info.cell_range_offset +
 								   FlattenCellIndex(cell, Vec3i(resolution, resolution, resolution));
-							   out_triangle_indices[offset] = tri;
+							   out_prim_indices[offset] = tri;
 							   ++offset;
 						   });
 					while (offset < write_end)
 					{
 						out_cell_indices[offset]	 = invalid_cell_index;
-						out_triangle_indices[offset] = tri;
+						out_prim_indices[offset] = tri;
 						++offset;
 					}
 					return exact_counts[i];
@@ -178,7 +180,7 @@ namespace happyray
 		struct TwoLevelGridSahFunctor
 		{
 			const TopLevelCell *top_level_cells;
-			const uint32_t	   *top_level_triangle_ref_counts;
+			const uint32_t	   *top_level_prim_ref_counts;
 			Vec3f				top_cell_size;
 			SahCostConstants	costs;
 
@@ -194,7 +196,7 @@ namespace happyray
 									  top_cell_size.z / resolution);
 				return HalfSurfaceArea(cell_size) *
 					   (static_cast<float>(num_local) * costs.traversal +
-						static_cast<float>(top_level_triangle_ref_counts[t]) * costs.intersection);
+						static_cast<float>(top_level_prim_ref_counts[t]) * costs.intersection);
 			}
 		};
 
@@ -204,9 +206,9 @@ namespace happyray
 	{
 		GridBoundsView						top_level;
 		thrust::device_vector<TopLevelCell> top_level_cells;
-		thrust::device_vector<uint32_t>		top_level_triangle_ref_counts;
+		thrust::device_vector<uint32_t>		top_level_prim_ref_counts;
 		thrust::device_vector<CellRange>	second_level_cell_ranges;
-		thrust::device_vector<uint32_t>		second_level_triangle_indices;
+		thrust::device_vector<uint32_t>		second_level_prim_indices;
 
 		TwoLevelGridView View() const
 		{
@@ -214,24 +216,48 @@ namespace happyray
 			view.top_level					   = top_level;
 			view.top_level_cells			   = thrust::raw_pointer_cast(top_level_cells.data());
 			view.second_level_cell_ranges	   = thrust::raw_pointer_cast(second_level_cell_ranges.data());
-			view.second_level_triangle_indices = thrust::raw_pointer_cast(second_level_triangle_indices.data());
+			view.second_level_prim_indices = thrust::raw_pointer_cast(second_level_prim_indices.data());
 			return view;
 		}
+
+		template <typename P, CellOverlapMode Mode>
+		void Build(const SceneView &scene,
+				   float			top_level_density,
+				   float			second_level_density,
+				   uint32_t			dense_cell_threshold);
 	};
 
 	TwoLevelGrid::TwoLevelGrid(const SceneView &scene,
 							   float			top_level_density,
 							   float			second_level_density,
-							   uint32_t			dense_cell_threshold)
+							   uint32_t			dense_cell_threshold,
+							   CellOverlapMode	mode)
 		: impl_(std::make_unique<Impl>())
 	{
-		auto		coarse				 = detail::BuildCellReferences(scene, top_level_density);
-		auto	   &triangle_bboxes		 = coarse.boxes;
-		auto	   &top_cell_keys		 = coarse.keys;
-		auto	   &top_triangle_indices = coarse.triangles;
+		detail::DispatchBuild(scene.primitive_type,
+							  mode,
+							  [&](auto prim, auto overlap)
+							  {
+								  impl_->Build<typename decltype(prim)::type, decltype(overlap)::value>(scene,
+																									   top_level_density,
+																									   second_level_density,
+																									   dense_cell_threshold);
+							  });
+	}
+
+	template <typename P, CellOverlapMode Mode>
+	void TwoLevelGrid::Impl::Build(const SceneView &scene,
+								   float			top_level_density,
+								   float			second_level_density,
+								   uint32_t			dense_cell_threshold)
+	{
+		auto		coarse			 = detail::BuildCellReferences<P, Mode>(scene, top_level_density);
+		auto	   &prim_bboxes		 = coarse.boxes;
+		auto	   &top_cell_keys	 = coarse.keys;
+		auto	   &top_prim_indices = coarse.prims;
 		auto	   &top_cell_ranges		 = coarse.ranges;
 		const auto &geometry			 = coarse.geometry;
-		impl_->top_level				 = {geometry.bounds_min,
+		top_level = {geometry.bounds_min,
 											geometry.bounds_max,
 											geometry.cell_size,
 											geometry.inv_cell_size,
@@ -239,7 +265,7 @@ namespace happyray
 		const uint32_t num_top_cells	 = static_cast<uint32_t>(top_cell_ranges.size());
 		const uint32_t total_top_pairs	 = static_cast<uint32_t>(top_cell_keys.size());
 
-		const GridBoundsView				top_view = impl_->View().top_level;
+		const GridBoundsView				top_view = View().top_level;
 		thrust::device_vector<TopLevelCell> top_level_cells(num_top_cells);
 		thrust::transform(thrust::counting_iterator<uint32_t>(0),
 						  thrust::counting_iterator<uint32_t>(num_top_cells),
@@ -270,9 +296,9 @@ namespace happyray
 		thrust::transform(thrust::counting_iterator<uint32_t>(0),
 						  thrust::counting_iterator<uint32_t>(total_top_pairs),
 						  second_pair_counts.begin(),
-						  Fragments<false>{scene,
+						  Fragments<P, Mode, false>{scene,
 										   thrust::raw_pointer_cast(top_cell_keys.data()),
-										   thrust::raw_pointer_cast(top_triangle_indices.data()),
+										   thrust::raw_pointer_cast(top_prim_indices.data()),
 										   thrust::raw_pointer_cast(top_level_cells.data()),
 										   top_view.bounds_min,
 										   top_view.cell_size,
@@ -280,17 +306,17 @@ namespace happyray
 										   top_view.resolution.x,
 										   top_view.resolution.y,
 										   num_top_cells,
-										   thrust::raw_pointer_cast(triangle_bboxes.data())});
+										   thrust::raw_pointer_cast(prim_bboxes.data())});
 		thrust::inclusive_scan(second_pair_counts.begin(), second_pair_counts.end(), second_pair_counts.begin());
 		const uint32_t					total_second_pairs = total_top_pairs > 0 ? second_pair_counts.back() : 0u;
 		thrust::device_vector<uint32_t> second_cell_keys(total_second_pairs);
-		thrust::device_vector<uint32_t> second_triangle_indices(total_second_pairs);
+		thrust::device_vector<uint32_t> second_prim_indices(total_second_pairs);
 		thrust::device_vector<uint32_t> exact_second_pair_counts(total_top_pairs, 0u);
 		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
 						 thrust::counting_iterator<uint32_t>(total_top_pairs),
-						 Fragments<true>{scene,
+						 Fragments<P, Mode, true>{scene,
 										 thrust::raw_pointer_cast(top_cell_keys.data()),
-										 thrust::raw_pointer_cast(top_triangle_indices.data()),
+										 thrust::raw_pointer_cast(top_prim_indices.data()),
 										 thrust::raw_pointer_cast(top_level_cells.data()),
 										 top_view.bounds_min,
 										 top_view.cell_size,
@@ -298,31 +324,34 @@ namespace happyray
 										 top_view.resolution.x,
 										 top_view.resolution.y,
 										 num_top_cells,
-										 thrust::raw_pointer_cast(triangle_bboxes.data()),
+										 thrust::raw_pointer_cast(prim_bboxes.data()),
 										 thrust::raw_pointer_cast(second_pair_counts.data()),
 										 thrust::raw_pointer_cast(exact_second_pair_counts.data()),
 										 total_second_cells,
 										 thrust::raw_pointer_cast(second_cell_keys.data()),
-										 thrust::raw_pointer_cast(second_triangle_indices.data())});
-		thrust::device_vector<uint32_t> top_level_triangle_ref_counts(num_top_cells);
+										 thrust::raw_pointer_cast(second_prim_indices.data())});
+		thrust::device_vector<uint32_t> top_level_prim_ref_counts(num_top_cells);
 		thrust::transform(
 			thrust::counting_iterator<uint32_t>(0),
 			thrust::counting_iterator<uint32_t>(num_top_cells),
-			top_level_triangle_ref_counts.begin(),
+			top_level_prim_ref_counts.begin(),
 			ComputeTopLevelCellRefCountFunctor{thrust::raw_pointer_cast(top_cell_ranges.data()),
 											   thrust::raw_pointer_cast(exact_second_pair_counts.data())});
-		thrust::sort_by_key(second_cell_keys.begin(), second_cell_keys.end(), second_triangle_indices.begin());
-		impl_->second_level_cell_ranges.assign(total_second_cells, CellRange{0u, 0u});
+		thrust::sort_by_key(second_cell_keys.begin(), second_cell_keys.end(), second_prim_indices.begin());
+		uint32_t valid_second_pairs = total_second_pairs;
+		if constexpr (Mode == CellOverlapMode::kHybrid)
+			valid_second_pairs = detail::TrimInvalidPairs(&second_cell_keys, &second_prim_indices, total_second_cells);
+		second_level_cell_ranges.assign(total_second_cells, CellRange{0u, 0u});
 		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-						 thrust::counting_iterator<uint32_t>(total_second_pairs),
+						 thrust::counting_iterator<uint32_t>(valid_second_pairs),
 						 detail::CellRangeExtractor{thrust::raw_pointer_cast(second_cell_keys.data()),
-													thrust::raw_pointer_cast(impl_->second_level_cell_ranges.data()),
-													total_second_pairs,
+													thrust::raw_pointer_cast(second_level_cell_ranges.data()),
+													valid_second_pairs,
 													total_second_cells});
 
-		impl_->top_level_cells				 = std::move(top_level_cells);
-		impl_->top_level_triangle_ref_counts = std::move(top_level_triangle_ref_counts);
-		impl_->second_level_triangle_indices = std::move(second_triangle_indices);
+		this->top_level_cells			= std::move(top_level_cells);
+		this->top_level_prim_ref_counts = std::move(top_level_prim_ref_counts);
+		second_level_prim_indices		= std::move(second_prim_indices);
 	}
 
 	TwoLevelGrid::~TwoLevelGrid() = default;
@@ -332,9 +361,9 @@ namespace happyray
 		return static_cast<uint32_t>(impl_->second_level_cell_ranges.size());
 	}
 
-	uint32_t TwoLevelGrid::SecondLevelTriangleIndexCount() const
+	uint32_t TwoLevelGrid::SecondLevelPrimIndexCount() const
 	{
-		return static_cast<uint32_t>(impl_->second_level_triangle_indices.size());
+		return static_cast<uint32_t>(impl_->second_level_prim_indices.size());
 	}
 
 	float TwoLevelGrid::ComputeSahCost(const BBox &scene_bounds, const SahCostConstants &costs) const
@@ -349,7 +378,7 @@ namespace happyray
 				thrust::counting_iterator<uint32_t>(0),
 				thrust::counting_iterator<uint32_t>(num_top_cells),
 				TwoLevelGridSahFunctor{thrust::raw_pointer_cast(impl_->top_level_cells.data()),
-									   thrust::raw_pointer_cast(impl_->top_level_triangle_ref_counts.data()),
+									   thrust::raw_pointer_cast(impl_->top_level_prim_ref_counts.data()),
 									   view.top_level.cell_size,
 									   costs},
 				0.0f,

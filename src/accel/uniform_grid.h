@@ -21,6 +21,7 @@
 
 #include "bbox.h"
 #include "primitive.h"
+#include "primitive_traits.h"
 #include "ray.h"
 #include "sah_cost.h"
 #include "scene.h"
@@ -30,11 +31,18 @@
 namespace happyray
 {
 
-	// Shared host/device build math for all three grid builders.
-	HAPPYRAY_HD inline BBox ComputeTriangleBBox(const SceneView &scene, uint32_t tri)
+	// How builders assign primitives to cells (counting pass / writing pass).
+	enum class CellOverlapMode
 	{
-		return BBoxExtractor<Triangle>::Get(FetchTriangle(scene, tri));
-	}
+		kAabb,	 // AABB cells / AABB cells.
+		kExact,	 // Exact cells / exact cells.
+		kHybrid, // AABB cells / exact cells, unused slots trimmed.
+	};
+
+	// kExact on CUDA, kHybrid on TBB.
+	CellOverlapMode DefaultCellOverlapMode();
+
+	const char *CellOverlapModeName(CellOverlapMode mode);
 
 	struct alignas(8) CellRange
 	{
@@ -43,11 +51,11 @@ namespace happyray
 	};
 	static_assert(sizeof(CellRange) == 2 * sizeof(uint32_t));
 
-	// Sizes a grid from the expanded geometry bounds and target triangle density.
+	// Sizes a grid from the expanded geometry bounds and target primitive density.
 	HAPPYRAY_HD inline Vec3i
-	ComputeGridResolution(const BBox &bounds, uint32_t triangle_count, float target_triangles_per_cell)
+	ComputeGridResolution(const BBox &bounds, uint32_t primitive_count, float target_prims_per_cell)
 	{
-		if (triangle_count == 0)
+		if (primitive_count == 0)
 		{
 			return Vec3i(1, 1, 1);
 		}
@@ -63,7 +71,7 @@ namespace happyray
 
 		const float volume = extent.x * extent.y * extent.z;
 		const float cells_per_unit_volume =
-			std::cbrt(target_triangles_per_cell * static_cast<float>(triangle_count) / volume);
+			std::cbrt(target_prims_per_cell * static_cast<float>(primitive_count) / volume);
 
 		return Vec3i(
 			extent.x * cells_per_unit_volume + 0.5f > 1.0f ? static_cast<int>(extent.x * cells_per_unit_volume + 0.5f)
@@ -106,7 +114,7 @@ namespace happyray
 		Vec3i resolution = Vec3i(1, 1, 1);
 		// One begin/end pair per cell; empty cells have equal indices.
 		const CellRange *cell_ranges	  = nullptr;
-		const uint32_t	*triangle_indices = nullptr; // Sorted by cell; indexes into SceneView.
+		const uint32_t	*prim_indices = nullptr; // Sorted by cell; indexes into SceneView.
 	};
 
 	HAPPYRAY_HD inline uint32_t FlattenCellIndex(int cx, int cy, int cz, int resolution_x, int resolution_y)
@@ -124,7 +132,7 @@ namespace happyray
 	namespace detail
 	{
 
-		// Number of grid cells overlapped by the triangle AABB's clamped cell range.
+		// Number of grid cells overlapped by the primitive AABB's clamped cell range.
 		HAPPYRAY_HD inline uint32_t CountCandidateCells(const BBox	&box,
 														const Vec3f &bounds_min,
 														const Vec3f &inv_cell_size,
@@ -136,17 +144,17 @@ namespace happyray
 				   static_cast<uint32_t>(z_range.y - z_range.x + 1);
 		}
 
-		// Preserve the grid's 1% cell enlargement while delegating the SAT to core geometry.
-		struct TriangleCellIntersection
+		// Exact primitive/cell test with the grid's 1% cell enlargement.
+		template <typename P> struct CellIntersection
 		{
-			TriangleBoxIntersection intersects;
+			typename PrimitiveTraits<P>::CellOverlap intersects;
 
-			HAPPYRAY_HD TriangleCellIntersection(const SceneView &scene, uint32_t tri)
-				: TriangleCellIntersection(FetchTriangle(scene, tri))
+			HAPPYRAY_HD CellIntersection(const SceneView &scene, uint32_t prim)
+				: CellIntersection(PrimitiveTraits<P>::Fetch(scene, prim))
 			{
 			}
 
-			HAPPYRAY_HD explicit TriangleCellIntersection(const Triangle &triangle) : intersects(triangle)
+			HAPPYRAY_HD explicit CellIntersection(const P &primitive) : intersects(primitive)
 			{
 			}
 
@@ -188,66 +196,69 @@ namespace happyray
 			}
 		};
 
-		// Shared by every FragmentCounter/FragmentWriter pair
-		// (uniform/two-level/irregular): walks the triangle's AABB-derived cell range
-		// [cx0,cx1]x[cy0,cy1]x[cz0,cz1] (from ComputeCellRange) and invokes `emit(cell)`
-		// with a Vec3i only for cells the triangle's *actual* shape intersects (the full
-		// SAT test, TriangleCellIntersection above), not just its bounding box. This
-		// conservative AABB range can vastly overcount true intersections for long,
-		// thin, diagonally-oriented triangles (e.g. hair-strand geometry) -- a single
-		// such triangle's bbox can span a cube-shaped range spanning tens of thousands
-		// of cells even though the triangle only actually threads through a sliver of
-		// them. Builders may reserve the full AABB range and pad unused output slots;
-		// this helper emits only the exact SAT intersections.
-		template <typename EmitFn>
-		HAPPYRAY_HD inline uint32_t ForEachIntersectedCell(const Triangle &triangle,
-														   const BBox	  &box,
-														   const Vec3f	  &bounds_min,
-														   const Vec3f	  &inv_cell_size,
-														   const Vec3f	  &cell_size,
-														   const Vec3i	  &resolution,
-														   EmitFn		 &&emit)
+		// Shared by every grid builder: walks the primitive's AABB cell range and calls `emit(cell)` for
+		// every cell in it (kAabb) or only for cells the primitive's actual shape overlaps (otherwise).
+		// Exact overlap matters for long, thin, diagonal primitives, whose AABB range can be orders of
+		// magnitude larger than the cells they touch.
+		template <typename P, CellOverlapMode Mode, typename EmitFn>
+		HAPPYRAY_HD inline uint32_t ForEachOverlappedCell(const P	  &primitive,
+														  const BBox  &box,
+														  const Vec3f &bounds_min,
+														  const Vec3f &inv_cell_size,
+														  const Vec3f &cell_size,
+														  const Vec3i &resolution,
+														  EmitFn	 &&emit)
 		{
 			Vec2i x_range, y_range, z_range;
 			ComputeCellRange(box, bounds_min, inv_cell_size, resolution, &x_range, &y_range, &z_range);
-			const TriangleCellIntersection intersects(triangle);
-			uint32_t					   count = 0;
-			for (int cz = z_range.x; cz <= z_range.y; ++cz)
+			uint32_t count = 0;
+			if constexpr (Mode == CellOverlapMode::kAabb)
 			{
-				for (int cy = y_range.x; cy <= y_range.y; ++cy)
-				{
-					for (int cx = x_range.x; cx <= x_range.y; ++cx)
-					{
-						const Vec3f center = bounds_min + Vec3f(cx + 0.5f, cy + 0.5f, cz + 0.5f) * cell_size;
-						if (intersects(center, cell_size))
+				for (int cz = z_range.x; cz <= z_range.y; ++cz)
+					for (int cy = y_range.x; cy <= y_range.y; ++cy)
+						for (int cx = x_range.x; cx <= x_range.y; ++cx)
 						{
 							emit(Vec3i(cx, cy, cz));
 							++count;
 						}
-					}
-				}
+			}
+			else
+			{
+				const CellIntersection<P> intersects(primitive);
+				for (int cz = z_range.x; cz <= z_range.y; ++cz)
+					for (int cy = y_range.x; cy <= y_range.y; ++cy)
+						for (int cx = x_range.x; cx <= x_range.y; ++cx)
+						{
+							const Vec3f center = bounds_min + Vec3f(cx + 0.5f, cy + 0.5f, cz + 0.5f) * cell_size;
+							if (intersects(center, cell_size))
+							{
+								emit(Vec3i(cx, cy, cz));
+								++count;
+							}
+						}
 			}
 			return count;
 		}
 
-		HAPPYRAY_HD inline uint32_t CountTriangleCellIntersections(const Triangle &triangle,
-																   const BBox	  &box,
-																   const Vec3f	  &bounds_min,
-																   const Vec3f	  &inv_cell_size,
-																   const Vec3f	  &cell_size,
-																   const Vec3i	  &resolution)
+		// Counting pass: an upper bound of what ForEachOverlappedCell<P, Mode> emits (exact unless kHybrid).
+		template <typename P, CellOverlapMode Mode>
+		HAPPYRAY_HD inline uint32_t CountOverlappedCells(const P	 &primitive,
+														 const BBox	 &box,
+														 const Vec3f &bounds_min,
+														 const Vec3f &inv_cell_size,
+														 const Vec3f &cell_size,
+														 const Vec3i &resolution)
 		{
-#if HAPPYRAY_FAST_CELL_COUNT
-			return CountCandidateCells(box, bounds_min, inv_cell_size, resolution);
-#else
-			return ForEachIntersectedCell(triangle,
-										  box,
-										  bounds_min,
-										  inv_cell_size,
-										  cell_size,
-										  resolution,
-										  [](const Vec3i &) {});
-#endif
+			if constexpr (Mode == CellOverlapMode::kExact)
+				return ForEachOverlappedCell<P, Mode>(primitive,
+													  box,
+													  bounds_min,
+													  inv_cell_size,
+													  cell_size,
+													  resolution,
+													  [](const Vec3i &) {});
+			else
+				return CountCandidateCells(box, bounds_min, inv_cell_size, resolution);
 		}
 
 		// Reciprocal of a ray direction component, +/-infinity for zero (HAGrid's
@@ -381,27 +392,17 @@ namespace happyray
 
 	} // namespace detail
 
-	// Closest-hit state carried through traversal: like happyray's `bestHit` and
-	// HAGrid's `Hit`, only the triangle id and its barycentrics are tracked while
-	// walking cells -- normals and materials are fetched once, by
-	// ResolveClosestHit, after traversal ends.
-	struct ClosestTriangleHit
-	{
-		uint32_t triangle = 0xffffffffu;
-		float	 t = 0.0f, u = 0.0f, v = 0.0f;
-	};
-
-	// Tests every triangle in the contiguous range [begin, end) of `triangle_indices`
-	// against `ray`, clipped to `*ray_t_max`, which shrinks (and `*hit` updates) on
-	// every closer hit. Returns true if any triangle in the range was hit. Shared
-	// by all three grids' closest-hit queries.
-	HAPPYRAY_HD inline bool IntersectTrianglesClosest(const SceneView	 &scene,
-													  const uint32_t	 *triangle_indices,
-													  uint32_t			  begin,
-													  uint32_t			  end,
-													  const Ray			 &ray,
-													  float				 *ray_t_max,
-													  ClosestTriangleHit *hit)
+	// Tests every primitive in the contiguous range [begin, end) of `prim_indices` against `ray`,
+	// clipped to `*ray_t_max`, which shrinks (and `*hit` updates) on every closer hit. Returns true if
+	// any primitive in the range was hit. Shared by all three grids' closest-hit queries.
+	template <typename P>
+	HAPPYRAY_HD inline bool IntersectPrimitivesClosest(const SceneView &scene,
+													   const uint32_t  *prim_indices,
+													   uint32_t			begin,
+													   uint32_t			end,
+													   const Ray	   &ray,
+													   float		   *ray_t_max,
+													   ClosestHit	   *hit)
 	{
 		bool hit_anything = false;
 		Ray	 probe		  = ray;
@@ -409,17 +410,16 @@ namespace happyray
 
 		for (uint32_t i = begin; i < end; ++i)
 		{
-			const uint32_t tri		= triangle_indices[i];
-			const Triangle triangle = FetchTriangle(scene, tri);
-			float		   t, u, v;
-			if (IntersectRayTriangle(probe, triangle.vtx[0], triangle.vtx[1], triangle.vtx[2], &t, &u, &v))
+			const uint32_t prim = prim_indices[i];
+			float		   t, u = 0.0f, v = 0.0f;
+			if (PrimitiveTraits<P>::Intersect(probe, PrimitiveTraits<P>::Fetch(scene, prim), &t, &u, &v))
 			{
-				probe.t_max	  = t;
-				hit->triangle = tri;
-				hit->t		  = t;
-				hit->u		  = u;
-				hit->v		  = v;
-				hit_anything  = true;
+				probe.t_max	 = t;
+				hit->prim	 = prim;
+				hit->t		 = t;
+				hit->u		 = u;
+				hit->v		 = v;
+				hit_anything = true;
 			}
 		}
 
@@ -428,41 +428,35 @@ namespace happyray
 		return hit_anything;
 	}
 
-	// Fills `out_hit` (position, barycentric-interpolated shading normal, material)
-	// from the closest hit found during traversal. Returns false if nothing was
-	// hit.
+	// Fills `out_hit` (position, shading normal, material) from the closest hit found during
+	// traversal. Returns false if nothing was hit.
+	template <typename P>
 	HAPPYRAY_HD inline bool
-	ResolveClosestHit(const SceneView &scene, const Ray &ray, const ClosestTriangleHit &hit, HitRecord *out_hit)
+	ResolveClosestHit(const SceneView &scene, const Ray &ray, const ClosestHit &hit, HitRecord *out_hit)
 	{
-		if (hit.triangle == 0xffffffffu)
+		if (hit.prim == 0xffffffffu)
 		{
 			return false;
 		}
-		const uint32_t i0	 = scene.indices[hit.triangle * 3 + 0];
-		const uint32_t i1	 = scene.indices[hit.triangle * 3 + 1];
-		const uint32_t i2	 = scene.indices[hit.triangle * 3 + 2];
 		out_hit->t			 = hit.t;
 		out_hit->position	 = ray.At(hit.t);
-		out_hit->normal		 = Normalize(scene.normals[i0] * (1.0f - hit.u - hit.v) + scene.normals[i1] * hit.u +
-									 scene.normals[i2] * hit.v);
-		out_hit->material_id = FetchMaterialId(scene, hit.triangle);
+		out_hit->normal		 = PrimitiveTraits<P>::Normal(scene, ray, hit);
+		out_hit->material_id = FetchMaterialId(scene, hit.prim);
 		return true;
 	}
 
-	// Returns true as soon as any triangle in the contiguous range [begin, end) occludes
-	// `ray`.
-	HAPPYRAY_HD inline bool TestTrianglesInRangeOccluded(const SceneView &scene,
-														 const uint32_t	 *triangle_indices,
-														 uint32_t		  begin,
-														 uint32_t		  end,
-														 const Ray		 &ray)
+	// Returns true as soon as any primitive in the contiguous range [begin, end) occludes `ray`.
+	template <typename P>
+	HAPPYRAY_HD inline bool TestPrimitivesInRangeOccluded(const SceneView &scene,
+														  const uint32_t  *prim_indices,
+														  uint32_t		   begin,
+														  uint32_t		   end,
+														  const Ray		  &ray)
 	{
 		for (uint32_t i = begin; i < end; ++i)
 		{
-			const uint32_t tri		= triangle_indices[i];
-			const Triangle triangle = FetchTriangle(scene, tri);
-			float		   t, u, v;
-			if (IntersectRayTriangle(ray, triangle.vtx[0], triangle.vtx[1], triangle.vtx[2], &t, &u, &v))
+			float t, u, v;
+			if (PrimitiveTraits<P>::Intersect(ray, PrimitiveTraits<P>::Fetch(scene, prim_indices[i]), &t, &u, &v))
 			{
 				return true;
 			}
@@ -472,49 +466,73 @@ namespace happyray
 
 	namespace detail
 	{
-		struct ClosestHitVisitor
+		template <typename P> struct ClosestHitVisitor
 		{
-			const SceneView	   &scene;
-			const uint32_t	   *triangle_indices;
-			const Ray		   &ray;
-			ClosestTriangleHit &hit;
+			const SceneView &scene;
+			const uint32_t	*prim_indices;
+			const Ray		&ray;
+			ClosestHit		&hit;
 
 			HAPPYRAY_HD bool operator()(CellRange range, float *t_max) const
 			{
-				IntersectTrianglesClosest(scene, triangle_indices, range.start, range.end, ray, t_max, &hit);
+				IntersectPrimitivesClosest<P>(scene, prim_indices, range.start, range.end, ray, t_max, &hit);
 				return false;
 			}
 		};
 
-		struct OcclusionVisitor
+		template <typename P> struct OcclusionVisitor
 		{
 			const SceneView &scene;
-			const uint32_t	*triangle_indices;
+			const uint32_t	*prim_indices;
 			const Ray		&ray;
 
 			HAPPYRAY_HD bool operator()(CellRange range, float *) const
 			{
-				return TestTrianglesInRangeOccluded(scene, triangle_indices, range.start, range.end, ray);
+				return TestPrimitivesInRangeOccluded<P>(scene, prim_indices, range.start, range.end, ray);
 			}
 		};
 	} // namespace detail
 
-	// Finds the closest hit across the triangles referenced by `grid`'s cells, in
-	// the same sense as IntersectSceneBruteForce. Returns false if the ray hits
-	// nothing.
+	// Finds the closest hit across the primitives referenced by `grid`'s cells, in the same sense as
+	// IntersectSceneBruteForce. Returns false if the ray hits nothing.
+	template <typename P = DynamicPrimitive>
 	HAPPYRAY_HD inline bool
 	IntersectSceneGrid(const SceneView &scene, const UniformGridView &grid, const Ray &ray, HitRecord *out_hit)
 	{
-		ClosestTriangleHit hit;
-		detail::TraverseGrid(grid, ray, detail::ClosestHitVisitor{scene, grid.triangle_indices, ray, hit});
-		return ResolveClosestHit(scene, ray, hit, out_hit);
+		if constexpr (std::is_same_v<P, DynamicPrimitive>)
+		{
+			return DispatchPrimitive(scene.primitive_type,
+									 [&](auto tag)
+									 {
+										 using Q = typename decltype(tag)::type;
+										 return IntersectSceneGrid<Q>(scene, grid, ray, out_hit);
+									 });
+		}
+		else
+		{
+			ClosestHit hit;
+			detail::TraverseGrid(grid, ray, detail::ClosestHitVisitor<P>{scene, grid.prim_indices, ray, hit});
+			return ResolveClosestHit<P>(scene, ray, hit, out_hit);
+		}
 	}
 
-	// Returns true as soon as any triangle referenced by `grid`'s cells occludes
-	// `ray`.
+	// Returns true as soon as any primitive referenced by `grid`'s cells occludes `ray`.
+	template <typename P = DynamicPrimitive>
 	HAPPYRAY_HD inline bool IsOccludedGrid(const SceneView &scene, const UniformGridView &grid, const Ray &ray)
 	{
-		return detail::TraverseGrid(grid, ray, detail::OcclusionVisitor{scene, grid.triangle_indices, ray});
+		if constexpr (std::is_same_v<P, DynamicPrimitive>)
+		{
+			return DispatchPrimitive(scene.primitive_type,
+									 [&](auto tag)
+									 {
+										 using Q = typename decltype(tag)::type;
+										 return IsOccludedGrid<Q>(scene, grid, ray);
+									 });
+		}
+		else
+		{
+			return detail::TraverseGrid(grid, ray, detail::OcclusionVisitor<P>{scene, grid.prim_indices, ray});
+		}
 	}
 
 	class UniformGrid
@@ -524,15 +542,17 @@ namespace happyray
 		// `scene` must point at memory reachable by whichever Thrust backend this
 		// binary was built with (device memory for the CUDA backend, ordinary host
 		// memory for the TBB backend).
-		explicit UniformGrid(const SceneView &scene, float target_triangles_per_cell = kDefaultDensity);
+		explicit UniformGrid(const SceneView &scene,
+							 float			  target_prims_per_cell = kDefaultDensity,
+							 CellOverlapMode  mode					= DefaultCellOverlapMode());
 		~UniformGrid();
 		UniformGrid(const UniformGrid &)			= delete;
 		UniformGrid &operator=(const UniformGrid &) = delete;
 
 		UniformGridView View() const;
 
-		// Total number of (cell, triangle) references stored by this grid.
-		uint32_t TriangleIndexCount() const;
+		// Total number of (cell, primitive) references stored by this grid.
+		uint32_t PrimIndexCount() const;
 
 		// Structural SAH cost estimate for this grid as currently built (see
 		// sah_cost.h), normalized by `scene_bounds`'s own half surface area -- not

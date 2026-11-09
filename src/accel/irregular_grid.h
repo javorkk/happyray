@@ -167,7 +167,7 @@ namespace happyray
 		// the file header comment above).
 		const uint32_t		*local_entries	  = nullptr;
 		const IrregularCell *local_cells	  = nullptr; // Combined across every top-level cell.
-		const uint32_t		*triangle_indices = nullptr; // Combined sorted leaf CSR payload.
+		const uint32_t		*prim_indices = nullptr; // Combined sorted leaf CSR payload.
 		// The grid-wide shared lattice every IrregularCell's bounds are expressed
 		// in (see the file header comment above): `global_cell_size` is one shared
 		// lattice step's world-space size, and `global_resolution` is how many
@@ -325,21 +325,47 @@ namespace happyray
 
 	// Finds the closest hit by walking the irregular grid's cells front to back (see
 	// detail::TraverseIrregularGrid above). Returns false if the ray hits nothing.
+	template <typename P = DynamicPrimitive>
 	HAPPYRAY_HD inline bool IntersectSceneIrregularGrid(const SceneView			&scene,
 														const IrregularGridView &grid,
 														const Ray				&ray,
 														HitRecord				*out_hit)
 	{
-		ClosestTriangleHit hit;
-		detail::TraverseIrregularGrid(grid, ray, detail::ClosestHitVisitor{scene, grid.triangle_indices, ray, hit});
-		return ResolveClosestHit(scene, ray, hit, out_hit);
+		if constexpr (std::is_same_v<P, DynamicPrimitive>)
+		{
+			return DispatchPrimitive(scene.primitive_type,
+									 [&](auto tag)
+									 {
+										 using Q = typename decltype(tag)::type;
+										 return IntersectSceneIrregularGrid<Q>(scene, grid, ray, out_hit);
+									 });
+		}
+		else
+		{
+			ClosestHit hit;
+			detail::TraverseIrregularGrid(grid, ray, detail::ClosestHitVisitor<P>{scene, grid.prim_indices, ray, hit});
+			return ResolveClosestHit<P>(scene, ray, hit, out_hit);
+		}
 	}
 
-	// Returns true as soon as any triangle in any irregular cell the ray visits occludes `ray`.
+	// Returns true as soon as any primitive in any irregular cell the ray visits occludes `ray`.
+	template <typename P = DynamicPrimitive>
 	HAPPYRAY_HD inline bool
 	IsOccludedIrregularGrid(const SceneView &scene, const IrregularGridView &grid, const Ray &ray)
 	{
-		return detail::TraverseIrregularGrid(grid, ray, detail::OcclusionVisitor{scene, grid.triangle_indices, ray});
+		if constexpr (std::is_same_v<P, DynamicPrimitive>)
+		{
+			return DispatchPrimitive(scene.primitive_type,
+									 [&](auto tag)
+									 {
+										 using Q = typename decltype(tag)::type;
+										 return IsOccludedIrregularGrid<Q>(scene, grid, ray);
+									 });
+		}
+		else
+		{
+			return detail::TraverseIrregularGrid(grid, ray, detail::OcclusionVisitor<P>{scene, grid.prim_indices, ray});
+		}
 	}
 
 	class IrregularGrid
@@ -365,7 +391,8 @@ namespace happyray
 							   float			second_level_density = kDefaultSecondLevelDensity,
 							   uint32_t			dense_cell_threshold = 16,
 							   float			merge_alpha			 = 0.7f,
-							   int				expand_iterations	 = 2);
+							   int				expand_iterations	 = 2,
+							   CellOverlapMode	mode				 = DefaultCellOverlapMode());
 		~IrregularGrid();
 		IrregularGrid(const IrregularGrid &)			= delete;
 		IrregularGrid &operator=(const IrregularGrid &) = delete;
@@ -376,16 +403,16 @@ namespace happyray
 		// element count -- not derivable from the view alone, since several finest-voxel
 		// `local_entries` slots can resolve to the same cell. Used by callers that need to enumerate
 		// every distinct cell exactly once (e.g. tests/accel_performance_tests.cpp's SAH cost
-		// computation), mirroring UniformGrid::TriangleIndexCount()'s existing precedent.
+		// computation), mirroring UniformGrid::PrimIndexCount()'s existing precedent.
 		uint32_t LocalCellCount() const;
 
 		// Remaining per-array element counts needed (alongside LocalCellCount() above and
 		// View().top_level's own resolution) to compute an analytic memory-footprint estimate
 		// (count * sizeof(element)) without any CUDA-specific allocation introspection -- see
 		// tests/accel_performance_tests.cpp.
-		uint32_t TopLevelTriangleIndexCount() const;
+		uint32_t TopLevelPrimIndexCount() const;
 		uint32_t LocalEntryCount() const;
-		uint32_t TriangleIndexCount() const;
+		uint32_t PrimIndexCount() const;
 
 		// Structural SAH cost estimate for this grid as currently built (see sah_cost.h), normalized
 		// by `scene_bounds`'s own half surface area -- not from casting rays, but the same

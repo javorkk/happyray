@@ -104,4 +104,17 @@ namespace happyray
 		return true;
 	}
 
+	HAPPYRAY_HD inline bool Overlaps(const BBox &a, const BBox &b)
+	{
+		return a.min_bound.x <= b.max_bound.x && a.max_bound.x >= b.min_bound.x && a.min_bound.y <= b.max_bound.y &&
+			   a.max_bound.y >= b.min_bound.y && a.min_bound.z <= b.max_bound.z && a.max_bound.z >= b.min_bound.z;
+	}
+
+	// Whether segment [a, b] intersects `box`.
+	HAPPYRAY_HD inline bool SegmentIntersectsBBox(const Vec3f &a, const Vec3f &b, const BBox &box)
+	{
+		float t_near, t_far;
+		return IntersectRayBBox(Ray(a, b - a, 0.0f, 1.0f), box, &t_near, &t_far);
+	}
+
 } // namespace happyray

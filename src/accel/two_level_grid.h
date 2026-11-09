@@ -33,7 +33,7 @@ namespace happyray
 	struct GridRangeView : GridBoundsView
 	{
 		const CellRange *cell_ranges	  = nullptr;
-		const uint32_t	*triangle_indices = nullptr;
+		const uint32_t	*prim_indices = nullptr;
 	};
 
 	// Per-top-level-cell second-level grid metadata. `cell_range_offset` locates
@@ -60,7 +60,7 @@ namespace happyray
 		GridBoundsView		top_level;
 		const TopLevelCell *top_level_cells				  = nullptr; // One entry per top-level cell.
 		const CellRange	   *second_level_cell_ranges	  = nullptr;
-		const uint32_t	   *second_level_triangle_indices = nullptr; // Sorted by second-level cell.
+		const uint32_t	   *second_level_prim_indices = nullptr; // Sorted by second-level cell.
 	};
 
 	// Builds the range view for top-level cell `cell_index`'s second-level grid.
@@ -85,7 +85,7 @@ namespace happyray
 		view.inv_cell_size	  = Vec3f(1.0f / cell_size.x, 1.0f / cell_size.y, 1.0f / cell_size.z);
 		view.resolution		  = Vec3i(resolution, resolution, resolution);
 		view.cell_ranges	  = grid.second_level_cell_ranges + info.cell_range_offset;
-		view.triangle_indices = grid.second_level_triangle_indices;
+		view.prim_indices = grid.second_level_prim_indices;
 		return view;
 	}
 
@@ -95,7 +95,7 @@ namespace happyray
 		// Two-level traversal, ported from happyray's TLGridTraverser: the outer DDA
 		// directly initializes an inner DDA for each non-empty top-level cell, with no
 		// recursive traversal calls or second-level box test. Top-level cells with no
-		// triangles are skipped using their resolution sign bit.
+		// primitives are skipped using their resolution sign bit.
 		// `visit_top(top_index)` is called for every top-level cell visited (a no-op
 		// for queries; the SAH calibration counts steps with it);
 		// `visit_leaf(range, &ray_t_max)` for every second-level cell.
@@ -259,27 +259,53 @@ namespace happyray
 	// Finds the closest hit by walking the top-level grid and, for every non-empty
 	// cell the ray passes through, its second-level grid (see
 	// detail::TraverseTwoLevelGrid above). Returns false if the ray hits nothing.
+	template <typename P = DynamicPrimitive>
 	HAPPYRAY_HD inline bool
 	IntersectSceneTwoLevelGrid(const SceneView &scene, const TwoLevelGridView &grid, const Ray &ray, HitRecord *out_hit)
 	{
-		ClosestTriangleHit hit;
-		detail::TraverseTwoLevelGrid(
-			grid,
-			ray,
-			[](uint32_t) {},
-			detail::ClosestHitVisitor{scene, grid.second_level_triangle_indices, ray, hit});
-		return ResolveClosestHit(scene, ray, hit, out_hit);
+		if constexpr (std::is_same_v<P, DynamicPrimitive>)
+		{
+			return DispatchPrimitive(scene.primitive_type,
+									 [&](auto tag)
+									 {
+										 using Q = typename decltype(tag)::type;
+										 return IntersectSceneTwoLevelGrid<Q>(scene, grid, ray, out_hit);
+									 });
+		}
+		else
+		{
+			ClosestHit hit;
+			detail::TraverseTwoLevelGrid(
+				grid,
+				ray,
+				[](uint32_t) {},
+				detail::ClosestHitVisitor<P>{scene, grid.second_level_prim_indices, ray, hit});
+			return ResolveClosestHit<P>(scene, ray, hit, out_hit);
+		}
 	}
 
-	// Returns true as soon as any triangle in any second-level cell the ray visits
+	// Returns true as soon as any primitive in any second-level cell the ray visits
 	// occludes `ray`.
+	template <typename P = DynamicPrimitive>
 	HAPPYRAY_HD inline bool IsOccludedTwoLevelGrid(const SceneView &scene, const TwoLevelGridView &grid, const Ray &ray)
 	{
-		return detail::TraverseTwoLevelGrid(
-			grid,
-			ray,
-			[](uint32_t) {},
-			detail::OcclusionVisitor{scene, grid.second_level_triangle_indices, ray});
+		if constexpr (std::is_same_v<P, DynamicPrimitive>)
+		{
+			return DispatchPrimitive(scene.primitive_type,
+									 [&](auto tag)
+									 {
+										 using Q = typename decltype(tag)::type;
+										 return IsOccludedTwoLevelGrid<Q>(scene, grid, ray);
+									 });
+		}
+		else
+		{
+			return detail::TraverseTwoLevelGrid(
+				grid,
+				ray,
+				[](uint32_t) {},
+				detail::OcclusionVisitor<P>{scene, grid.second_level_prim_indices, ray});
+		}
 	}
 
 	class TwoLevelGrid
@@ -292,7 +318,8 @@ namespace happyray
 		explicit TwoLevelGrid(const SceneView &scene,
 							  float			   top_level_density	= kDefaultTopLevelDensity,
 							  float			   second_level_density = kDefaultSecondLevelDensity,
-							  uint32_t		   dense_cell_threshold = 16);
+							  uint32_t		   dense_cell_threshold = 16,
+							  CellOverlapMode  mode					= DefaultCellOverlapMode());
 		~TwoLevelGrid();
 		TwoLevelGrid(const TwoLevelGrid &)			  = delete;
 		TwoLevelGrid &operator=(const TwoLevelGrid &) = delete;
@@ -307,7 +334,7 @@ namespace happyray
 		// `View().top_level.resolution`'s product, already public; these fill
 		// in the remaining counts that aren't otherwise derivable from the view.
 		uint32_t SecondLevelCellCount() const;
-		uint32_t SecondLevelTriangleIndexCount() const;
+		uint32_t SecondLevelPrimIndexCount() const;
 
 		// Structural SAH cost estimate for this grid as currently built (see
 		// sah_cost.h), normalized by `scene_bounds`'s own half surface area -- not

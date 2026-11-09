@@ -14,6 +14,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 
+#include "attractor_scene.h"
 #include "irregular_grid.h"
 #include "two_level_grid.h"
 #include "uniform_grid.h"
@@ -188,7 +189,7 @@ namespace
 
 		HAPPYRAY_HD void operator()(uint32_t i) const
 		{
-			results[i] = happyray::detail::TriangleCellIntersection(scene, i)(happyray::Vec3f(0, 0, 0),
+			results[i] = happyray::detail::CellIntersection<happyray::Triangle>(scene, i)(happyray::Vec3f(0, 0, 0),
 																			  happyray::Vec3f(2, 2, 2));
 		}
 	};
@@ -223,7 +224,7 @@ namespace
 		happyray::SceneView host_scene;
 		host_scene.positions	  = positions.data();
 		host_scene.indices		  = indices.data();
-		host_scene.triangle_count = static_cast<uint32_t>(cases.size());
+		host_scene.primitive_count = static_cast<uint32_t>(cases.size());
 		const thrust::device_vector<Vec3f>	  device_positions(positions.begin(), positions.end());
 		const thrust::device_vector<uint32_t> device_indices(indices.begin(), indices.end());
 		happyray::SceneView					  scene = host_scene;
@@ -231,12 +232,12 @@ namespace
 		scene.indices								= thrust::raw_pointer_cast(device_indices.data());
 		thrust::device_vector<uint32_t> results(cases.size());
 		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-						 thrust::counting_iterator<uint32_t>(scene.triangle_count),
+						 thrust::counting_iterator<uint32_t>(scene.primitive_count),
 						 CheckOverlapFunctor{scene, thrust::raw_pointer_cast(results.data())});
 		const thrust::host_vector<uint32_t> actual = results;
 		for (uint32_t i = 0; i < cases.size(); ++i)
 		{
-			Check(happyray::detail::TriangleCellIntersection(host_scene, i)(Vec3f(0, 0, 0), Vec3f(2, 2, 2)) ==
+			Check(happyray::detail::CellIntersection<happyray::Triangle>(host_scene, i)(Vec3f(0, 0, 0), Vec3f(2, 2, 2)) ==
 					  cases[i].expected,
 				  "host triangle/cell overlap");
 			Check(actual[i] == cases[i].expected, "backend triangle/cell overlap");
@@ -258,8 +259,8 @@ namespace
 		{
 			reference_count = std::max(reference_count, range.end);
 		}
-		const auto			 refs = Download(grid.triangle_indices, reference_count);
-		const happyray::BBox box  = happyray::ComputeTriangleBBox(scene, 0);
+		const auto			 refs = Download(grid.prim_indices, reference_count);
+		const happyray::BBox box  = happyray::ComputePrimitiveBBox<happyray::Triangle>(scene, 0);
 		happyray::Vec2i		 x_range, y_range, z_range;
 		happyray::ComputeCellRange(box,
 								   grid.bounds_min,
@@ -268,7 +269,7 @@ namespace
 								   &x_range,
 								   &y_range,
 								   &z_range);
-		const happyray::detail::TriangleCellIntersection intersects(scene, 0);
+		const happyray::detail::CellIntersection<happyray::Triangle> intersects(scene, 0);
 		uint32_t										 expected_refs = 0;
 		for (int z = 0; z < grid.resolution.z; ++z)
 		{
@@ -299,8 +300,8 @@ namespace
 	{
 		const uint32_t		 num_cells = grid.resolution.x * grid.resolution.y * grid.resolution.z;
 		const auto			 ranges	   = Download(grid.cell_ranges, num_cells);
-		const auto			 refs	   = Download(grid.triangle_indices, reference_count);
-		const happyray::BBox box	   = happyray::ComputeTriangleBBox(scene, 0);
+		const auto			 refs	   = Download(grid.prim_indices, reference_count);
+		const happyray::BBox box	   = happyray::ComputePrimitiveBBox<happyray::Triangle>(scene, 0);
 		happyray::Vec2i		 x_range, y_range, z_range;
 		happyray::ComputeCellRange(box,
 								   grid.bounds_min,
@@ -309,7 +310,7 @@ namespace
 								   &x_range,
 								   &y_range,
 								   &z_range);
-		const happyray::detail::TriangleCellIntersection intersects(scene, 0);
+		const happyray::detail::CellIntersection<happyray::Triangle> intersects(scene, 0);
 		uint32_t										 expected_refs	 = 0;
 		uint32_t										 aabb_candidates = 0;
 		for (int z = 0; z < grid.resolution.z; ++z)
@@ -346,7 +347,7 @@ namespace
 		happyray::SceneView			host_scene;
 		host_scene.positions	  = positions.data();
 		host_scene.indices		  = indices.data();
-		host_scene.triangle_count = 1;
+		host_scene.primitive_count = 1;
 		const thrust::device_vector<Vec3f>	  device_positions(positions.begin(), positions.end());
 		const thrust::device_vector<uint32_t> device_indices(indices.begin(), indices.end());
 		happyray::SceneView					  scene = host_scene;
@@ -363,7 +364,7 @@ namespace
 		{
 			uniform_reference_count = std::max(uniform_reference_count, range.end);
 		}
-		Check(uniform.TriangleIndexCount() >= uniform_reference_count,
+		Check(uniform.PrimIndexCount() >= uniform_reference_count,
 			  "uniform ranges fit in pair storage including padding");
 
 		const happyray::TwoLevelGrid two_level(scene, 128, 128, 0);
@@ -431,11 +432,11 @@ namespace
 		finest.inv_cell_size	= info.inv_cell_size;
 		finest.resolution		= info.resolution;
 		finest.cell_ranges		= thrust::raw_pointer_cast(device_ranges.data());
-		finest.triangle_indices = irregular_view.triangle_indices;
+		finest.prim_indices = irregular_view.prim_indices;
 		CheckFilteredFragments(host_scene, finest);
 
 		const happyray::UniformGrid single_cell(scene, 1);
-		Check(single_cell.TriangleIndexCount() == 1, "no rejected sentinel required for final cell");
+		Check(single_cell.PrimIndexCount() == 1, "no rejected sentinel required for final cell");
 		const auto single_ranges = Download(single_cell.View().cell_ranges, 1);
 		Check(single_ranges[0].start == 0 && single_ranges[0].end == 1, "single occupied-cell range endpoints");
 	}
@@ -474,10 +475,70 @@ namespace
 		}
 	}
 
+	struct DeviceFlatScene
+	{
+		thrust::device_vector<happyray::Vec3f>		 positions;
+		thrust::device_vector<uint32_t>				 indices, material_ids;
+		thrust::device_vector<happyray::Point>		 points;
+		thrust::device_vector<happyray::Sphere>		 spheres;
+		thrust::device_vector<happyray::BezierCurve> curves;
+		happyray::SceneView							 view;
+
+		explicit DeviceFlatScene(const happyray::FlatScene &scene)
+			: positions(scene.positions.begin(), scene.positions.end()),
+			  indices(scene.indices.begin(), scene.indices.end()),
+			  material_ids(scene.material_ids.begin(), scene.material_ids.end()),
+			  points(scene.points.begin(), scene.points.end()), spheres(scene.spheres.begin(), scene.spheres.end()),
+			  curves(scene.curves.begin(), scene.curves.end()), view(scene.View())
+		{
+			view.positions	  = thrust::raw_pointer_cast(positions.data());
+			view.indices	  = thrust::raw_pointer_cast(indices.data());
+			view.material_ids = thrust::raw_pointer_cast(material_ids.data());
+			view.normals	  = nullptr;
+			view.object_ids	  = nullptr;
+			view.material_diffuse_colors = nullptr;
+			view.points		  = thrust::raw_pointer_cast(points.data());
+			view.spheres	  = thrust::raw_pointer_cast(spheres.data());
+			view.curves		  = thrust::raw_pointer_cast(curves.data());
+		}
+	};
+
+	// Exact and hybrid cell assignment store identical references; AABB stores a superset.
+	void CheckOverlapModeReferenceCounts()
+	{
+		using happyray::CellOverlapMode;
+		const happyray::PrimitiveType types[] = {happyray::PrimitiveType::kPoint,
+												 happyray::PrimitiveType::kSphere,
+												 happyray::PrimitiveType::kBezierCurve};
+		for (happyray::PrimitiveType type : types)
+		{
+			const DeviceFlatScene  scene(happyray::FlattenScene(happyray::MakeAttractorScene(type, 2000)));
+			const CellOverlapMode modes[] = {CellOverlapMode::kAabb, CellOverlapMode::kExact, CellOverlapMode::kHybrid};
+			uint32_t			  counts[3][3];
+			for (int m = 0; m < 3; ++m)
+			{
+				counts[m][0] = happyray::UniformGrid(scene.view, 3.0f, modes[m]).PrimIndexCount();
+				counts[m][1] =
+					happyray::TwoLevelGrid(scene.view, 0.12f, 1.2f, 16, modes[m]).SecondLevelPrimIndexCount();
+				counts[m][2] =
+					happyray::IrregularGrid(scene.view, 0.12f, 2.4f, 16, 0.7f, 2, modes[m]).PrimIndexCount();
+			}
+			for (int grid = 0; grid < 3; ++grid)
+			{
+				Check(counts[1][grid] == counts[2][grid], "exact and hybrid store identical reference counts");
+				Check(counts[0][grid] >= counts[1][grid], "AABB references cover exact references");
+				Check(counts[1][grid] >= 2000, "every primitive is referenced");
+			}
+			if (type == happyray::PrimitiveType::kBezierCurve)
+				Check(counts[0][0] > counts[1][0], "exact curve assignment rejects AABB-only cells");
+		}
+	}
+
 } // namespace
 
 int main()
 {
+	CheckOverlapModeReferenceCounts();
 	CheckTraversalBoundaries();
 	CheckTriangleCellIntersection();
 	CheckFragmentWriters();

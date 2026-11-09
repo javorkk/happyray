@@ -20,24 +20,29 @@
 namespace happyray
 {
 
-	// Per-triangle collision id meaning "this triangle does not collide with any other object".
+	// Per-primitive collision id meaning "this primitive does not collide with any other object".
 	constexpr uint32_t kNoCollision = 0xffffffffu;
 
-	// Non-owning triangle-soup view over either host or device memory.
+	// Non-owning view over either host or device memory. Holds one primitive type: an indexed
+	// triangle soup, or one of the point/sphere/curve arrays.
 	struct SceneView
 	{
 		const Vec3f	   *positions	 = nullptr;
 		const Vec3f	   *normals		 = nullptr;
 		const uint32_t *indices		 = nullptr; // 3 per triangle, indexing positions/normals.
-		const uint32_t *material_ids = nullptr; // 1 per triangle.
+		const uint32_t *material_ids = nullptr; // 1 per primitive.
 		// FlattenScene supplies a default-white entry for scenes with no materials.
 		const Vec3f	   *material_diffuse_colors = nullptr;
-		uint32_t		triangle_count			= 0;
-		const uint32_t *object_ids				= nullptr; // 1 per triangle; may be null.
-		// 1 per triangle (the smallest id of another object it intersects, or kNoCollision); may be
-		// null. Colliding triangles are shaded with `collided_material_id` instead of their own.
-		const uint32_t *collision_ids		 = nullptr;
-		uint32_t		collided_material_id = 0;
+		uint32_t		primitive_count			= 0;
+		const uint32_t *object_ids				= nullptr; // 1 per primitive; may be null.
+		// 1 per primitive (the smallest id of another object it intersects, or kNoCollision); may be
+		// null. Colliding primitives are shaded with `collided_material_id` instead of their own.
+		const uint32_t	  *collision_ids		= nullptr;
+		uint32_t		   collided_material_id = 0;
+		PrimitiveType	   primitive_type		= PrimitiveType::kTriangle;
+		const Point		  *points				= nullptr;
+		const Sphere	  *spheres				= nullptr;
+		const BezierCurve *curves				= nullptr;
 	};
 
 	HAPPYRAY_HD inline Triangle FetchTriangle(const SceneView &scene, uint32_t tri)
@@ -49,27 +54,46 @@ namespace happyray
 		return t;
 	}
 
-	// The material a hit on `tri` is shaded with: swapped for the collided material if collision
-	// detection found the triangle intersecting another object.
-	HAPPYRAY_HD inline uint32_t FetchMaterialId(const SceneView &scene, uint32_t tri)
+	// The material a hit on `prim` is shaded with: swapped for the collided material if collision
+	// detection found the primitive intersecting another object.
+	HAPPYRAY_HD inline uint32_t FetchMaterialId(const SceneView &scene, uint32_t prim)
 	{
-		if (scene.collision_ids && scene.collision_ids[tri] != kNoCollision)
+		if (scene.collision_ids && scene.collision_ids[prim] != kNoCollision)
 		{
 			return scene.collided_material_id;
 		}
-		return scene.material_ids[tri];
+		return scene.material_ids[prim];
 	}
 
 	// Host-owned geometry shared by CPU rendering and GPU upload.
 	struct FlatScene
 	{
+		PrimitiveType		  primitive_type = PrimitiveType::kTriangle;
 		std::vector<Vec3f>	  positions;
 		std::vector<Vec3f>	  normals;
 		std::vector<uint32_t> indices;
-		std::vector<uint32_t> material_ids;
-		std::vector<Vec3f>	  material_diffuse_colors;
-		// 1 per triangle, unique across meshes; empty means a single object.
+		std::vector<Point>	  points;
+		std::vector<Sphere>	  spheres;
+		std::vector<BezierCurve> curves;
+		std::vector<uint32_t>	 material_ids; // 1 per primitive.
+		std::vector<Vec3f>		 material_diffuse_colors;
+		// 1 per primitive, unique across meshes; empty means a single object.
 		std::vector<uint32_t> object_ids;
+
+		uint32_t PrimitiveCount() const
+		{
+			switch (primitive_type)
+			{
+			case PrimitiveType::kPoint:
+				return static_cast<uint32_t>(points.size());
+			case PrimitiveType::kSphere:
+				return static_cast<uint32_t>(spheres.size());
+			case PrimitiveType::kBezierCurve:
+				return static_cast<uint32_t>(curves.size());
+			default:
+				return static_cast<uint32_t>(indices.size() / 3);
+			}
+		}
 
 		SceneView View() const
 		{
@@ -80,16 +104,33 @@ namespace happyray
 			view.material_ids			 = material_ids.data();
 			view.material_diffuse_colors = material_diffuse_colors.data();
 			view.object_ids				 = object_ids.empty() ? nullptr : object_ids.data();
-			view.triangle_count			 = static_cast<uint32_t>(indices.size() / 3);
+			view.primitive_count		 = PrimitiveCount();
+			view.primitive_type			 = primitive_type;
+			view.points					 = points.data();
+			view.spheres				 = spheres.data();
+			view.curves					 = curves.data();
 			return view;
 		}
 	};
 
 	// Concatenates meshes, offsetting indices by the running vertex count and object ids by the
-	// running object count (a mesh without object ids counts as one object).
+	// running object count (a mesh without object ids counts as one object). Non-triangle
+	// primitives form a single object.
 	inline FlatScene FlattenScene(const Scene &scene)
 	{
 		FlatScene flat;
+		flat.primitive_type = scene.Type();
+		if (flat.primitive_type != PrimitiveType::kTriangle)
+		{
+			if (!scene.meshes.empty() || (!scene.points.empty()) + (!scene.spheres.empty()) + (!scene.curves.empty()) > 1)
+				throw std::invalid_argument("Scenes must hold a single primitive type");
+			flat.points		  = scene.points;
+			flat.spheres	  = scene.spheres;
+			flat.curves		  = scene.curves;
+			flat.material_ids = scene.primitive_material_ids;
+			flat.material_ids.resize(flat.PrimitiveCount(), 0u);
+			flat.object_ids.assign(flat.PrimitiveCount(), 0u);
+		}
 		uint32_t  vertex_offset = 0;
 		uint32_t  object_offset = 0;
 		for (const Mesh &mesh : scene.meshes)

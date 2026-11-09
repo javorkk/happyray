@@ -21,6 +21,7 @@
 #include <thread>
 #include <vector>
 
+#include "attractor_scene.h"
 #include "camera.h"
 #include "grid_density_search.h"
 #include "obj_loader.h"
@@ -100,14 +101,16 @@ namespace
 	}
 
 	// Renders `num_frames` accumulated AO samples via `renderer` and checks the result agrees closely
-	// with `reference` (the brute-force host loop above).
+	// with `reference` (the brute-force host loop above), except for up to `max_outlier_fraction` of
+	// the pixels.
 	template <typename Integrator>
 	void CompareRendererToReference(const char						   *label,
 									happyray::Renderer				   *renderer,
 									const happyray::Camera			   &camera,
 									const Integrator				   &integrator,
 									int									num_frames,
-									const std::vector<happyray::Vec3f> &reference)
+									const std::vector<happyray::Vec3f> &reference,
+									float								max_outlier_fraction = 0.0f)
 	{
 		renderer->ResetAccumulation();
 		for (int frame = 0; frame < num_frames; ++frame)
@@ -120,12 +123,14 @@ namespace
 
 		float		 max_abs_diff = 0.0f;
 		double		 sum_abs_diff = 0.0;
+		size_t		 outliers	  = 0;
 		const size_t pixel_count  = reference.size();
 		for (size_t i = 0; i < pixel_count; ++i)
 		{
 			const happyray::Vec3f diff = reference[i] - resolved[i];
 			const float max_channel	   = std::fmax(std::fabs(diff.x), std::fmax(std::fabs(diff.y), std::fabs(diff.z)));
 			max_abs_diff			   = std::fmax(max_channel, max_abs_diff);
+			outliers += max_channel >= 0.05f;
 			sum_abs_diff += (std::fabs(diff.x) + std::fabs(diff.y) + std::fabs(diff.z)) / 3;
 		}
 		const float mean_abs_diff = static_cast<float>(sum_abs_diff / pixel_count);
@@ -140,7 +145,7 @@ namespace
 		// Both traces draw identical Halton samples against identical geometry, so they should agree
 		// almost exactly; allow a small tolerance for host/device transcendental function rounding
 		// differences (CUDA backend) or summation-order differences (TBB backend).
-		HAPPYRAY_CHECK(max_abs_diff < 0.05f);
+		HAPPYRAY_CHECK(outliers <= static_cast<size_t>(max_outlier_fraction * pixel_count));
 		HAPPYRAY_CHECK(mean_abs_diff < 0.01f);
 	}
 
@@ -429,8 +434,51 @@ namespace
 		}
 	}
 
-	// Every grid's leaf-cell collision detection must match an all-pairs host oracle, and colliding
-	// triangles must render with the red collided material.
+	// All-pairs host oracle: per primitive, the smallest other object id `collide(a, b)` reports.
+	template <typename CollideFn>
+	std::vector<uint32_t> CollisionOracle(const happyray::FlatScene &scene, CollideFn &&collide)
+	{
+		using namespace happyray;
+		const SceneView		  view = scene.View();
+		std::vector<uint32_t> expected(view.primitive_count, kNoCollision);
+		for (uint32_t a = 0; a < view.primitive_count; ++a)
+		{
+			for (uint32_t b = a + 1; b < view.primitive_count; ++b)
+			{
+				const uint32_t object_a = scene.object_ids[a], object_b = scene.object_ids[b];
+				if (object_a != object_b && collide(FetchTriangle(view, a), FetchTriangle(view, b)))
+				{
+					expected[a] = std::min(expected[a], object_b);
+					expected[b] = std::min(expected[b], object_a);
+				}
+			}
+		}
+		return expected;
+	}
+
+	uint32_t CountCollisions(const std::vector<uint32_t> &ids)
+	{
+		return static_cast<uint32_t>(std::count_if(ids.begin(), ids.end(), [](uint32_t id) { return id != happyray::kNoCollision; }));
+	}
+
+	// Primitives sharing a leaf cell collide when their boxes overlap: every truly intersecting pair
+	// is found, and only bbox-overlapping pairs are (all of them with AABB cell assignment).
+	bool CollisionsWithinBounds(const std::vector<uint32_t> &ids,
+								const std::vector<uint32_t> &bbox_expected,
+								const std::vector<uint32_t> &exact_expected)
+	{
+		if (ids.size() != bbox_expected.size())
+			return false;
+		for (size_t i = 0; i < ids.size(); ++i)
+		{
+			if (ids[i] < bbox_expected[i] || ids[i] > exact_expected[i])
+				return false;
+		}
+		return true;
+	}
+
+	// Every grid's leaf-cell collision detection must agree with all-pairs host oracles, and
+	// colliding primitives must render with the red collided material.
 	void TestCollisionDetection()
 	{
 		using namespace happyray;
@@ -443,48 +491,51 @@ namespace
 		AddTessellatedQuad(&scene, Vec3f(-0.5f, -0.5f, 0.03f), Vec3f(1, 0, 0), Vec3f(0, 1, 0), 16, 1);
 		AddTessellatedQuad(&scene, Vec3f(-1, 0.8f, -1), Vec3f(0, 0, 2), Vec3f(2, 0, 0), 8, 2);
 
-		const SceneView		  view = scene.View();
-		std::vector<uint32_t> expected(view.triangle_count, kNoCollision);
-		for (uint32_t a = 0; a < view.triangle_count; ++a)
+		const SceneView				view = scene.View();
+		const std::vector<uint32_t> bbox_expected =
+			CollisionOracle(scene,
+							[](const Triangle &a, const Triangle &b)
+							{ return Overlaps(BBoxExtractor<Triangle>::Get(a), BBoxExtractor<Triangle>::Get(b)); });
+		const std::vector<uint32_t> exact_expected =
+			CollisionOracle(scene, [](const Triangle &a, const Triangle &b) { return IntersectTriangles(a, b); });
+		bool						ceiling_untouched = true;
+		for (uint32_t prim = 0; prim < view.primitive_count; ++prim)
 		{
-			for (uint32_t b = a + 1; b < view.triangle_count; ++b)
-			{
-				const uint32_t object_a = scene.object_ids[a], object_b = scene.object_ids[b];
-				if (object_a != object_b && IntersectTriangles(FetchTriangle(view, a), FetchTriangle(view, b)))
-				{
-					expected[a] = std::min(expected[a], object_b);
-					expected[b] = std::min(expected[b], object_a);
-				}
-			}
-		}
-		uint32_t expected_count	   = 0;
-		bool	 ceiling_untouched = true;
-		for (uint32_t tri = 0; tri < view.triangle_count; ++tri)
-		{
-			if (expected[tri] != kNoCollision)
-				++expected_count;
-			if (scene.object_ids[tri] == 2 && expected[tri] != kNoCollision)
+			if (scene.object_ids[prim] == 2 && bbox_expected[prim] != kNoCollision)
 				ceiling_untouched = false;
 		}
-		HAPPYRAY_CHECK(expected_count > 0);
+		HAPPYRAY_CHECK(CountCollisions(exact_expected) > 0);
+		HAPPYRAY_CHECK(CountCollisions(bbox_expected) >= CountCollisions(exact_expected));
 		HAPPYRAY_CHECK(ceiling_untouched);
 
 		Renderer renderer(scene);
-		HAPPYRAY_CHECK(renderer.CollisionIds() == std::vector<uint32_t>(view.triangle_count, kNoCollision));
+		HAPPYRAY_CHECK(renderer.CollisionIds() == std::vector<uint32_t>(view.primitive_count, kNoCollision));
 		const AccelType grids[] = {AccelType::kUniformGrid, AccelType::kTwoLevelGrid, AccelType::kIrregularGrid};
-		for (AccelType type : grids)
+		const CellOverlapMode modes[] = {CellOverlapMode::kAabb, CellOverlapMode::kExact, CellOverlapMode::kHybrid};
+		for (CellOverlapMode mode : modes)
 		{
-			renderer.SetAccelType(type);
-			HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
-			HAPPYRAY_CHECK(renderer.LastCollisionStats().object_count == 3);
-			HAPPYRAY_CHECK(renderer.LastCollisionStats().candidate_cell_count > 0);
-			HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_triangle_count == expected_count);
+			renderer.SetCellOverlapMode(mode);
+			for (AccelType type : grids)
+			{
+				renderer.SetAccelType(type);
+				renderer.DetectCollisions();
+				const std::vector<uint32_t> ids = renderer.CollisionIds();
+				HAPPYRAY_CHECK(CollisionsWithinBounds(ids, bbox_expected, exact_expected));
+				if (mode == CellOverlapMode::kAabb)
+					HAPPYRAY_CHECK(ids == bbox_expected);
+				HAPPYRAY_CHECK(renderer.LastCollisionStats().object_count == 3);
+				HAPPYRAY_CHECK(renderer.LastCollisionStats().candidate_cell_count > 0);
+				HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_primitive_count == CountCollisions(ids));
+			}
 		}
+		renderer.SetCellOverlapMode(DefaultCellOverlapMode());
 		// Refined second levels and small irregular cells exercise more leaves than the defaults.
 		renderer.BuildTwoLevelGrid(0.5f, 8.0f, 2);
-		HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
+		HAPPYRAY_CHECK(CollisionsWithinBounds(renderer.CollisionIds(), bbox_expected, exact_expected));
 		renderer.BuildIrregularGrid(0.5f, 8.0f, 2);
-		HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
+		const std::vector<uint32_t> expected	   = renderer.CollisionIds();
+		const uint32_t				expected_count = CountCollisions(expected);
+		HAPPYRAY_CHECK(CollisionsWithinBounds(expected, bbox_expected, exact_expected));
 
 		// Disabled detection (a paused animation) keeps the last results through rebuilds.
 		renderer.SetCollisionDetectionEnabled(false);
@@ -494,19 +545,19 @@ namespace
 		renderer.SetAccelType(AccelType::kTwoLevelGrid);
 		HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
 		HAPPYRAY_CHECK(renderer.LastCollisionStats().total_ms == last_collision_ms);
-		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_triangle_count == expected_count);
+		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_primitive_count == expected_count);
 		renderer.SetCollisionDetectionEnabled(true);
 		renderer.SetAccelType(AccelType::kIrregularGrid);
-		HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
+		HAPPYRAY_CHECK(CollisionsWithinBounds(renderer.CollisionIds(), bbox_expected, exact_expected));
 
 		// Toggling off clears the results; an explicit detection runs even while disabled.
 		renderer.SetCollisionDetectionEnabled(false);
 		renderer.ClearCollisions();
-		HAPPYRAY_CHECK(renderer.CollisionIds() == std::vector<uint32_t>(view.triangle_count, kNoCollision));
-		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_triangle_count == 0);
+		HAPPYRAY_CHECK(renderer.CollisionIds() == std::vector<uint32_t>(view.primitive_count, kNoCollision));
+		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_primitive_count == 0);
 		renderer.DetectCollisions();
-		HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
-		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_triangle_count == expected_count);
+		HAPPYRAY_CHECK(CollisionsWithinBounds(renderer.CollisionIds(), bbox_expected, exact_expected));
+		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_primitive_count == CountCollisions(renderer.CollisionIds()));
 		renderer.SetCollisionDetectionEnabled(true);
 
 		Camera camera;
@@ -528,8 +579,111 @@ namespace
 		single_object.object_ids.clear();
 		renderer.UpdateScene(single_object);
 		HAPPYRAY_CHECK(renderer.LastCollisionStats().object_count == 1);
-		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_triangle_count == 0);
-		HAPPYRAY_CHECK(renderer.CollisionIds() == std::vector<uint32_t>(view.triangle_count, kNoCollision));
+		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_primitive_count == 0);
+		HAPPYRAY_CHECK(renderer.CollisionIds() == std::vector<uint32_t>(view.primitive_count, kNoCollision));
+	}
+
+	// Host copy of `scene` with Renderer's screen-space point/curve radii for `camera`.
+	happyray::FlatScene WithScreenSpaceRadii(happyray::FlatScene scene, const happyray::Camera &camera, int height, float pixels)
+	{
+		using namespace happyray;
+		const float world_per_pixel =
+			pixels * 2.0f * std::tan(0.5f * camera.vertical_fov_deg * (3.14159265358979323846f / 180.0f)) / height;
+		auto radius = [&](const Vec3f &a, const Vec3f &b)
+		{ return world_per_pixel * std::fmin(Length(a - camera.position), Length(b - camera.position)); };
+		for (Point &point : scene.points)
+			point.radius = radius(point.vtx[0], point.vtx[0]);
+		for (BezierCurve &curve : scene.curves)
+			curve.radius = radius(curve.vtx[0], curve.vtx[3]);
+		return scene;
+	}
+
+	// Every grid in every cell-overlap mode must match the host brute-force reference.
+	void TestSceneAcrossOverlapModes(const char					*label,
+									 const happyray::FlatScene	&flat_scene,
+									 const happyray::Camera		&camera,
+									 const happyray::AOIntegrator &integrator)
+	{
+		using namespace happyray;
+		constexpr int kWidth = 48, kHeight = 27, kFrames = 2;
+		const bool	  view_dependent = flat_scene.primitive_type == PrimitiveType::kPoint ||
+								   flat_scene.primitive_type == PrimitiveType::kBezierCurve;
+		const FlatScene reference_scene =
+			view_dependent ? WithScreenSpaceRadii(flat_scene, camera, kHeight, 2.0f) : flat_scene;
+		const std::vector<Vec2f> jitter	   = MakePixelJitter(kWidth, kHeight);
+		const std::vector<Vec3f> reference = RenderBruteForceReference(reference_scene.View(),
+																	   camera,
+																	   integrator,
+																	   kWidth,
+																	   kHeight,
+																	   jitter,
+																	   kFrames,
+																	   integrator.samples_per_pixel_per_frame);
+		int covered = 0;
+		for (const Vec3f &pixel : reference)
+			covered += Length(pixel - integrator.background_color) > 1e-3f;
+		HAPPYRAY_CHECK(covered > kWidth * kHeight / 20);
+
+		Renderer renderer(flat_scene);
+		renderer.ResizeFramebuffer(kWidth, kHeight);
+		HAPPYRAY_CHECK(renderer.UpdateViewDependentGeometry(camera) == view_dependent);
+		const CellOverlapMode modes[] = {CellOverlapMode::kAabb, CellOverlapMode::kExact, CellOverlapMode::kHybrid};
+		const AccelType		  types[] = {AccelType::kUniformGrid, AccelType::kTwoLevelGrid, AccelType::kIrregularGrid};
+		// Grazing silhouette hits may flip between host and device rounding.
+		renderer.SetAccelType(AccelType::kBruteForce);
+		const std::string brute_label = std::string(label) + " brute force";
+		CompareRendererToReference(brute_label.c_str(), &renderer, camera, integrator, kFrames, reference, 0.005f);
+		const std::vector<Vec3f> device_reference = renderer.ResolvedPixels();
+		for (CellOverlapMode mode : modes)
+		{
+			renderer.SetCellOverlapMode(mode);
+			for (AccelType type : types)
+			{
+				renderer.SetAccelType(type);
+				const std::string case_label = std::string(label) + " " + CellOverlapModeName(mode) + " " +
+											   (type == AccelType::kUniformGrid	   ? "uniform"
+												: type == AccelType::kTwoLevelGrid ? "two-level"
+																				   : "irregular");
+				CompareRendererToReference(case_label.c_str(), &renderer, camera, integrator, kFrames, device_reference);
+			}
+		}
+	}
+
+	void TestPrimitiveScenes(const happyray::FlatScene &triangle_scene, const happyray::Camera &triangle_camera)
+	{
+		using namespace happyray;
+		AOIntegrator integrator;
+		integrator.samples_per_pixel_per_frame = 2;
+		integrator.max_distance				   = 1.5f;
+		TestSceneAcrossOverlapModes("triangles", triangle_scene, triangle_camera, integrator);
+
+		const PrimitiveType types[] = {PrimitiveType::kPoint, PrimitiveType::kSphere, PrimitiveType::kBezierCurve};
+		for (PrimitiveType type : types)
+		{
+			const Scene scene		 = MakeAttractorScene(type, 1500);
+			Camera		camera		 = MakeDefaultCamera(scene);
+			camera.vertical_fov_deg	 = 30.0f;
+			integrator.max_distance = DefaultMaxDistance(scene);
+			TestSceneAcrossOverlapModes(PrimitiveTypeName(type), FlattenScene(scene), camera, integrator);
+		}
+
+		// Larger screen-space radii cover more pixels.
+		const Scene scene  = MakeAttractorScene(PrimitiveType::kBezierCurve, 1500);
+		const Camera camera = MakeDefaultCamera(scene);
+		Renderer	 renderer(FlattenScene(scene));
+		renderer.ResizeFramebuffer(48, 27);
+		renderer.SetAccelType(AccelType::kTwoLevelGrid);
+		int coverage[2] = {0, 0};
+		for (int i = 0; i < 2; ++i)
+		{
+			renderer.SetScreenSpaceRadius(i == 0 ? 1.0f : 4.0f);
+			HAPPYRAY_CHECK(renderer.UpdateViewDependentGeometry(camera));
+			renderer.ResetAccumulation();
+			renderer.RenderFrame(camera, SimpleIntegrator());
+			for (const Vec3f &pixel : renderer.ResolvedPixels())
+				coverage[i] += Length(pixel - SimpleIntegrator().background_color) > 1e-3f;
+		}
+		HAPPYRAY_CHECK(coverage[1] > coverage[0]);
 	}
 
 } // namespace
@@ -558,6 +712,7 @@ int main(int argc, char **argv)
 	TestProgressiveBlend(flat_scene, camera);
 	TestDensityGridRebuilds(flat_scene, camera);
 	TestAnimatedSceneUpdate(flat_scene, camera);
+	TestPrimitiveScenes(flat_scene, camera);
 
 	happyray::AOIntegrator integrator;
 	integrator.samples_per_pixel_per_frame = 4;

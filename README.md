@@ -1,7 +1,8 @@
 # HappyRay v2.0
 
 A small ray tracer implemented in [Thrust](https://developer.nvidia.com/thrust).
-Currently supports fly-throughs in static or animated .obj scenes in an interactive SDL2 window, and collision detection. 
+Currently supports fly-throughs in static or animated .obj scenes and procedural point, sphere, and
+Bezier curve scenes in an interactive SDL2 window, and collision detection. 
 Implements:
 
   * [A Parallel Algorithm for Construction of Uniform Grids](https://javor.me/data/gpu_grid_construction.pdf)
@@ -44,7 +45,13 @@ xauth add ${DISPLAY} MIT-MAGIC-COOKIE-1  9e6238034158c72ba4b08487c0ff0cd0
 
 ```sh
 ./build/happyray assets/box_on_floor.obj [width] [height]
+./build/happyray attractor:<points|spheres|curves>[:count] [width] [height]
 ```
+
+`attractor:...` generates a Lorenz attractor trajectory (default 20,000 samples) as points,
+spheres, or Catmull-Rom cubic Bezier curves. Point and curve radii are 2 pixels wide at each
+primitive's distance from the camera (`Renderer::SetScreenSpaceRadius`); they are recomputed and
+the grid rebuilt only once the camera stops moving.
 
 The window starts at an explicit `[width] [height]` if given; otherwise at the scene's sibling
 `<name>.camera.cfg`'s `resX`/`resY` if it has one (see below); otherwise at a 512x512 default.
@@ -89,7 +96,8 @@ directly loads it as a static scene. `HAPPYRAY_SCREENSHOT_PATH=/path/to/out.ppm`
 still scene, or `<n>` rendered frames during animation (use a `.png` path to save PNG), and
 `HAPPYRAY_ACCEL_TYPE=uniform_grid`, `HAPPYRAY_ACCEL_TYPE=two_level_grid`, or
 `HAPPYRAY_ACCEL_TYPE=irregular_grid` selects that structure from startup instead of the default, for
-headless verification. A scene can also have a sibling `<name>.camera.cfg` giving it a fixed
+headless verification. `HAPPYRAY_CELL_OVERLAP=aabb|exact|hybrid` overrides how grids assign
+primitives to cells (see Architecture). A scene can also have a sibling `<name>.camera.cfg` giving it a fixed
 starting viewpoint (and, via `resX`/`resY`, starting resolution) instead of the generic
 bounding-box-framed default camera at the 512x512 default resolution -- see
 the bundled scene camera configuration files.
@@ -115,12 +123,12 @@ keep the grid's default densities.
 
 Every OBJ `o`/`g` statement starts an object: each distinct (`o` name, `g` name) pair with faces
 gets its own id (a new `o` resets the group; repeating a name continues the earlier object). For
-scenes with at least two objects, the renderer runs exact collision detection whenever it builds
+scenes with at least two objects, the renderer runs collision detection whenever it builds
 an acceleration structure (or switches to an already-built one), including on every animation
-frame. This follows string2shape's `CollisionDetector`. Leaf cells that hold triangles from only
-one object are dropped. In each remaining cell, every pair of triangles from different objects is
-tested with the triangle/triangle intersection test. Each triangle records the smallest id of
-another object it intersects. Triangles that touch or intersect another object are drawn with a
+frame. This follows string2shape's `CollisionDetector`. Leaf cells that hold primitives from only
+one object are dropped. In each remaining cell, every pair of primitives from different objects
+collides if their bounding boxes overlap, which works for every primitive type. Each primitive
+records the smallest id of another object it collides with. Colliding primitives are drawn with a
 red "collided" material. For such scenes the window title shows the latest detection time as
 `coll: <ms>`; the `build: <ms>` figure excludes it. While an animation is paused (`P`), its
 geometry doesn't change, so detection is skipped (density-search rebuilds and grid switches
@@ -130,15 +138,17 @@ red highlighting) and back on (detecting immediately on the active grid, even wh
 ## Running the benchmark
 
 ```sh
-./build/src/app/happyray_benchmark [scene.obj ...] [--width W] [--height H] [--frames N]
-                               [--warmup N] [--samples N] [--assets-dir DIR]
+./build/src/app/happyray_benchmark [scene.obj|attractor:<points|spheres|curves>[:count] ...]
+                               [--width W] [--height H] [--frames N] [--warmup N] [--samples N]
+                               [--assets-dir DIR] [--overlap aabb|exact|hybrid]
+                               [--radius PIXELS] [--no-brute-force]
 ```
 
 Headless (no SDL/window dependency): times `Renderer::RenderFrame` for every acceleration
 structure (brute force, uniform grid, two-level grid) against each given scene (or, with no
 scene arguments, `assets/box_on_floor.obj` and `assets/dense_cube.obj`), after a few untimed
-warmup frames, and prints a table of mean/min/max frame time and estimated AO-ray throughput
-(Mrays/s). Like the viewer, it only ever exercises whichever Thrust backend it was built with —
+warmup frames, and prints a table of mean/min/max frame time, estimated AO-ray throughput
+(Mrays/s), and grid build time. Like the viewer, it only ever exercises whichever Thrust backend it was built with —
 build both backends and run each one's `happyray_benchmark` to compare them.
 
 ### Acceleration performance tests (CUDA)
@@ -201,12 +211,19 @@ backends; it carries the `performance` label and runs serially.
   the renderer, whose host/device layout is unchanged.
 - `src/accel/`: the uniform grid, the two-level grid, and the irregular grid.
   Each acceleration structure has one header and one implementation file.
-  `uniform_grid.h` provides shared resolution, cell-range, and triangle/cell SAT helpers.
+  `primitive_traits.h` defines the per-primitive-type interface (`PrimitiveTraits<P>`: fetch, ray
+  intersection, shading normal, and exact cell overlap) for triangles, points, spheres, and Bezier
+  curves. Grid views are primitive-agnostic; builders and leaf intersection are templated on the
+  primitive type and dispatched once per build or kernel launch from `SceneView::primitive_type`.
+  Query functions default to `DynamicPrimitive`, which dispatches at runtime.
+  `CellOverlapMode` selects how builders assign primitives to cells: `kAabb` (every cell of the
+  primitive's AABB), `kExact` (exact, conservative primitive/cell tests for counting and writing;
+  the CUDA default), or `kHybrid` (AABB counting, exact writing, trimmed padding; the TBB default).
+  `uniform_grid.h` provides shared resolution, cell-range, and primitive/cell overlap helpers.
   `UniformGridView` stores one begin/end pair per cell, and its `HAPPYRAY_HD` 3D-DDA traversal
   (`IntersectSceneGrid`/`IsOccludedGrid`) tests the references in that interval.
   The backend-private `grid_common.h` shares the complete coarse construction operation:
-  bounds, count, scan, emit, sort, and range extraction. CUDA counts exact SAT intersections;
-  TBB reserves AABB capacities and sentinel-pads slots not used by exact SAT emission.
+  bounds, count, scan, emit, sort, and range extraction, specialized per overlap mode.
   Empty cells keep equal zero indices, with no CSR gap-fill scan.
   `uniform_grid.cpp` owns the resulting buffers. `irregular_grid.cpp` uses UniformGrid for
   its top-level layout, then builds a separate local voxel CSR, which its merge/expand passes
@@ -244,7 +261,7 @@ backends; it carries the `performance` label and runs serially.
   the integrator. `renderer.h`/`.cpp` is the `Renderer` engine: uploads scene geometry once,
   owns a `UniformGrid`, a `TwoLevelGrid`, and an `IrregularGrid`, and renders each frame via a
   single `thrust::for_each` over a `RenderPixelFunctor` (no `<<<...>>>` kernel launch anywhere).
-  `collision_detector.h`/`.cpp` reuse the leaf cells of any of the three grids for exact
+  `collision_detector.h`/`.cpp` reuse the leaf cells of any of the three grids for bounding-box
   object/object collision detection (see "Collision detection" above), parallelized per cell
   reference with Thrust; the renderer runs it after every grid build.
   `simple_integrator.h` provides deterministic `SimpleIntegrator` cartoon shading with a
@@ -259,7 +276,8 @@ backends; it carries the `performance` label and runs serially.
   single-integrator `RenderFrame` path remains unchanged for benchmarks and direct rendering;
   reset before switching between these paths.
 - `src/app/`: `obj_loader.h`/`.cpp` (OBJ + `mtllib`/`Kd` parsing, `o`/`g` object ids), `scene.h` (the shared
-  `SceneView`, `FlatScene`, flattening, subdivision, and camera/AO helpers),
+  `SceneView`, `FlatScene`, flattening, subdivision, and camera/AO helpers), `attractor_scene.h`
+  (procedural point/sphere/curve scenes),
   `main.cpp` (the
   interactive SDL2 viewer), and `benchmark.cpp` (the headless `happyray_benchmark` timing harness,
   no SDL dependency).
@@ -278,4 +296,5 @@ sparse to exceed `dense_cell_threshold`, exercising only each grid's degenerate 
 top-level cells get real, non-degenerate refinement -- for the irregular grid, this also
 exercises real merge, confirmed via instrumentation to collapse 512 initial finest cells down to
 296, and real expand, confirmed to grow average cell size from 1.73 to 2.77 finest voxels, with
-one cell growing to 27).
+one cell growing to 27).Triangle, point, sphere, and curve scenes are additionally rendered through every grid in every
+cell-overlap mode and compared against the renderer's own brute-force output.

@@ -34,7 +34,7 @@ namespace happyray
 	{
 
 		// Camera-ray generation and integrator dispatch, independent of the shading algorithm.
-		template <typename Integrator> struct RenderPixelFunctor
+		template <typename Integrator, typename P> struct RenderPixelFunctor
 		{
 			SceneView		scene;
 			AccelStructures accel;
@@ -52,7 +52,7 @@ namespace happyray
 				const int y			  = static_cast<int>(pixel_index / width);
 				const Ray primary_ray = camera.GenerateRay(static_cast<float>(x), static_cast<float>(y), width, height);
 				const Vec3f sample =
-					integrator.Integrate(scene, accel, primary_ray, sample_offset, pixel_jitter[pixel_index]);
+					integrator.template Integrate<P>(scene, accel, primary_ray, sample_offset, pixel_jitter[pixel_index]);
 				accumulated[pixel_index] += sample;
 			}
 		};
@@ -73,13 +73,39 @@ namespace happyray
 			}
 		};
 
+		// Sets the radius to `world_per_pixel` times the distance from `eye` to the nearest endpoint.
+		template <typename P> struct ScreenSpaceRadiusFunctor
+		{
+			Vec3f eye;
+			float world_per_pixel;
+
+			HAPPYRAY_HD P operator()(P primitive) const
+			{
+				const float distance = fminf(Length(primitive.vtx[0] - eye),
+											 Length(primitive.vtx[P::kNumVertices - 1] - eye));
+				primitive.radius	 = world_per_pixel * distance;
+				return primitive;
+			}
+		};
+
 	} // namespace
 
 	struct Renderer::Impl
 	{
+		PrimitiveType					primitive_type = PrimitiveType::kTriangle;
 		thrust::device_vector<Vec3f>	positions;
 		thrust::device_vector<Vec3f>	normals;
 		thrust::device_vector<uint32_t> indices;
+		thrust::device_vector<Point>		points;
+		thrust::device_vector<Sphere>		spheres;
+		thrust::device_vector<BezierCurve> curves;
+		// Scene-provided points/curves; `points`/`curves` hold the view-dependent copies.
+		thrust::device_vector<Point>		scene_points;
+		thrust::device_vector<BezierCurve> scene_curves;
+		float							   screen_space_radius = 2.0f;
+		bool							   has_view_camera	   = false;
+		Camera							   view_camera;
+		CellOverlapMode					   overlap_mode = DefaultCellOverlapMode();
 		thrust::device_vector<uint32_t> material_ids;
 		thrust::device_vector<Vec3f>	material_diffuse_colors; // Ends with the collided material.
 		thrust::device_vector<uint32_t> object_ids;
@@ -112,6 +138,7 @@ namespace happyray
 		uint32_t sample_count = 0;
 
 		void UploadScene(const FlatScene &scene);
+		void ApplyViewDependentRadii();
 
 		// Runs collision detection over `grid`'s leaf cells, refreshing collision_ids.
 		template <typename Grid> void RunCollisionDetection(const Grid &grid)
@@ -148,7 +175,11 @@ namespace happyray
 			view.object_ids				 = thrust::raw_pointer_cast(object_ids.data());
 			view.collision_ids			 = thrust::raw_pointer_cast(collision_ids.data());
 			view.collided_material_id	 = static_cast<uint32_t>(material_diffuse_colors.size() - 1);
-			view.triangle_count			 = static_cast<uint32_t>(indices.size() / 3);
+			view.primitive_count		 = static_cast<uint32_t>(material_ids.size());
+			view.primitive_type			 = primitive_type;
+			view.points					 = thrust::raw_pointer_cast(points.data());
+			view.spheres				 = thrust::raw_pointer_cast(spheres.data());
+			view.curves					 = thrust::raw_pointer_cast(curves.data());
 			return view;
 		}
 
@@ -172,22 +203,29 @@ namespace happyray
 		}
 	};
 
-	// Red diffuse color that replaces the material of triangles colliding with another object.
+	// Red diffuse color that replaces the material of primitives colliding with another object.
 	const Vec3f kCollidedDiffuseColor(1.0f, 0.0f, 0.0f);
 
 	void Renderer::Impl::UploadScene(const FlatScene &scene)
 	{
-		const size_t triangle_count = scene.indices.size() / 3;
+		const size_t primitive_count = scene.PrimitiveCount();
+		if (scene.material_ids.size() != primitive_count)
+			throw std::invalid_argument("Scenes need one material id per primitive");
+		primitive_type = scene.primitive_type;
 		positions.assign(scene.positions.begin(), scene.positions.end());
 		normals.assign(scene.normals.begin(), scene.normals.end());
 		indices.assign(scene.indices.begin(), scene.indices.end());
+		spheres.assign(scene.spheres.begin(), scene.spheres.end());
+		scene_points.assign(scene.points.begin(), scene.points.end());
+		scene_curves.assign(scene.curves.begin(), scene.curves.end());
+		ApplyViewDependentRadii();
 		material_ids.assign(scene.material_ids.begin(), scene.material_ids.end());
 		std::vector<Vec3f> colors = scene.material_diffuse_colors;
 		colors.push_back(kCollidedDiffuseColor);
 		material_diffuse_colors.assign(colors.begin(), colors.end());
 
 		object_count = 1;
-		if (scene.object_ids.size() == triangle_count)
+		if (scene.object_ids.size() == primitive_count)
 		{
 			object_ids.assign(scene.object_ids.begin(), scene.object_ids.end());
 			for (uint32_t object_id : scene.object_ids)
@@ -197,11 +235,29 @@ namespace happyray
 		}
 		else
 		{
-			object_ids.assign(triangle_count, 0u);
+			object_ids.assign(primitive_count, 0u);
 		}
-		collision_ids.assign(triangle_count, kNoCollision);
+		collision_ids.assign(primitive_count, kNoCollision);
 		collision_stats				 = CollisionStats{};
 		collision_stats.object_count = object_count;
+	}
+
+	void Renderer::Impl::ApplyViewDependentRadii()
+	{
+		points = scene_points;
+		curves = scene_curves;
+		if (!has_view_camera || screen_space_radius <= 0.0f || height <= 0)
+			return;
+		const float tan_half_fov	= std::tan(0.5f * view_camera.vertical_fov_deg * (3.14159265358979323846f / 180.0f));
+		const float world_per_pixel = screen_space_radius * 2.0f * tan_half_fov / static_cast<float>(height);
+		thrust::transform(scene_points.begin(),
+						  scene_points.end(),
+						  points.begin(),
+						  ScreenSpaceRadiusFunctor<Point>{view_camera.position, world_per_pixel});
+		thrust::transform(scene_curves.begin(),
+						  scene_curves.end(),
+						  curves.begin(),
+						  ScreenSpaceRadiusFunctor<BezierCurve>{view_camera.position, world_per_pixel});
 	}
 
 	Renderer::Renderer(const FlatScene &scene) : impl_(std::make_unique<Impl>())
@@ -240,7 +296,45 @@ namespace happyray
 	void Renderer::UpdateScene(const FlatScene &scene)
 	{
 		impl_->UploadScene(scene);
+		RebuildGrids();
+	}
 
+	void Renderer::SetScreenSpaceRadius(float pixels)
+	{
+		impl_->screen_space_radius = pixels;
+	}
+
+	float Renderer::ScreenSpaceRadius() const
+	{
+		return impl_->screen_space_radius;
+	}
+
+	bool Renderer::UpdateViewDependentGeometry(const Camera &camera)
+	{
+		impl_->view_camera	   = camera;
+		impl_->has_view_camera = true;
+		if (impl_->primitive_type != PrimitiveType::kPoint && impl_->primitive_type != PrimitiveType::kBezierCurve)
+			return false;
+		impl_->ApplyViewDependentRadii();
+		RebuildGrids();
+		return true;
+	}
+
+	void Renderer::SetCellOverlapMode(CellOverlapMode mode)
+	{
+		if (impl_->overlap_mode == mode)
+			return;
+		impl_->overlap_mode = mode;
+		RebuildGrids();
+	}
+
+	CellOverlapMode Renderer::GetCellOverlapMode() const
+	{
+		return impl_->overlap_mode;
+	}
+
+	void Renderer::RebuildGrids()
+	{
 		impl_->uniform_grid.reset();
 		impl_->two_level_grid.reset();
 		impl_->irregular_grid.reset();
@@ -283,11 +377,12 @@ namespace happyray
 		return impl_->sample_count;
 	}
 
-	void Renderer::BuildUniformGrid(float target_triangles_per_cell)
+	void Renderer::BuildUniformGrid(float target_prims_per_cell)
 	{
-		impl_->uniform_grid = std::make_unique<UniformGrid>(impl_->View(), target_triangles_per_cell);
+		impl_->uniform_grid =
+			std::make_unique<UniformGrid>(impl_->View(), target_prims_per_cell, impl_->overlap_mode);
 		impl_->ComputeCollisions(*impl_->uniform_grid);
-		impl_->uniform_densities = {target_triangles_per_cell, 0};
+		impl_->uniform_densities = {target_prims_per_cell, 0};
 	}
 
 	bool Renderer::HasUniformGrid() const
@@ -300,7 +395,8 @@ namespace happyray
 		impl_->two_level_grid = std::make_unique<TwoLevelGrid>(impl_->View(),
 															   top_level_density,
 															   second_level_density,
-															   dense_cell_threshold);
+															   dense_cell_threshold,
+															   impl_->overlap_mode);
 		impl_->ComputeCollisions(*impl_->two_level_grid);
 		impl_->two_level_densities = {top_level_density, second_level_density};
 		impl_->two_level_threshold = dense_cell_threshold;
@@ -322,7 +418,8 @@ namespace happyray
 																second_level_density,
 																dense_cell_threshold,
 																merge_alpha,
-																expand_iterations);
+																expand_iterations,
+																impl_->overlap_mode);
 		impl_->ComputeCollisions(*impl_->irregular_grid);
 		impl_->irregular_densities		   = {top_level_density, second_level_density};
 		impl_->irregular_threshold		   = dense_cell_threshold;
@@ -480,18 +577,24 @@ namespace happyray
 
 		const uint32_t pixel_count = static_cast<uint32_t>(width) * height;
 
-		RenderPixelFunctor<Integrator> render{View(),
-											  CurrentAccel(),
-											  camera,
-											  integrator,
-											  thrust::raw_pointer_cast(pixel_jitter.data()),
-											  thrust::raw_pointer_cast(accumulated.data()),
-											  sample_offset,
-											  width,
-											  height};
-		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-						 thrust::counting_iterator<uint32_t>(pixel_count),
-						 render);
+		DispatchPrimitive(
+			primitive_type,
+			[&](auto tag)
+			{
+				using P = typename decltype(tag)::type;
+				const RenderPixelFunctor<Integrator, P> render{View(),
+															   CurrentAccel(),
+															   camera,
+															   integrator,
+															   thrust::raw_pointer_cast(pixel_jitter.data()),
+															   thrust::raw_pointer_cast(accumulated.data()),
+															   sample_offset,
+															   width,
+															   height};
+				thrust::for_each(thrust::counting_iterator<uint32_t>(0),
+								 thrust::counting_iterator<uint32_t>(pixel_count),
+								 render);
+			});
 		++sample_count;
 
 		const ResolveFunctor resolve{1.0f / static_cast<float>(accumulated_frames),

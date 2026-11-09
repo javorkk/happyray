@@ -67,17 +67,17 @@ namespace
 
 	HAPPYRAY_HD bool Intersect(const SceneView &scene, const UniformGridView &grid, const Ray &ray, HitRecord *hit)
 	{
-		return IntersectSceneGrid(scene, grid, ray, hit);
+		return IntersectSceneGrid<Triangle>(scene, grid, ray, hit);
 	}
 
 	HAPPYRAY_HD bool Intersect(const SceneView &scene, const TwoLevelGridView &grid, const Ray &ray, HitRecord *hit)
 	{
-		return IntersectSceneTwoLevelGrid(scene, grid, ray, hit);
+		return IntersectSceneTwoLevelGrid<Triangle>(scene, grid, ray, hit);
 	}
 
 	HAPPYRAY_HD bool Intersect(const SceneView &scene, const IrregularGridView &grid, const Ray &ray, HitRecord *hit)
 	{
-		return IntersectSceneIrregularGrid(scene, grid, ray, hit);
+		return IntersectSceneIrregularGrid<Triangle>(scene, grid, ray, hit);
 	}
 
 	template <typename View> struct Trace
@@ -118,7 +118,7 @@ namespace
 
 	// Analytic per-grid-type memory-footprint estimate: count * sizeof(element), summed over every
 	// device buffer that grid type actually holds, using only its own plain public element-count
-	// accessors (TriangleIndexCount(), LocalCellCount(), etc. -- see uniform_grid.h/two_level_grid.h/
+	// accessors (PrimIndexCount(), LocalCellCount(), etc. -- see uniform_grid.h/two_level_grid.h/
 	// irregular_grid.h) and View()'s own resolution fields -- no CUDA-specific allocation
 	// introspection (this file used to track real cudaMalloc/cudaFree calls via CUPTI) needed, at
 	// the cost of only reporting each structure's final, persistent footprint, not the transient
@@ -128,7 +128,7 @@ namespace
 	{
 		const UniformGridView view = grid.View();
 		const auto num_cells	   = static_cast<size_t>(view.resolution.x) * view.resolution.y * view.resolution.z;
-		return num_cells * sizeof(CellRange) + static_cast<size_t>(grid.TriangleIndexCount()) * sizeof(uint32_t);
+		return num_cells * sizeof(CellRange) + static_cast<size_t>(grid.PrimIndexCount()) * sizeof(uint32_t);
 	}
 
 	size_t GridMemoryBytes(const TwoLevelGrid &grid)
@@ -139,7 +139,7 @@ namespace
 		size_t bytes = num_top_cells * sizeof(TopLevelCell);
 		bytes += num_top_cells * sizeof(uint32_t);
 		bytes += static_cast<size_t>(grid.SecondLevelCellCount()) * sizeof(CellRange);
-		bytes += static_cast<size_t>(grid.SecondLevelTriangleIndexCount()) * sizeof(uint32_t);
+		bytes += static_cast<size_t>(grid.SecondLevelPrimIndexCount()) * sizeof(uint32_t);
 		return bytes;
 	}
 
@@ -149,12 +149,12 @@ namespace
 		const auto num_top_cells	 = static_cast<size_t>(view.top_level.resolution.x) * view.top_level.resolution.y *
 								   view.top_level.resolution.z;
 		size_t bytes = num_top_cells * sizeof(CellRange);
-		bytes += static_cast<size_t>(grid.TopLevelTriangleIndexCount()) * sizeof(uint32_t);
+		bytes += static_cast<size_t>(grid.TopLevelPrimIndexCount()) * sizeof(uint32_t);
 		bytes += num_top_cells * sizeof(IrregularCellInfo);
 		bytes += num_top_cells * sizeof(IrregularTopCell);
 		bytes += static_cast<size_t>(grid.LocalEntryCount()) * sizeof(uint32_t);
 		bytes += static_cast<size_t>(grid.LocalCellCount()) * sizeof(IrregularCell);
-		bytes += static_cast<size_t>(grid.TriangleIndexCount()) * sizeof(uint32_t);
+		bytes += static_cast<size_t>(grid.PrimIndexCount()) * sizeof(uint32_t);
 		return bytes;
 	}
 
@@ -302,7 +302,7 @@ namespace
 			irregular_costs,
 			device_rays));
 
-		std::printf("\nScene: %s (%u triangles), %u random closest-hit rays\n", path, view.triangle_count, kRayCount);
+		std::printf("\nScene: %s (%u triangles), %u random closest-hit rays\n", path, view.primitive_count, kRayCount);
 		std::printf("Subdivision: edge limit %.12g, maximum edge %.12g (0.1 x scene diagonal)\n",
 					std::sqrt(limit_squared),
 					std::sqrt(max_edge_squared));

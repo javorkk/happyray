@@ -6,8 +6,9 @@
 // HAPPYRAY_THRUST_BACKEND) is whatever gets measured; run the CUDA- and TBB-backend binaries
 // separately and compare their printed tables to compare the two.
 //
-// Usage: happyray_benchmark [scene.obj ...] [--width W] [--height H] [--frames N] [--warmup N]
-//                       [--samples N]
+// Usage: happyray_benchmark [scene.obj|attractor:<points|spheres|curves>[:count] ...] [--width W]
+//                       [--height H] [--frames N] [--warmup N] [--samples N]
+//                       [--overlap aabb|exact|hybrid] [--radius PIXELS] [--no-brute-force]
 // With no scene arguments, benchmarks a small built-in set of bundled assets (found relative to
 // --assets-dir, default "assets").
 #include <algorithm>
@@ -18,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "attractor_scene.h"
 #include "camera.h"
 #include "obj_loader.h"
 #include "renderer.h"
@@ -35,6 +37,9 @@ namespace
 		int						 warmup_frames				 = 4;
 		int						 measured_frames			 = 32;
 		int						 samples_per_pixel_per_frame = 4;
+		happyray::CellOverlapMode overlap_mode				 = happyray::DefaultCellOverlapMode();
+		float					  screen_space_radius		 = 2.0f;
+		bool					  brute_force				 = true;
 	};
 
 	struct FrameStats
@@ -87,6 +92,28 @@ namespace
 			{
 				if (!next_int(&options->samples_per_pixel_per_frame))
 					return false;
+			}
+			else if (arg == "--overlap")
+			{
+				const std::string mode = i + 1 < argc ? argv[++i] : "";
+				if (mode == "aabb")
+					options->overlap_mode = happyray::CellOverlapMode::kAabb;
+				else if (mode == "exact")
+					options->overlap_mode = happyray::CellOverlapMode::kExact;
+				else if (mode == "hybrid")
+					options->overlap_mode = happyray::CellOverlapMode::kHybrid;
+				else
+					return false;
+			}
+			else if (arg == "--radius")
+			{
+				if (i + 1 >= argc)
+					return false;
+				options->screen_space_radius = static_cast<float>(std::atof(argv[++i]));
+			}
+			else if (arg == "--no-brute-force")
+			{
+				options->brute_force = false;
 			}
 			else if (arg == "--assets-dir")
 			{
@@ -144,17 +171,28 @@ namespace
 		return stats;
 	}
 
-	void
-	PrintRow(const std::string &scene_name, const char *accel_label, uint32_t triangle_count, const FrameStats &stats)
+	void PrintRow(const std::string &scene_name,
+				  const char		*accel_label,
+				  uint32_t			 primitive_count,
+				  const FrameStats	&stats,
+				  double			 build_ms)
 	{
-		std::printf("%-24s %-14s %10u %12.3f %12.3f %12.3f %12.2f\n",
+		std::printf("%-24s %-14s %10u %12.3f %12.3f %12.3f %12.2f %12.3f\n",
 					scene_name.c_str(),
 					accel_label,
-					triangle_count,
+					primitive_count,
 					stats.mean_ms,
 					stats.min_ms,
 					stats.max_ms,
-					stats.mrays_per_sec);
+					stats.mrays_per_sec,
+					build_ms);
+	}
+
+	template <typename BuildFn> double MeasureBuildMs(BuildFn &&build)
+	{
+		const auto start = std::chrono::steady_clock::now();
+		build();
+		return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 	}
 
 } // namespace
@@ -165,8 +203,9 @@ int main(int argc, char **argv)
 	if (!ParseOptions(argc, argv, &options))
 	{
 		std::fprintf(stderr,
-					 "Usage: %s [scene.obj ...] [--width W] [--height H] [--frames N] "
-					 "[--warmup N] [--samples N] [--assets-dir DIR]\n",
+					 "Usage: %s [scene.obj|attractor:<points|spheres|curves>[:count] ...] [--width W] "
+					 "[--height H] [--frames N] [--warmup N] [--samples N] [--assets-dir DIR] "
+					 "[--overlap aabb|exact|hybrid] [--radius PIXELS] [--no-brute-force]\n",
 					 argv[0]);
 		return EXIT_FAILURE;
 	}
@@ -181,28 +220,36 @@ int main(int argc, char **argv)
 		}
 	}
 
-	std::printf("HappyRay benchmark -- backend: %s, resolution: %dx%d, samples/pixel/frame: %d, "
-				"warmup/measured frames: %d/%d\n",
+	std::printf("HappyRay benchmark -- backend: %s, cell overlap: %s, resolution: %dx%d, samples/pixel/frame: "
+				"%d, warmup/measured frames: %d/%d\n",
 				happyray::RendererBackendName(),
+				happyray::CellOverlapModeName(options.overlap_mode),
 				options.width,
 				options.height,
 				options.samples_per_pixel_per_frame,
 				options.warmup_frames,
 				options.measured_frames);
-	std::printf("%-24s %-14s %10s %12s %12s %12s %12s\n",
+	std::printf("%-24s %-14s %10s %12s %12s %12s %12s %12s\n",
 				"Scene",
 				"Accel",
-				"Triangles",
+				"Primitives",
 				"Mean ms",
 				"Min ms",
 				"Max ms",
-				"Mrays/s");
+				"Mrays/s",
+				"Build ms");
 
 	bool any_failure = false;
 	for (const std::string &scene_path : options.scene_paths)
 	{
-		happyray::Scene scene;
-		if (!happyray::LoadObj(scene_path, &scene))
+		happyray::Scene			scene;
+		happyray::PrimitiveType attractor_type;
+		uint32_t				attractor_count = 0;
+		if (happyray::ParseAttractorSpec(scene_path, &attractor_type, &attractor_count))
+		{
+			scene = happyray::MakeAttractorScene(attractor_type, attractor_count);
+		}
+		else if (!happyray::LoadObj(scene_path, &scene))
 		{
 			std::fprintf(stderr, "Failed to load '%s', skipping.\n", scene_path.c_str());
 			any_failure = true;
@@ -218,9 +265,14 @@ int main(int argc, char **argv)
 
 		happyray::Renderer renderer(flat_scene);
 		renderer.ResizeFramebuffer(options.width, options.height);
-		renderer.BuildUniformGrid();
-		renderer.BuildTwoLevelGrid();
-		renderer.BuildIrregularGrid();
+		renderer.SetCollisionDetectionEnabled(false);
+		renderer.SetCellOverlapMode(options.overlap_mode);
+		renderer.SetScreenSpaceRadius(options.screen_space_radius);
+		renderer.UpdateViewDependentGeometry(camera);
+		const double build_ms[] = {0.0,
+								   MeasureBuildMs([&] { renderer.BuildUniformGrid(); }),
+								   MeasureBuildMs([&] { renderer.BuildTwoLevelGrid(); }),
+								   MeasureBuildMs([&] { renderer.BuildIrregularGrid(); })};
 
 		const size_t	  last_slash = scene_path.find_last_of('/');
 		const std::string scene_name = last_slash == std::string::npos ? scene_path : scene_path.substr(last_slash + 1);
@@ -233,10 +285,16 @@ int main(int argc, char **argv)
 		};
 		for (const AccelCase &accel_case : kAccelCases)
 		{
+			if (accel_case.type == happyray::AccelType::kBruteForce && !options.brute_force)
+				continue;
 			renderer.SetAccelType(accel_case.type);
 			renderer.ResetAccumulation();
 			const FrameStats stats = MeasureRenderFrame(&renderer, camera, integrator, options);
-			PrintRow(scene_name, accel_case.label, scene.TriangleCount(), stats);
+			PrintRow(scene_name,
+					 accel_case.label,
+					 scene.PrimitiveCount(),
+					 stats,
+					 build_ms[static_cast<int>(accel_case.type)]);
 		}
 	}
 

@@ -1,4 +1,5 @@
-// Interactive SDL2 viewer: loads an OBJ scene, flies a pinhole camera around it
+// Interactive SDL2 viewer: loads an OBJ scene (or a procedural attractor scene,
+// see attractor_scene.h), flies a pinhole camera around it
 // with the keyboard/mouse, and starts with a simple-shaded preview via Renderer
 // (src/render/renderer.h), fading into accumulated AO while the camera is
 // still. Renderer is parallelized entirely through Thrust; whether that means
@@ -38,6 +39,7 @@
 #include <vector>
 
 #include "animation.h"
+#include "attractor_scene.h"
 #include "camera.h"
 #include "grid_density_search.h"
 #include "obj_loader.h"
@@ -174,7 +176,10 @@ int main(int argc, char **argv)
 {
 	if (argc < 2)
 	{
-		std::fprintf(stderr, "Usage: %s <scene.obj|animation.cfg> [width] [height]\n", argv[0]);
+		std::fprintf(stderr,
+					 "Usage: %s <scene.obj|animation.cfg|attractor:<points|spheres|curves>[:count]> [width] "
+					 "[height]\n",
+					 argv[0]);
 		return EXIT_FAILURE;
 	}
 	// Resolution precedence: an explicit command-line [width] [height] wins
@@ -192,7 +197,13 @@ int main(int argc, char **argv)
 	happyray::KeyframeAnimation animation;
 	const std::string			input_extension	 = std::filesystem::path(argv[1]).extension().string();
 	const bool					animation_loaded = input_extension == ".cfg";
-	if (animation_loaded)
+	happyray::PrimitiveType		attractor_type;
+	uint32_t					attractor_count = 0;
+	if (happyray::ParseAttractorSpec(argv[1], &attractor_type, &attractor_count))
+	{
+		scene = happyray::MakeAttractorScene(attractor_type, attractor_count);
+	}
+	else if (animation_loaded)
 	{
 		if (!animation.LoadConfig(argv[1], &scene))
 		{
@@ -214,9 +225,10 @@ int main(int argc, char **argv)
 	}
 	const std::string camera_config_path =
 		animation_loaded ? animation.CameraConfigPath() : happyray::CameraConfigPathFor(argv[1]);
-	std::printf("Loaded '%s': %u triangle(s), %u material(s)\n",
+	std::printf("Loaded '%s': %u %s primitive(s), %u material(s)\n",
 				argv[1],
-				scene.TriangleCount(),
+				scene.PrimitiveCount(),
+				happyray::PrimitiveTypeName(scene.Type()),
 				static_cast<unsigned>(scene.materials.size()));
 	if (animation_loaded)
 	{
@@ -284,6 +296,19 @@ int main(int argc, char **argv)
 
 	happyray::Renderer renderer(flat_scene);
 	renderer.ResizeFramebuffer(width, height);
+	renderer.UpdateViewDependentGeometry(camera);
+	// HAPPYRAY_CELL_OVERLAP=aabb, exact, or hybrid overrides the backend's grid cell assignment.
+	if (const char *overlap = std::getenv("HAPPYRAY_CELL_OVERLAP"))
+	{
+		const std::string mode = overlap;
+		if (mode == "aabb")
+			renderer.SetCellOverlapMode(happyray::CellOverlapMode::kAabb);
+		else if (mode == "exact")
+			renderer.SetCellOverlapMode(happyray::CellOverlapMode::kExact);
+		else if (mode == "hybrid")
+			renderer.SetCellOverlapMode(happyray::CellOverlapMode::kHybrid);
+	}
+	std::printf("Grid cell overlap: %s\n", happyray::CellOverlapModeName(renderer.GetCellOverlapMode()));
 
 	// Acceleration structures (see src/accel); '1'/'2'/'3' select the uniform
 	// grid, the two-level grid (the default), and the irregular grid at
@@ -325,7 +350,7 @@ int main(int argc, char **argv)
 
 	happyray::GridDensitySearch density_search;
 	constexpr uint32_t			kMaxPrimitivesForDensitySearch = 1000000;
-	const bool					density_search_enabled = scene.TriangleCount() <= kMaxPrimitivesForDensitySearch;
+	const bool					density_search_enabled = scene.PrimitiveCount() <= kMaxPrimitivesForDensitySearch;
 	happyray::SahCalibration	sah_calibration;
 	if (density_search_enabled)
 	{
@@ -410,6 +435,9 @@ int main(int argc, char **argv)
 		return renderer.CollisionDetectionEnabled() ? std::max(0.0, elapsed_ms - renderer.LastCollisionStats().total_ms)
 													: elapsed_ms;
 	};
+
+	// Point/curve radii are refreshed only once the camera stops.
+	bool view_geometry_stale = false;
 
 	while (running)
 	{
@@ -634,6 +662,21 @@ int main(int argc, char **argv)
 		{
 			camera.MoveUp(-speed);
 			camera_dirty = true;
+		}
+
+		if (camera_dirty)
+		{
+			view_geometry_stale = true;
+		}
+		else if (view_geometry_stale)
+		{
+			view_geometry_stale	   = false;
+			const auto build_start = std::chrono::steady_clock::now();
+			if (renderer.UpdateViewDependentGeometry(camera))
+			{
+				build_ms	 = grid_build_ms_since(build_start);
+				camera_dirty = true;
+			}
 		}
 
 		if (camera_dirty)

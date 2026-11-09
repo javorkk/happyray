@@ -232,8 +232,8 @@ namespace
 
 		const BezierCurve curve(Vec3f(-2, 0, 1), Vec3f(1, 3, -1), Vec3f(4, -2, 2), Vec3f(0, 1, 5), 0.5f);
 		const BBox		  curve_bounds = BBoxExtractor<BezierCurve>::Get(curve);
-		HAPPYRAY_CHECK(NearlyEqual(curve_bounds.min_bound, Vec3f(-2.5f, -2.5f, -1.5f)));
-		HAPPYRAY_CHECK(NearlyEqual(curve_bounds.max_bound, Vec3f(4.5f, 3.5f, 5.5f)));
+		HAPPYRAY_CHECK(NearlyEqual(curve_bounds.min_bound, Vec3f(-2.502f, -2.502f, -1.502f)));
+		HAPPYRAY_CHECK(NearlyEqual(curve_bounds.max_bound, Vec3f(4.502f, 3.502f, 5.502f)));
 	}
 
 	void TestPrimitiveIntersections()
@@ -268,6 +268,29 @@ namespace
 		HAPPYRAY_CHECK(Intersects(Sphere{Vec3f(1.5f, 0, 0), 0.5f}, box));
 		HAPPYRAY_CHECK(!Intersects(Sphere{Vec3f(1.51f, 0, 0), 0.5f}, box));
 		HAPPYRAY_CHECK(Intersects(line_curve, BBox(Vec3f(5, -0.5f, -0.5f), Vec3f(6, 0.5f, 0.5f))));
+
+		// Point radius widens the hit disc and the conservative box test.
+		HAPPYRAY_CHECK(IntersectRayPoint(x_ray, Point(Vec3f(2, 0.4f, 0), 0.5f), &t));
+		HAPPYRAY_CHECK(!IntersectRayPoint(x_ray, Point(Vec3f(2, 0.6f, 0), 0.5f), &t));
+		HAPPYRAY_CHECK(Intersects(Point(Vec3f(1.4f, 0, 0), 0.5f), box));
+		HAPPYRAY_CHECK(NearlyEqual(BBoxExtractor<Point>::Get(Point(Vec3f(1, 2, 3), 0.5f)).max_bound, Vec3f(1.5f, 2.5f, 3.5f)));
+
+		// Curve hits report their curve parameter; normals derive from it.
+		float u = -1.0f;
+		HAPPYRAY_CHECK(IntersectRayBezierCurve(tube_ray, line_curve, &t, &u));
+		HAPPYRAY_CHECK(std::fabs(u - 0.5f) < 0.01f);
+		HAPPYRAY_CHECK(NearlyEqual(EvaluateBezierCurve(line_curve, 0.5f), Vec3f(5.5f, 0, 0)));
+		HAPPYRAY_CHECK(NearlyEqual(EvaluateBezierCurve(curved_tube, 0.5f), Vec3f(0.5f, 0.75f, 0)));
+		// Boxes inside the curve's hull but away from the tube don't overlap it.
+		HAPPYRAY_CHECK(!Intersects(curved_tube, BBox(Vec3f(0.45f, 0.15f, -0.05f), Vec3f(0.55f, 0.25f, 0.05f))));
+		HAPPYRAY_CHECK(Intersects(curved_tube, BBox(Vec3f(0.45f, 0.7f, -0.05f), Vec3f(0.55f, 0.8f, 0.05f))));
+		HAPPYRAY_CHECK(!Intersects(curved_tube, BBox(Vec3f(0.45f, 0.85f, -0.05f), Vec3f(0.55f, 0.95f, 0.05f))));
+		// Rays starting inside a point's disc (AO rays) don't self-occlude.
+		HAPPYRAY_CHECK(!IntersectRayPoint(Ray(Vec3f(2, 0.05f, 0.001f), Vec3f(0.3f, -0.1f, 1)), Point(Vec3f(2, 0, 0), 0.1f), &t));
+		// Cells smaller than the ray tolerance still cover the ray test's capsule proxies.
+		const BezierCurve flat_curve(Vec3f(0, 0.7e-3f, 5e-4f), Vec3f(0.01f, 1.65e-3f, 5e-4f), Vec3f(0.02f, 1.65e-3f, 5e-4f), Vec3f(0.03f, 0.7e-3f, 5e-4f), 0.0f);
+		HAPPYRAY_CHECK(IntersectRayBezierCurve(Ray(Vec3f(0.015f, -1.25e-3f, -1), Vec3f(0, 0, 1)), flat_curve, &t));
+		HAPPYRAY_CHECK(Intersects(flat_curve, BBox(Vec3f(0.014995f, -0.002005f, -5e-6f), Vec3f(0.016005f, -0.000995f, 0.001005f))));
 
 		const Triangle flat{
 			{Vec3f(0, 0, 0), Vec3f(2, 0, 0), Vec3f(0, 2, 0)}
@@ -480,7 +503,7 @@ namespace
 		}
 		HAPPYRAY_CHECK(flat.View().positions == flat.positions.data());
 		HAPPYRAY_CHECK(flat.View().normals == flat.normals.data());
-		HAPPYRAY_CHECK(flat.View().triangle_count == 2);
+		HAPPYRAY_CHECK(flat.View().primitive_count == 2);
 	}
 
 	// `o`/`g` statements become per-triangle object ids that survive subdivision and flattening.

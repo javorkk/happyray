@@ -8,6 +8,10 @@
 #include <vector>
 
 #include "bbox.h"
+#include "bezier_curve.h"
+#include "point.h"
+#include "primitive.h"
+#include "sphere.h"
 #include "vec.h"
 
 namespace happyray
@@ -45,10 +49,27 @@ namespace happyray
 		}
 	};
 
+	// Holds a single primitive type: either triangle meshes or one of the non-triangle arrays.
 	struct Scene
 	{
-		std::vector<Mesh>	  meshes;
-		std::vector<Material> materials;
+		std::vector<Mesh>		 meshes;
+		std::vector<Material>	 materials;
+		std::vector<Point>		 points;
+		std::vector<Sphere>		 spheres;
+		std::vector<BezierCurve> curves;
+		// One entry per point/sphere/curve, indexing into `materials`.
+		std::vector<uint32_t> primitive_material_ids;
+
+		PrimitiveType Type() const
+		{
+			if (!points.empty())
+				return PrimitiveType::kPoint;
+			if (!spheres.empty())
+				return PrimitiveType::kSphere;
+			if (!curves.empty())
+				return PrimitiveType::kBezierCurve;
+			return PrimitiveType::kTriangle;
+		}
 
 		BBox WorldBounds() const
 		{
@@ -60,7 +81,18 @@ namespace happyray
 					bounds.Grow(position);
 				}
 			}
+			for (const Point &point : points)
+				bounds.Grow(BBoxExtractor<Point>::Get(point));
+			for (const Sphere &sphere : spheres)
+				bounds.Grow(BBoxExtractor<Sphere>::Get(sphere));
+			for (const BezierCurve &curve : curves)
+				bounds.Grow(BBoxExtractor<BezierCurve>::Get(curve));
 			return bounds;
+		}
+
+		uint32_t PrimitiveCount() const
+		{
+			return static_cast<uint32_t>(points.size() + spheres.size() + curves.size()) + TriangleCount();
 		}
 
 		uint32_t TriangleCount() const

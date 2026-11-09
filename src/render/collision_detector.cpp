@@ -1,7 +1,7 @@
 // Thrust implementation of CollisionDetector (see collision_detector.h), following
 // string2shape's CollisionDetector::computeCollisionGraph: trim single-object cells, compact
-// the remaining ones, then run exact triangle/triangle tests per cell reference. Compiles under either
-// the CUDA or the TBB Thrust backend, the same as the grid builders.
+// the remaining ones, then run primitive bounding-box overlap tests per cell reference. Compiles under
+// either the CUDA or the TBB Thrust backend, the same as the grid builders.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
 #define THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_TBB
@@ -22,7 +22,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
-#include "triangle.h"
+#include "primitive_traits.h"
 
 namespace happyray
 {
@@ -61,12 +61,12 @@ namespace happyray
 			}
 		};
 
-		// Replaces cells that cannot contain a collision (fewer than two triangles, or
-		// all triangles from the same object) with an empty range.
+		// Replaces cells that cannot contain a collision (fewer than two primitives, or
+		// all primitives from the same object) with an empty range.
 		struct CellTrimmer
 		{
 			const uint32_t *object_ids;
-			const uint32_t *triangle_indices;
+			const uint32_t *prim_indices;
 
 			HAPPYRAY_HD CellRange operator()(const CellRange &cell_range) const
 			{
@@ -75,7 +75,7 @@ namespace happyray
 
 				for (uint32_t ref = cell_range.start; ref + 1 < cell_range.end; ++ref)
 				{
-					if (object_ids[triangle_indices[ref]] != object_ids[triangle_indices[ref + 1]])
+					if (object_ids[prim_indices[ref]] != object_ids[prim_indices[ref + 1]])
 						return cell_range;
 				}
 				return CellRange{};
@@ -95,15 +95,26 @@ namespace happyray
 			}
 		};
 
-		// Tests all triangle pairs from different objects inside the candidate cells.
-		// Unlike string2shape (one thread per cell), each work item is one reference of
-		// a candidate cell, tested against the cell's later references: the same pairs,
-		// but a cell with thousands of triangles (e.g. a uniform grid cell over dense
-		// geometry) no longer serializes O(k^2) tests on a single thread.
-		struct ExactCollisionOperator
+		template <typename P> struct PrimitiveBoundsFunctor
 		{
 			SceneView		 scene;
-			const uint32_t	*triangle_indices;
+			HAPPYRAY_HD BBox operator()(uint32_t prim) const
+			{
+				return ComputePrimitiveBBox<P>(scene, prim);
+			}
+		};
+
+		// Tests all primitive pairs from different objects inside the candidate cells
+		// for bounding-box overlap. Unlike string2shape (one thread per cell), each work
+		// item is one reference of a candidate cell, tested against the cell's later
+		// references: the same pairs, but a cell with thousands of primitives (e.g. a
+		// uniform grid cell over dense geometry) no longer serializes O(k^2) tests on a
+		// single thread.
+		struct CollisionOperator
+		{
+			const uint32_t	*object_ids;
+			const BBox		*boxes;
+			const uint32_t	*prim_indices;
 			uint32_t		*collision_ids;
 			const CellRange *cells;
 			const uint32_t	*cell_ref_offsets; // Exclusive scan of the cell sizes.
@@ -124,14 +135,14 @@ namespace happyray
 				const CellRange cell_range = cells[lo];
 				const uint32_t	ref		   = cell_range.start + (work_item - cell_ref_offsets[lo]);
 
-				const uint32_t my_prim = triangle_indices[ref];
-				const uint32_t my_obj  = scene.object_ids[my_prim];
-				const Triangle my_tri  = FetchTriangle(scene, my_prim);
+				const uint32_t my_prim = prim_indices[ref];
+				const uint32_t my_obj  = object_ids[my_prim];
+				const BBox	   my_box  = boxes[my_prim];
 
 				for (uint32_t other_ref = ref + 1; other_ref < cell_range.end; ++other_ref)
 				{
-					const uint32_t other_prim = triangle_indices[other_ref];
-					const uint32_t other_obj  = scene.object_ids[other_prim];
+					const uint32_t other_prim = prim_indices[other_ref];
+					const uint32_t other_obj  = object_ids[other_prim];
 					if (my_obj == other_obj)
 						continue;
 					// Per-primitive analog of string2shape's lastRecordedPair: skip the
@@ -140,7 +151,7 @@ namespace happyray
 						LoadCollisionId(collision_ids + other_prim) <= my_obj)
 						continue;
 
-					if (IntersectTriangles(my_tri, FetchTriangle(scene, other_prim)))
+					if (Overlaps(my_box, boxes[other_prim]))
 					{
 						AtomicMinCollisionId(collision_ids + my_prim, other_obj);
 						AtomicMinCollisionId(collision_ids + other_prim, my_obj);
@@ -158,13 +169,13 @@ namespace happyray
 		};
 
 		// `cells` iterates CellRange or IrregularCell leaves; their ranges index
-		// `triangle_indices`.
+		// `prim_indices`.
 		template <typename CellIterator>
 		CollisionStats DetectCollisions(const SceneView &scene,
 										uint32_t		 object_count,
 										CellIterator	 cells,
 										uint32_t		 cell_count,
-										const uint32_t	*triangle_indices,
+										const uint32_t	*prim_indices,
 										uint32_t		*collision_ids)
 		{
 			const auto	   start_time = std::chrono::steady_clock::now();
@@ -172,7 +183,7 @@ namespace happyray
 			stats.object_count = object_count;
 
 			const thrust::device_ptr<uint32_t> ids = thrust::device_pointer_cast(collision_ids);
-			thrust::fill(ids, ids + scene.triangle_count, kNoCollision);
+			thrust::fill(ids, ids + scene.primitive_count, kNoCollision);
 
 			if (object_count >= 2u && scene.object_ids && cell_count > 0)
 			{
@@ -181,7 +192,7 @@ namespace happyray
 				thrust::transform(cells,
 								  cells + cell_count,
 								  trimmed_cells.begin(),
-								  CellTrimmer{scene.object_ids, triangle_indices});
+								  CellTrimmer{scene.object_ids, prim_indices});
 				thrust::device_vector<CellRange> candidate_cells(cell_count);
 				const auto						 candidate_cells_end = thrust::copy_if(trimmed_cells.begin(),
 																   trimmed_cells.end(),
@@ -201,18 +212,28 @@ namespace happyray
 					const CellRange last_cell		= candidate_cells[stats.candidate_cell_count - 1];
 					const uint32_t	work_item_count = cell_ref_offsets.back() + (last_cell.end - last_cell.start);
 
+					thrust::device_vector<BBox> boxes(scene.primitive_count);
+					DispatchPrimitive(scene.primitive_type,
+									  [&](auto tag)
+									  {
+										  thrust::transform(thrust::counting_iterator<uint32_t>(0),
+															thrust::counting_iterator<uint32_t>(scene.primitive_count),
+															boxes.begin(),
+															PrimitiveBoundsFunctor<typename decltype(tag)::type>{scene});
+									  });
 					thrust::for_each(thrust::counting_iterator<uint32_t>(0),
 									 thrust::counting_iterator<uint32_t>(work_item_count),
-									 ExactCollisionOperator{scene,
-															triangle_indices,
+									 CollisionOperator{scene.object_ids,
+															thrust::raw_pointer_cast(boxes.data()),
+															prim_indices,
 															collision_ids,
 															thrust::raw_pointer_cast(candidate_cells.data()),
 															thrust::raw_pointer_cast(cell_ref_offsets.data()),
 															stats.candidate_cell_count});
 				}
 
-				stats.colliding_triangle_count =
-					static_cast<uint32_t>(thrust::count_if(ids, ids + scene.triangle_count, IsColliding()));
+				stats.colliding_primitive_count =
+					static_cast<uint32_t>(thrust::count_if(ids, ids + scene.primitive_count, IsColliding()));
 			}
 
 			stats.total_ms =
@@ -233,7 +254,7 @@ namespace happyray
 								object_count,
 								thrust::device_pointer_cast(view.cell_ranges),
 								cell_count,
-								view.triangle_indices,
+								view.prim_indices,
 								collision_ids);
 	}
 
@@ -247,7 +268,7 @@ namespace happyray
 								object_count,
 								thrust::device_pointer_cast(view.second_level_cell_ranges),
 								grid.SecondLevelCellCount(),
-								view.second_level_triangle_indices,
+								view.second_level_prim_indices,
 								collision_ids);
 	}
 
@@ -261,7 +282,7 @@ namespace happyray
 								object_count,
 								thrust::device_pointer_cast(view.local_cells),
 								grid.LocalCellCount(),
-								view.triangle_indices,
+								view.prim_indices,
 								collision_ids);
 	}
 
