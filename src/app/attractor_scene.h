@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "mesh.h"
+#include "../core/mesh.h"
 
 namespace happyray
 {
@@ -99,7 +99,11 @@ namespace happyray
 			{
 				// Catmull-Rom span samples[i + 1] -> samples[i + 2] as a cubic Bezier.
 				const Vec3f &p0 = samples[i], &p1 = samples[i + 1], &p2 = samples[i + 2], &p3 = samples[i + 3];
-				scene.curves.emplace_back(p1, p1 + (p2 - p0) * (1.0f / 6.0f), p2 - (p3 - p1) * (1.0f / 6.0f), p2, kThinRadius);
+				scene.curves.emplace_back(p1,
+										  p1 + (p2 - p0) * (1.0f / 6.0f),
+										  p2 - (p3 - p1) * (1.0f / 6.0f),
+										  p2,
+										  kThinRadius);
 				break;
 			}
 			}

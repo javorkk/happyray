@@ -38,13 +38,13 @@
 #include <string>
 #include <vector>
 
+#include "../accel/sah_cost.h"
+#include "../render/camera.h"
+#include "../render/renderer.h"
 #include "animation.h"
 #include "attractor_scene.h"
-#include "camera.h"
 #include "grid_density_search.h"
 #include "obj_loader.h"
-#include "renderer.h"
-#include "sah_cost.h"
 #include "scene.h"
 #include "screenshot.h"
 

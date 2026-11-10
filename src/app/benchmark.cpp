@@ -19,10 +19,10 @@
 #include <string>
 #include <vector>
 
+#include "../render/camera.h"
+#include "../render/renderer.h"
 #include "attractor_scene.h"
-#include "camera.h"
 #include "obj_loader.h"
-#include "renderer.h"
 #include "scene.h"
 
 namespace
@@ -30,16 +30,16 @@ namespace
 
 	struct BenchmarkOptions
 	{
-		std::vector<std::string> scene_paths;
-		std::string				 assets_dir					 = "assets";
-		int						 width						 = 640;
-		int						 height						 = 360;
-		int						 warmup_frames				 = 4;
-		int						 measured_frames			 = 32;
-		int						 samples_per_pixel_per_frame = 4;
-		happyray::CellOverlapMode overlap_mode				 = happyray::DefaultCellOverlapMode();
-		float					  screen_space_radius		 = 2.0f;
-		bool					  brute_force				 = true;
+		std::vector<std::string>  scene_paths;
+		std::string				  assets_dir				  = "assets";
+		int						  width						  = 640;
+		int						  height					  = 360;
+		int						  warmup_frames				  = 4;
+		int						  measured_frames			  = 32;
+		int						  samples_per_pixel_per_frame = 4;
+		happyray::CellOverlapMode overlap_mode				  = happyray::DefaultCellOverlapMode();
+		float					  screen_space_radius		  = 2.0f;
+		bool					  brute_force				  = true;
 	};
 
 	struct FrameStats

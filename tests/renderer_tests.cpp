@@ -21,14 +21,14 @@
 #include <thread>
 #include <vector>
 
-#include "attractor_scene.h"
-#include "camera.h"
-#include "grid_density_search.h"
-#include "obj_loader.h"
-#include "random.h"
-#include "renderer.h"
-#include "scene.h"
-#include "scene_intersect.h"
+#include "../src/accel/scene_intersect.h"
+#include "../src/app/attractor_scene.h"
+#include "../src/app/grid_density_search.h"
+#include "../src/app/obj_loader.h"
+#include "../src/app/scene.h"
+#include "../src/core/random.h"
+#include "../src/render/camera.h"
+#include "../src/render/renderer.h"
 
 namespace
 {
@@ -458,7 +458,8 @@ namespace
 
 	uint32_t CountCollisions(const std::vector<uint32_t> &ids)
 	{
-		return static_cast<uint32_t>(std::count_if(ids.begin(), ids.end(), [](uint32_t id) { return id != happyray::kNoCollision; }));
+		return static_cast<uint32_t>(
+			std::count_if(ids.begin(), ids.end(), [](uint32_t id) { return id != happyray::kNoCollision; }));
 	}
 
 	// Primitives sharing a leaf cell collide when their boxes overlap: every truly intersecting pair
@@ -498,7 +499,7 @@ namespace
 							{ return Overlaps(BBoxExtractor<Triangle>::Get(a), BBoxExtractor<Triangle>::Get(b)); });
 		const std::vector<uint32_t> exact_expected =
 			CollisionOracle(scene, [](const Triangle &a, const Triangle &b) { return IntersectTriangles(a, b); });
-		bool						ceiling_untouched = true;
+		bool ceiling_untouched = true;
 		for (uint32_t prim = 0; prim < view.primitive_count; ++prim)
 		{
 			if (scene.object_ids[prim] == 2 && bbox_expected[prim] != kNoCollision)
@@ -510,7 +511,7 @@ namespace
 
 		Renderer renderer(scene);
 		HAPPYRAY_CHECK(renderer.CollisionIds() == std::vector<uint32_t>(view.primitive_count, kNoCollision));
-		const AccelType grids[] = {AccelType::kUniformGrid, AccelType::kTwoLevelGrid, AccelType::kIrregularGrid};
+		const AccelType		  grids[] = {AccelType::kUniformGrid, AccelType::kTwoLevelGrid, AccelType::kIrregularGrid};
 		const CellOverlapMode modes[] = {CellOverlapMode::kAabb, CellOverlapMode::kExact, CellOverlapMode::kHybrid};
 		for (CellOverlapMode mode : modes)
 		{
@@ -557,7 +558,8 @@ namespace
 		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_primitive_count == 0);
 		renderer.DetectCollisions();
 		HAPPYRAY_CHECK(CollisionsWithinBounds(renderer.CollisionIds(), bbox_expected, exact_expected));
-		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_primitive_count == CountCollisions(renderer.CollisionIds()));
+		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_primitive_count ==
+					   CountCollisions(renderer.CollisionIds()));
 		renderer.SetCollisionDetectionEnabled(true);
 
 		Camera camera;
@@ -584,7 +586,8 @@ namespace
 	}
 
 	// Host copy of `scene` with Renderer's screen-space point/curve radii for `camera`.
-	happyray::FlatScene WithScreenSpaceRadii(happyray::FlatScene scene, const happyray::Camera &camera, int height, float pixels)
+	happyray::FlatScene
+	WithScreenSpaceRadii(happyray::FlatScene scene, const happyray::Camera &camera, int height, float pixels)
 	{
 		using namespace happyray;
 		const float world_per_pixel =
@@ -599,15 +602,15 @@ namespace
 	}
 
 	// Every grid in every cell-overlap mode must match the host brute-force reference.
-	void TestSceneAcrossOverlapModes(const char					*label,
-									 const happyray::FlatScene	&flat_scene,
-									 const happyray::Camera		&camera,
+	void TestSceneAcrossOverlapModes(const char					  *label,
+									 const happyray::FlatScene	  &flat_scene,
+									 const happyray::Camera		  &camera,
 									 const happyray::AOIntegrator &integrator)
 	{
 		using namespace happyray;
 		constexpr int kWidth = 48, kHeight = 27, kFrames = 2;
 		const bool	  view_dependent = flat_scene.primitive_type == PrimitiveType::kPoint ||
-								   flat_scene.primitive_type == PrimitiveType::kBezierCurve;
+									flat_scene.primitive_type == PrimitiveType::kBezierCurve;
 		const FlatScene reference_scene =
 			view_dependent ? WithScreenSpaceRadii(flat_scene, camera, kHeight, 2.0f) : flat_scene;
 		const std::vector<Vec2f> jitter	   = MakePixelJitter(kWidth, kHeight);
@@ -619,7 +622,7 @@ namespace
 																	   jitter,
 																	   kFrames,
 																	   integrator.samples_per_pixel_per_frame);
-		int covered = 0;
+		int						 covered   = 0;
 		for (const Vec3f &pixel : reference)
 			covered += Length(pixel - integrator.background_color) > 1e-3f;
 		HAPPYRAY_CHECK(covered > kWidth * kHeight / 20);
@@ -644,7 +647,12 @@ namespace
 											   (type == AccelType::kUniformGrid	   ? "uniform"
 												: type == AccelType::kTwoLevelGrid ? "two-level"
 																				   : "irregular");
-				CompareRendererToReference(case_label.c_str(), &renderer, camera, integrator, kFrames, device_reference);
+				CompareRendererToReference(case_label.c_str(),
+										   &renderer,
+										   camera,
+										   integrator,
+										   kFrames,
+										   device_reference);
 			}
 		}
 	}
@@ -660,15 +668,15 @@ namespace
 		const PrimitiveType types[] = {PrimitiveType::kPoint, PrimitiveType::kSphere, PrimitiveType::kBezierCurve};
 		for (PrimitiveType type : types)
 		{
-			const Scene scene		 = MakeAttractorScene(type, 1500);
-			Camera		camera		 = MakeDefaultCamera(scene);
-			camera.vertical_fov_deg	 = 30.0f;
+			const Scene scene		= MakeAttractorScene(type, 1500);
+			Camera		camera		= MakeDefaultCamera(scene);
+			camera.vertical_fov_deg = 30.0f;
 			integrator.max_distance = DefaultMaxDistance(scene);
 			TestSceneAcrossOverlapModes(PrimitiveTypeName(type), FlattenScene(scene), camera, integrator);
 		}
 
 		// Larger screen-space radii cover more pixels.
-		const Scene scene  = MakeAttractorScene(PrimitiveType::kBezierCurve, 1500);
+		const Scene	 scene	= MakeAttractorScene(PrimitiveType::kBezierCurve, 1500);
 		const Camera camera = MakeDefaultCamera(scene);
 		Renderer	 renderer(FlattenScene(scene));
 		renderer.ResizeFramebuffer(48, 27);

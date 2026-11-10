@@ -37,9 +37,9 @@ namespace happyray
 		// Calls `fn(PrimitiveTag<P>{}, OverlapModeTag<mode>{})`.
 		template <typename Fn> decltype(auto) DispatchBuild(PrimitiveType type, CellOverlapMode mode, Fn &&fn)
 		{
-			return DispatchPrimitive(type,
-									 [&](auto prim)
-									 { return DispatchOverlapMode(mode, [&](auto overlap) { return fn(prim, overlap); }); });
+			return DispatchPrimitive(
+				type,
+				[&](auto prim) { return DispatchOverlapMode(mode, [&](auto overlap) { return fn(prim, overlap); }); });
 		}
 
 		template <typename P> struct PrimitiveBounds
@@ -90,17 +90,18 @@ namespace happyray
 				{
 					uint32_t	   offset = offsets[prim];
 					const uint32_t end	  = offset + counts[prim];
-					const uint32_t count  = ForEachOverlappedCell<P, Mode>(primitive,
-																		   boxes[prim],
-																		   grid.bounds_min,
-																		   grid.inv_cell_size,
-																		   grid.cell_size,
-																		   grid.resolution,
-																		   [&](const Vec3i &cell)
-																		   {
-																			   keys[offset] = FlattenCellIndex(cell, grid.resolution);
-																			   prims[offset++] = prim;
-																		   });
+					const uint32_t count =
+						ForEachOverlappedCell<P, Mode>(primitive,
+													   boxes[prim],
+													   grid.bounds_min,
+													   grid.inv_cell_size,
+													   grid.cell_size,
+													   grid.resolution,
+													   [&](const Vec3i &cell)
+													   {
+														   keys[offset]	   = FlattenCellIndex(cell, grid.resolution);
+														   prims[offset++] = prim;
+													   });
 					const uint32_t invalid =
 						static_cast<uint32_t>(grid.resolution.x) * grid.resolution.y * grid.resolution.z;
 					while (offset < end)
@@ -129,8 +130,8 @@ namespace happyray
 										 thrust::device_vector<uint32_t> *values,
 										 uint32_t						  invalid_key)
 		{
-			const uint32_t valid = static_cast<uint32_t>(
-				thrust::lower_bound(keys->begin(), keys->end(), invalid_key) - keys->begin());
+			const uint32_t valid =
+				static_cast<uint32_t>(thrust::lower_bound(keys->begin(), keys->end(), invalid_key) - keys->begin());
 			if (valid < keys->size())
 			{
 				keys->resize(valid);
@@ -196,14 +197,12 @@ namespace happyray
 
 		inline BuiltCellReferences BuildCellReferences(const SceneView &scene, float density, CellOverlapMode mode)
 		{
-			return DispatchBuild(scene.primitive_type,
-								 mode,
-								 [&](auto prim, auto overlap)
-								 {
-									 return BuildCellReferences<typename decltype(prim)::type, decltype(overlap)::value>(
-										 scene,
-										 density);
-								 });
+			return DispatchBuild(
+				scene.primitive_type,
+				mode,
+				[&](auto prim, auto overlap) {
+					return BuildCellReferences<typename decltype(prim)::type, decltype(overlap)::value>(scene, density);
+				});
 		}
 	} // namespace detail
 } // namespace happyray

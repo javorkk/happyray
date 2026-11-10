@@ -9,7 +9,7 @@
 // whichever hardware this binary actually runs on.
 #pragma once
 
-#include "vec.h"
+#include "../core/vec.h"
 
 namespace happyray
 {

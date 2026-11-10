@@ -17,10 +17,10 @@
 
 #include <cstdint>
 
-#include "irregular_grid.h"
-#include "scene.h"
-#include "two_level_grid.h"
-#include "uniform_grid.h"
+#include "../accel/irregular_grid.h"
+#include "../accel/two_level_grid.h"
+#include "../accel/uniform_grid.h"
+#include "../app/scene.h"
 
 namespace happyray
 {
@@ -29,9 +29,9 @@ namespace happyray
 	{
 		uint32_t object_count = 0;
 		// Leaf cells holding primitives of at least two different objects.
-		uint32_t candidate_cell_count	  = 0;
+		uint32_t candidate_cell_count	   = 0;
 		uint32_t colliding_primitive_count = 0;
-		float	 total_ms				  = 0.0f;
+		float	 total_ms				   = 0.0f;
 	};
 
 	class CollisionDetector

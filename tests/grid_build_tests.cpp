@@ -14,10 +14,10 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 
-#include "attractor_scene.h"
-#include "irregular_grid.h"
-#include "two_level_grid.h"
-#include "uniform_grid.h"
+#include "../src/accel/irregular_grid.h"
+#include "../src/accel/two_level_grid.h"
+#include "../src/accel/uniform_grid.h"
+#include "../src/app/attractor_scene.h"
 
 namespace
 {
@@ -190,7 +190,7 @@ namespace
 		HAPPYRAY_HD void operator()(uint32_t i) const
 		{
 			results[i] = happyray::detail::CellIntersection<happyray::Triangle>(scene, i)(happyray::Vec3f(0, 0, 0),
-																			  happyray::Vec3f(2, 2, 2));
+																						  happyray::Vec3f(2, 2, 2));
 		}
 	};
 
@@ -222,8 +222,8 @@ namespace
 			}
 		}
 		happyray::SceneView host_scene;
-		host_scene.positions	  = positions.data();
-		host_scene.indices		  = indices.data();
+		host_scene.positions	   = positions.data();
+		host_scene.indices		   = indices.data();
 		host_scene.primitive_count = static_cast<uint32_t>(cases.size());
 		const thrust::device_vector<Vec3f>	  device_positions(positions.begin(), positions.end());
 		const thrust::device_vector<uint32_t> device_indices(indices.begin(), indices.end());
@@ -237,9 +237,10 @@ namespace
 		const thrust::host_vector<uint32_t> actual = results;
 		for (uint32_t i = 0; i < cases.size(); ++i)
 		{
-			Check(happyray::detail::CellIntersection<happyray::Triangle>(host_scene, i)(Vec3f(0, 0, 0), Vec3f(2, 2, 2)) ==
-					  cases[i].expected,
-				  "host triangle/cell overlap");
+			Check(
+				happyray::detail::CellIntersection<happyray::Triangle>(host_scene, i)(Vec3f(0, 0, 0), Vec3f(2, 2, 2)) ==
+					cases[i].expected,
+				"host triangle/cell overlap");
 			Check(actual[i] == cases[i].expected, "backend triangle/cell overlap");
 		}
 	}
@@ -270,7 +271,7 @@ namespace
 								   &y_range,
 								   &z_range);
 		const happyray::detail::CellIntersection<happyray::Triangle> intersects(scene, 0);
-		uint32_t										 expected_refs = 0;
+		uint32_t													 expected_refs = 0;
 		for (int z = 0; z < grid.resolution.z; ++z)
 		{
 			for (int y = 0; y < grid.resolution.y; ++y)
@@ -311,8 +312,8 @@ namespace
 								   &y_range,
 								   &z_range);
 		const happyray::detail::CellIntersection<happyray::Triangle> intersects(scene, 0);
-		uint32_t										 expected_refs	 = 0;
-		uint32_t										 aabb_candidates = 0;
+		uint32_t													 expected_refs	 = 0;
+		uint32_t													 aabb_candidates = 0;
 		for (int z = 0; z < grid.resolution.z; ++z)
 		{
 			for (int y = 0; y < grid.resolution.y; ++y)
@@ -345,8 +346,8 @@ namespace
 		const std::vector<Vec3f>	positions = {Vec3f(0, 0, 0), Vec3f(1, 1, 0), Vec3f(0, 1, 1)};
 		const std::vector<uint32_t> indices	  = {0, 1, 2};
 		happyray::SceneView			host_scene;
-		host_scene.positions	  = positions.data();
-		host_scene.indices		  = indices.data();
+		host_scene.positions	   = positions.data();
+		host_scene.indices		   = indices.data();
 		host_scene.primitive_count = 1;
 		const thrust::device_vector<Vec3f>	  device_positions(positions.begin(), positions.end());
 		const thrust::device_vector<uint32_t> device_indices(indices.begin(), indices.end());
@@ -427,12 +428,12 @@ namespace
 		}
 		const thrust::device_vector<happyray::CellRange> device_ranges(ranges.begin(), ranges.end());
 		happyray::UniformGridView						 finest;
-		finest.bounds_min		= info.bounds_min;
-		finest.cell_size		= info.cell_size;
-		finest.inv_cell_size	= info.inv_cell_size;
-		finest.resolution		= info.resolution;
-		finest.cell_ranges		= thrust::raw_pointer_cast(device_ranges.data());
-		finest.prim_indices = irregular_view.prim_indices;
+		finest.bounds_min	 = info.bounds_min;
+		finest.cell_size	 = info.cell_size;
+		finest.inv_cell_size = info.inv_cell_size;
+		finest.resolution	 = info.resolution;
+		finest.cell_ranges	 = thrust::raw_pointer_cast(device_ranges.data());
+		finest.prim_indices	 = irregular_view.prim_indices;
 		CheckFilteredFragments(host_scene, finest);
 
 		const happyray::UniformGrid single_cell(scene, 1);
@@ -491,15 +492,15 @@ namespace
 			  points(scene.points.begin(), scene.points.end()), spheres(scene.spheres.begin(), scene.spheres.end()),
 			  curves(scene.curves.begin(), scene.curves.end()), view(scene.View())
 		{
-			view.positions	  = thrust::raw_pointer_cast(positions.data());
-			view.indices	  = thrust::raw_pointer_cast(indices.data());
-			view.material_ids = thrust::raw_pointer_cast(material_ids.data());
-			view.normals	  = nullptr;
-			view.object_ids	  = nullptr;
+			view.positions				 = thrust::raw_pointer_cast(positions.data());
+			view.indices				 = thrust::raw_pointer_cast(indices.data());
+			view.material_ids			 = thrust::raw_pointer_cast(material_ids.data());
+			view.normals				 = nullptr;
+			view.object_ids				 = nullptr;
 			view.material_diffuse_colors = nullptr;
-			view.points		  = thrust::raw_pointer_cast(points.data());
-			view.spheres	  = thrust::raw_pointer_cast(spheres.data());
-			view.curves		  = thrust::raw_pointer_cast(curves.data());
+			view.points					 = thrust::raw_pointer_cast(points.data());
+			view.spheres				 = thrust::raw_pointer_cast(spheres.data());
+			view.curves					 = thrust::raw_pointer_cast(curves.data());
 		}
 	};
 
@@ -512,7 +513,7 @@ namespace
 												 happyray::PrimitiveType::kBezierCurve};
 		for (happyray::PrimitiveType type : types)
 		{
-			const DeviceFlatScene  scene(happyray::FlattenScene(happyray::MakeAttractorScene(type, 2000)));
+			const DeviceFlatScene scene(happyray::FlattenScene(happyray::MakeAttractorScene(type, 2000)));
 			const CellOverlapMode modes[] = {CellOverlapMode::kAabb, CellOverlapMode::kExact, CellOverlapMode::kHybrid};
 			uint32_t			  counts[3][3];
 			for (int m = 0; m < 3; ++m)
@@ -520,8 +521,7 @@ namespace
 				counts[m][0] = happyray::UniformGrid(scene.view, 3.0f, modes[m]).PrimIndexCount();
 				counts[m][1] =
 					happyray::TwoLevelGrid(scene.view, 0.12f, 1.2f, 16, modes[m]).SecondLevelPrimIndexCount();
-				counts[m][2] =
-					happyray::IrregularGrid(scene.view, 0.12f, 2.4f, 16, 0.7f, 2, modes[m]).PrimIndexCount();
+				counts[m][2] = happyray::IrregularGrid(scene.view, 0.12f, 2.4f, 16, 0.7f, 2, modes[m]).PrimIndexCount();
 			}
 			for (int grid = 0; grid < 3; ++grid)
 			{

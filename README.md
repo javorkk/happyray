@@ -24,6 +24,27 @@ ctest --test-dir build --output-on-failure
 Switch between GPU and CPU backends using `HAPPYRAY_THRUST_BACKEND=CUDA|TBB` (default `CUDA`).
 Use `-DCMAKE_CUDA_ARCHITECTURES=<arch>` to specify GPU architectyre (default `89`). 
 
+### VS Code IntelliSense
+
+Local headers use paths relative to the including file. Same-directory includes use just the
+filename; cross-directory includes use paths such as `../core/vec.h`.
+
+For Microsoft's C/C++ extension, configure the project with CMake first, then point IntelliSense
+at the generated compilation database in your VS Code workspace settings:
+
+```json
+{
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json"
+}
+```
+
+Replace `build` with your actual build directory (for example, `build-tbb` or `build-cuda`).
+CMake already enables `CMAKE_EXPORT_COMPILE_COMMANDS`. The database supplies the compiler,
+include directories, and defines for each translation unit, including third-party dependencies.
+Alternatively, if you use the CMake Tools extension, set
+`"C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"` and configure the desired
+backend there.
+
 ## X forwarding using Docker on WSL2
 
 In WSL2:
@@ -209,11 +230,13 @@ backends; it carries the `performance` label and runs serially.
   both buffers have one entry per vertex and share the same triangle indices. OBJ attribute
   seams retain distinct vertex entries. Flattening extracts the positions and normals used by
   the renderer, whose host/device layout is unchanged.
+  `primitive_traits.h` defines both hit records (`ClosestHit`, `HitRecord`) and the
+  per-primitive-type interface (`PrimitiveTraits<P>`: fetch, ray intersection, shading normal,
+  and exact cell overlap) for triangles, points, spheres, and Bezier curves. The traits use
+  the application's `SceneView` from `scene.h`.
 - `src/accel/`: the uniform grid, the two-level grid, and the irregular grid.
   Each acceleration structure has one header and one implementation file.
-  `primitive_traits.h` defines the per-primitive-type interface (`PrimitiveTraits<P>`: fetch, ray
-  intersection, shading normal, and exact cell overlap) for triangles, points, spheres, and Bezier
-  curves. Grid views are primitive-agnostic; builders and leaf intersection are templated on the
+  Grid views are primitive-agnostic; builders and leaf intersection are templated on the
   primitive type and dispatched once per build or kernel launch from `SceneView::primitive_type`.
   Query functions default to `DynamicPrimitive`, which dispatches at runtime.
   `CellOverlapMode` selects how builders assign primitives to cells: `kAabb` (every cell of the

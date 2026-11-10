@@ -11,12 +11,12 @@
 #include <cstdint>
 #include <memory>
 
-#include "ray.h"
+#include "../app/scene.h"
+#include "../core/ray.h"
+#include "../core/triangle.h"
+#include "../core/vec.h"
 #include "sah_cost.h"
-#include "scene.h"
-#include "triangle.h"
 #include "uniform_grid.h"
-#include "vec.h"
 
 namespace happyray
 {
@@ -32,7 +32,7 @@ namespace happyray
 
 	struct GridRangeView : GridBoundsView
 	{
-		const CellRange *cell_ranges	  = nullptr;
+		const CellRange *cell_ranges  = nullptr;
 		const uint32_t	*prim_indices = nullptr;
 	};
 
@@ -58,8 +58,8 @@ namespace happyray
 	struct TwoLevelGridView
 	{
 		GridBoundsView		top_level;
-		const TopLevelCell *top_level_cells				  = nullptr; // One entry per top-level cell.
-		const CellRange	   *second_level_cell_ranges	  = nullptr;
+		const TopLevelCell *top_level_cells			  = nullptr; // One entry per top-level cell.
+		const CellRange	   *second_level_cell_ranges  = nullptr;
 		const uint32_t	   *second_level_prim_indices = nullptr; // Sorted by second-level cell.
 	};
 
@@ -79,13 +79,13 @@ namespace happyray
 								 top.bounds_min.z + cz * top.cell_size.z);
 		const Vec3f cell_size(top.cell_size.x / resolution, top.cell_size.y / resolution, top.cell_size.z / resolution);
 		GridRangeView view;
-		view.bounds_min		  = bounds_min;
-		view.bounds_max		  = bounds_min + top.cell_size;
-		view.cell_size		  = cell_size;
-		view.inv_cell_size	  = Vec3f(1.0f / cell_size.x, 1.0f / cell_size.y, 1.0f / cell_size.z);
-		view.resolution		  = Vec3i(resolution, resolution, resolution);
-		view.cell_ranges	  = grid.second_level_cell_ranges + info.cell_range_offset;
-		view.prim_indices = grid.second_level_prim_indices;
+		view.bounds_min	   = bounds_min;
+		view.bounds_max	   = bounds_min + top.cell_size;
+		view.cell_size	   = cell_size;
+		view.inv_cell_size = Vec3f(1.0f / cell_size.x, 1.0f / cell_size.y, 1.0f / cell_size.z);
+		view.resolution	   = Vec3i(resolution, resolution, resolution);
+		view.cell_ranges   = grid.second_level_cell_ranges + info.cell_range_offset;
+		view.prim_indices  = grid.second_level_prim_indices;
 		return view;
 	}
 

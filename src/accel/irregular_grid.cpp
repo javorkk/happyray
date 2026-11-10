@@ -184,15 +184,16 @@ namespace happyray
 				const Vec3f	   cell_min(top_bounds_min.x + cx * top_cell_size.x,
 										top_bounds_min.y + cy * top_cell_size.y,
 										top_bounds_min.z + cz * top_cell_size.z);
-				const Vec3f	   cell_max		  = cell_min + top_cell_size;
+				const Vec3f	   cell_max		   = cell_min + top_cell_size;
 				const uint32_t primitive_count = top_cell_ranges[c].end - top_cell_ranges[c].start;
 
-				Vec3i res = (primitive_count <= dense_cell_threshold)
-								? Vec3i(1, 1, 1)
-								: ComputeGridResolution(BBox(cell_min, cell_max), primitive_count, second_level_density);
-				res.x	  = RoundUpPow2(res.x);
-				res.y	  = RoundUpPow2(res.y);
-				res.z	  = RoundUpPow2(res.z);
+				Vec3i res =
+					(primitive_count <= dense_cell_threshold)
+						? Vec3i(1, 1, 1)
+						: ComputeGridResolution(BBox(cell_min, cell_max), primitive_count, second_level_density);
+				res.x = RoundUpPow2(res.x);
+				res.y = RoundUpPow2(res.y);
+				res.z = RoundUpPow2(res.z);
 
 				IrregularCellInfo info;
 				info.bounds_min		= cell_min;
@@ -345,16 +346,16 @@ namespace happyray
 		// Unsorted (finest voxel, primitive) pairs of every top-level pair; padding uses key
 		// `total_entries`.
 		template <typename P, CellOverlapMode Mode>
-		void BuildFinestPairs(const SceneView						&scene,
-							  const thrust::device_vector<uint32_t> &owning_top_cell,
-							  const uint32_t						*top_prim_indices,
+		void BuildFinestPairs(const SceneView								 &scene,
+							  const thrust::device_vector<uint32_t>			 &owning_top_cell,
+							  const uint32_t								 *top_prim_indices,
 							  const thrust::device_vector<IrregularCellInfo> &infos,
-							  uint32_t								 total_top_level_pairs,
-							  uint32_t								 total_entries,
-							  thrust::device_vector<uint32_t>		*pair_voxel_indices,
-							  thrust::device_vector<uint32_t>		*pair_prim_indices)
+							  uint32_t										  total_top_level_pairs,
+							  uint32_t										  total_entries,
+							  thrust::device_vector<uint32_t>				 *pair_voxel_indices,
+							  thrust::device_vector<uint32_t>				 *pair_prim_indices)
 		{
-			const auto first = thrust::counting_iterator<uint32_t>(0);
+			const auto						first = thrust::counting_iterator<uint32_t>(0);
 			thrust::device_vector<uint32_t> counts(total_top_level_pairs);
 			thrust::transform(first,
 							  first + total_top_level_pairs,
@@ -808,7 +809,7 @@ namespace happyray
 							  entries->begin(),
 							  ApplyRemapFunctor{thrust::raw_pointer_cast(remap_table.data())});
 
-			*cells			  = std::move(new_cells);
+			*cells		  = std::move(new_cells);
 			*prim_indices = std::move(new_triangle_indices);
 		}
 
@@ -934,7 +935,7 @@ namespace happyray
 			view.top_cells		   = thrust::raw_pointer_cast(top_cells.data());
 			view.local_entries	   = thrust::raw_pointer_cast(entries.data());
 			view.local_cells	   = thrust::raw_pointer_cast(cells.data());
-			view.prim_indices  = thrust::raw_pointer_cast(prim_indices.data());
+			view.prim_indices	   = thrust::raw_pointer_cast(prim_indices.data());
 			view.global_cell_size  = global_cell_size;
 			view.global_resolution = global_resolution;
 			view.global_inv_cell_size =
@@ -1160,9 +1161,9 @@ namespace happyray
 
 		impl_->top_cells.resize(num_top_cells);
 		thrust::transform(infos.begin(), infos.end(), impl_->top_cells.begin(), MakeTopCellFunctor());
-		impl_->cell_infos		= std::move(infos);
-		impl_->entries			= std::move(entries);
-		impl_->cells			= std::move(cells);
+		impl_->cell_infos	= std::move(infos);
+		impl_->entries		= std::move(entries);
+		impl_->cells		= std::move(cells);
 		impl_->prim_indices = std::move(prim_indices);
 	}
 

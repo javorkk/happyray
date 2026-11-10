@@ -11,8 +11,8 @@
 #include <cmath>
 #include <stdexcept>
 
-#include "random.h"
-#include "renderer.h"
+#include "../core/random.h"
+#include "../render/renderer.h"
 
 namespace happyray
 {

@@ -25,11 +25,11 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-#include "obj_loader.h"
-#include "random.h"
-#include "sah_cost.h"
-#include "scene.h"
-#include "scene_intersect.h"
+#include "../src/accel/sah_cost.h"
+#include "../src/accel/scene_intersect.h"
+#include "../src/app/obj_loader.h"
+#include "../src/app/scene.h"
+#include "../src/core/random.h"
 
 namespace
 {

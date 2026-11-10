@@ -14,14 +14,6 @@ namespace happyray
 
 	using Triangle = Primitive<3>;
 
-	struct HitRecord
-	{
-		float	 t = 1e30f;
-		Vec3f	 position;
-		Vec3f	 normal;
-		uint32_t material_id = 0;
-	};
-
 	// Moller-Trumbore ray/triangle intersection.
 	HAPPYRAY_HD inline bool IntersectRayTriangle(const Ray	 &ray,
 												 const Vec3f &v0,

@@ -1,8 +1,8 @@
 // Ambient-occlusion ray evaluation, independent of framebuffer ownership and parallel dispatch.
 #pragma once
 
-#include "random.h"
-#include "scene_intersect.h"
+#include "../accel/scene_intersect.h"
+#include "../core/random.h"
 
 namespace happyray
 {

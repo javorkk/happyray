@@ -9,10 +9,10 @@
 // drive keyframed camera/mesh animation and GPU-side basis computation.
 #pragma once
 
-#include "mat4.h"
-#include "quaternion.h"
-#include "ray.h"
-#include "vec.h"
+#include "../core/mat4.h"
+#include "../core/quaternion.h"
+#include "../core/ray.h"
+#include "../core/vec.h"
 
 namespace happyray
 {

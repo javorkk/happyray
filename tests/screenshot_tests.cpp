@@ -1,4 +1,4 @@
-#include "screenshot.h"
+#include "../src/app/screenshot.h"
 
 #include <png.h>
 

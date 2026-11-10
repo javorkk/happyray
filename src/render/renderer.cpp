@@ -22,11 +22,11 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include "../accel/irregular_grid.h"
+#include "../accel/two_level_grid.h"
+#include "../accel/uniform_grid.h"
+#include "../core/random.h"
 #include "collision_detector.h"
-#include "irregular_grid.h"
-#include "random.h"
-#include "two_level_grid.h"
-#include "uniform_grid.h"
 
 namespace happyray
 {
@@ -51,8 +51,11 @@ namespace happyray
 				const int x			  = static_cast<int>(pixel_index % width);
 				const int y			  = static_cast<int>(pixel_index / width);
 				const Ray primary_ray = camera.GenerateRay(static_cast<float>(x), static_cast<float>(y), width, height);
-				const Vec3f sample =
-					integrator.template Integrate<P>(scene, accel, primary_ray, sample_offset, pixel_jitter[pixel_index]);
+				const Vec3f sample	  = integrator.template Integrate<P>(scene,
+																		 accel,
+																		 primary_ray,
+																		 sample_offset,
+																		 pixel_jitter[pixel_index]);
 				accumulated[pixel_index] += sample;
 			}
 		};
@@ -81,9 +84,9 @@ namespace happyray
 
 			HAPPYRAY_HD P operator()(P primitive) const
 			{
-				const float distance = fminf(Length(primitive.vtx[0] - eye),
-											 Length(primitive.vtx[P::kNumVertices - 1] - eye));
-				primitive.radius	 = world_per_pixel * distance;
+				const float distance =
+					fminf(Length(primitive.vtx[0] - eye), Length(primitive.vtx[P::kNumVertices - 1] - eye));
+				primitive.radius = world_per_pixel * distance;
 				return primitive;
 			}
 		};
@@ -92,28 +95,28 @@ namespace happyray
 
 	struct Renderer::Impl
 	{
-		PrimitiveType					primitive_type = PrimitiveType::kTriangle;
-		thrust::device_vector<Vec3f>	positions;
-		thrust::device_vector<Vec3f>	normals;
-		thrust::device_vector<uint32_t> indices;
-		thrust::device_vector<Point>		points;
-		thrust::device_vector<Sphere>		spheres;
+		PrimitiveType					   primitive_type = PrimitiveType::kTriangle;
+		thrust::device_vector<Vec3f>	   positions;
+		thrust::device_vector<Vec3f>	   normals;
+		thrust::device_vector<uint32_t>	   indices;
+		thrust::device_vector<Point>	   points;
+		thrust::device_vector<Sphere>	   spheres;
 		thrust::device_vector<BezierCurve> curves;
 		// Scene-provided points/curves; `points`/`curves` hold the view-dependent copies.
-		thrust::device_vector<Point>		scene_points;
+		thrust::device_vector<Point>	   scene_points;
 		thrust::device_vector<BezierCurve> scene_curves;
 		float							   screen_space_radius = 2.0f;
 		bool							   has_view_camera	   = false;
 		Camera							   view_camera;
 		CellOverlapMode					   overlap_mode = DefaultCellOverlapMode();
-		thrust::device_vector<uint32_t> material_ids;
-		thrust::device_vector<Vec3f>	material_diffuse_colors; // Ends with the collided material.
-		thrust::device_vector<uint32_t> object_ids;
-		thrust::device_vector<uint32_t> collision_ids;
-		uint32_t						object_count = 1;
-		CollisionDetector				collision_detector;
-		CollisionStats					collision_stats;
-		bool							collision_detection_enabled = true;
+		thrust::device_vector<uint32_t>	   material_ids;
+		thrust::device_vector<Vec3f>	   material_diffuse_colors; // Ends with the collided material.
+		thrust::device_vector<uint32_t>	   object_ids;
+		thrust::device_vector<uint32_t>	   collision_ids;
+		uint32_t						   object_count = 1;
+		CollisionDetector				   collision_detector;
+		CollisionStats					   collision_stats;
+		bool							   collision_detection_enabled = true;
 
 		thrust::device_vector<Vec3f> accumulated;
 		thrust::device_vector<Vec2f> pixel_jitter;
@@ -248,7 +251,7 @@ namespace happyray
 		curves = scene_curves;
 		if (!has_view_camera || screen_space_radius <= 0.0f || height <= 0)
 			return;
-		const float tan_half_fov	= std::tan(0.5f * view_camera.vertical_fov_deg * (3.14159265358979323846f / 180.0f));
+		const float tan_half_fov = std::tan(0.5f * view_camera.vertical_fov_deg * (3.14159265358979323846f / 180.0f));
 		const float world_per_pixel = screen_space_radius * 2.0f * tan_half_fov / static_cast<float>(height);
 		thrust::transform(scene_points.begin(),
 						  scene_points.end(),
@@ -379,8 +382,7 @@ namespace happyray
 
 	void Renderer::BuildUniformGrid(float target_prims_per_cell)
 	{
-		impl_->uniform_grid =
-			std::make_unique<UniformGrid>(impl_->View(), target_prims_per_cell, impl_->overlap_mode);
+		impl_->uniform_grid = std::make_unique<UniformGrid>(impl_->View(), target_prims_per_cell, impl_->overlap_mode);
 		impl_->ComputeCollisions(*impl_->uniform_grid);
 		impl_->uniform_densities = {target_prims_per_cell, 0};
 	}
@@ -577,24 +579,24 @@ namespace happyray
 
 		const uint32_t pixel_count = static_cast<uint32_t>(width) * height;
 
-		DispatchPrimitive(
-			primitive_type,
-			[&](auto tag)
-			{
-				using P = typename decltype(tag)::type;
-				const RenderPixelFunctor<Integrator, P> render{View(),
-															   CurrentAccel(),
-															   camera,
-															   integrator,
-															   thrust::raw_pointer_cast(pixel_jitter.data()),
-															   thrust::raw_pointer_cast(accumulated.data()),
-															   sample_offset,
-															   width,
-															   height};
-				thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-								 thrust::counting_iterator<uint32_t>(pixel_count),
-								 render);
-			});
+		DispatchPrimitive(primitive_type,
+						  [&](auto tag)
+						  {
+							  using P = typename decltype(tag)::type;
+							  const RenderPixelFunctor<Integrator, P> render{
+								  View(),
+								  CurrentAccel(),
+								  camera,
+								  integrator,
+								  thrust::raw_pointer_cast(pixel_jitter.data()),
+								  thrust::raw_pointer_cast(accumulated.data()),
+								  sample_offset,
+								  width,
+								  height};
+							  thrust::for_each(thrust::counting_iterator<uint32_t>(0),
+											   thrust::counting_iterator<uint32_t>(pixel_count),
+											   render);
+						  });
 		++sample_count;
 
 		const ResolveFunctor resolve{1.0f / static_cast<float>(accumulated_frames),

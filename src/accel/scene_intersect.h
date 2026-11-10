@@ -2,14 +2,14 @@
 // Brute force is the correctness oracle for every acceleration structure.
 #pragma once
 
+#include "../app/scene.h"
+#include "../core/primitive.h"
+#include "../core/ray.h"
+#include "../core/triangle.h"
+#include "../core/vec.h"
 #include "irregular_grid.h"
-#include "primitive.h"
-#include "ray.h"
-#include "scene.h"
-#include "triangle.h"
 #include "two_level_grid.h"
 #include "uniform_grid.h"
-#include "vec.h"
 
 namespace happyray
 {

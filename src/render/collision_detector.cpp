@@ -22,7 +22,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
-#include "primitive_traits.h"
+#include "../core/primitive_traits.h"
 
 namespace happyray
 {
@@ -216,20 +216,21 @@ namespace happyray
 					DispatchPrimitive(scene.primitive_type,
 									  [&](auto tag)
 									  {
-										  thrust::transform(thrust::counting_iterator<uint32_t>(0),
-															thrust::counting_iterator<uint32_t>(scene.primitive_count),
-															boxes.begin(),
-															PrimitiveBoundsFunctor<typename decltype(tag)::type>{scene});
+										  thrust::transform(
+											  thrust::counting_iterator<uint32_t>(0),
+											  thrust::counting_iterator<uint32_t>(scene.primitive_count),
+											  boxes.begin(),
+											  PrimitiveBoundsFunctor<typename decltype(tag)::type>{scene});
 									  });
 					thrust::for_each(thrust::counting_iterator<uint32_t>(0),
 									 thrust::counting_iterator<uint32_t>(work_item_count),
 									 CollisionOperator{scene.object_ids,
-															thrust::raw_pointer_cast(boxes.data()),
-															prim_indices,
-															collision_ids,
-															thrust::raw_pointer_cast(candidate_cells.data()),
-															thrust::raw_pointer_cast(cell_ref_offsets.data()),
-															stats.candidate_cell_count});
+													   thrust::raw_pointer_cast(boxes.data()),
+													   prim_indices,
+													   collision_ids,
+													   thrust::raw_pointer_cast(candidate_cells.data()),
+													   thrust::raw_pointer_cast(cell_ref_offsets.data()),
+													   stats.candidate_cell_count});
 				}
 
 				stats.colliding_primitive_count =

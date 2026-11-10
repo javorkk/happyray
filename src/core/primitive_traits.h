@@ -4,15 +4,23 @@
 #include <cstdint>
 #include <type_traits>
 
+#include "../app/scene.h"
 #include "bezier_curve.h"
 #include "point.h"
 #include "primitive.h"
-#include "scene.h"
 #include "sphere.h"
 #include "triangle.h"
 
 namespace happyray
 {
+
+	struct HitRecord
+	{
+		float	 t = 1e30f;
+		Vec3f	 position;
+		Vec3f	 normal;
+		uint32_t material_id = 0;
+	};
 
 	// Closest-hit state carried through traversal; resolved into a HitRecord afterwards.
 	struct ClosestHit

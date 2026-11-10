@@ -1,7 +1,7 @@
 // Cartoon shading following happyray's RenderBug fragment shader.
 #pragma once
 
-#include "scene_intersect.h"
+#include "../accel/scene_intersect.h"
 
 namespace happyray
 {

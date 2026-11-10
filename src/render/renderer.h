@@ -11,14 +11,14 @@
 #include <memory>
 #include <vector>
 
+#include "../accel/sah_cost.h"
+#include "../accel/scene_intersect.h"
+#include "../app/scene.h"
+#include "../core/vec.h"
 #include "ao_integrator.h"
 #include "camera.h"
 #include "collision_detector.h"
-#include "sah_cost.h"
-#include "scene.h"
-#include "scene_intersect.h"
 #include "simple_integrator.h"
-#include "vec.h"
 
 namespace happyray
 {

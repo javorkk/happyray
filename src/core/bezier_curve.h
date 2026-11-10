@@ -140,8 +140,10 @@ namespace happyray
 		{
 			return {
 				{curve.vtx[0], curve.vtx[1], curve.vtx[2], curve.vtx[3]},
-				0.0f, 1.0f, 0
-			};
+				0.0f,
+				1.0f,
+				0
+			 };
 		}
 
 		// Max distance of the inner control points from the chord; bounds the curve's deviation.
@@ -163,11 +165,15 @@ namespace happyray
 			const float u_mid	 = 0.5f * (segment.u0 + segment.u1);
 			*left				 = {
 				   {segment.control[0], p01, p012, midpoint},
-				   segment.u0, u_mid, segment.depth + 1
+				   segment.u0,
+				   u_mid,
+				   segment.depth + 1
 			};
 			*right = {
 				{midpoint, p123, p23, segment.control[3]},
-				u_mid, segment.u1, segment.depth + 1
+				u_mid,
+				segment.u1,
+				segment.depth + 1
 			 };
 		}
 
@@ -238,8 +244,8 @@ namespace happyray
 	{
 		if (curve.radius < 0.0f || box.IsEmpty())
 			return false;
-		const float slack	  = curve.radius + 2.0f * kBezierRayTolerance;
-		const Vec3f extent	  = box.Extent();
+		const float slack  = curve.radius + 2.0f * kBezierRayTolerance;
+		const Vec3f extent = box.Extent();
 		// Never finer than the ray test, so its leaves nest inside ours and `slack` covers them.
 		const float tolerance =
 			fmaxf(kBezierRayTolerance, 0.1f * fminf(extent.x, fminf(extent.y, extent.z)) + 0.5f * curve.radius);

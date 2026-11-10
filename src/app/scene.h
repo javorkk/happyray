@@ -11,11 +11,11 @@
 #include <string>
 #include <vector>
 
+#include "../core/mesh.h"
+#include "../core/primitive.h"
+#include "../core/triangle.h"
+#include "../core/vec.h"
 #include "../render/camera.h"
-#include "mesh.h"
-#include "primitive.h"
-#include "triangle.h"
-#include "vec.h"
 
 namespace happyray
 {
@@ -68,12 +68,12 @@ namespace happyray
 	// Host-owned geometry shared by CPU rendering and GPU upload.
 	struct FlatScene
 	{
-		PrimitiveType		  primitive_type = PrimitiveType::kTriangle;
-		std::vector<Vec3f>	  positions;
-		std::vector<Vec3f>	  normals;
-		std::vector<uint32_t> indices;
-		std::vector<Point>	  points;
-		std::vector<Sphere>	  spheres;
+		PrimitiveType			 primitive_type = PrimitiveType::kTriangle;
+		std::vector<Vec3f>		 positions;
+		std::vector<Vec3f>		 normals;
+		std::vector<uint32_t>	 indices;
+		std::vector<Point>		 points;
+		std::vector<Sphere>		 spheres;
 		std::vector<BezierCurve> curves;
 		std::vector<uint32_t>	 material_ids; // 1 per primitive.
 		std::vector<Vec3f>		 material_diffuse_colors;
@@ -122,7 +122,8 @@ namespace happyray
 		flat.primitive_type = scene.Type();
 		if (flat.primitive_type != PrimitiveType::kTriangle)
 		{
-			if (!scene.meshes.empty() || (!scene.points.empty()) + (!scene.spheres.empty()) + (!scene.curves.empty()) > 1)
+			if (!scene.meshes.empty() ||
+				(!scene.points.empty()) + (!scene.spheres.empty()) + (!scene.curves.empty()) > 1)
 				throw std::invalid_argument("Scenes must hold a single primitive type");
 			flat.points		  = scene.points;
 			flat.spheres	  = scene.spheres;
@@ -131,8 +132,8 @@ namespace happyray
 			flat.material_ids.resize(flat.PrimitiveCount(), 0u);
 			flat.object_ids.assign(flat.PrimitiveCount(), 0u);
 		}
-		uint32_t  vertex_offset = 0;
-		uint32_t  object_offset = 0;
+		uint32_t vertex_offset = 0;
+		uint32_t object_offset = 0;
 		for (const Mesh &mesh : scene.meshes)
 		{
 			flat.positions.insert(flat.positions.end(), mesh.positions.begin(), mesh.positions.end());

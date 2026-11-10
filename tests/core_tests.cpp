@@ -9,20 +9,20 @@
 #include <string>
 #include <type_traits>
 
-#include "animation.h"
-#include "bbox.h"
-#include "bezier_curve.h"
-#include "mat4.h"
-#include "mesh.h"
-#include "obj_loader.h"
-#include "point.h"
-#include "quaternion.h"
-#include "random.h"
-#include "ray.h"
-#include "scene.h"
-#include "sphere.h"
-#include "triangle.h"
-#include "vec.h"
+#include "../src/app/animation.h"
+#include "../src/app/obj_loader.h"
+#include "../src/app/scene.h"
+#include "../src/core/bbox.h"
+#include "../src/core/bezier_curve.h"
+#include "../src/core/mat4.h"
+#include "../src/core/mesh.h"
+#include "../src/core/point.h"
+#include "../src/core/quaternion.h"
+#include "../src/core/random.h"
+#include "../src/core/ray.h"
+#include "../src/core/sphere.h"
+#include "../src/core/triangle.h"
+#include "../src/core/vec.h"
 
 namespace
 {
@@ -273,7 +273,8 @@ namespace
 		HAPPYRAY_CHECK(IntersectRayPoint(x_ray, Point(Vec3f(2, 0.4f, 0), 0.5f), &t));
 		HAPPYRAY_CHECK(!IntersectRayPoint(x_ray, Point(Vec3f(2, 0.6f, 0), 0.5f), &t));
 		HAPPYRAY_CHECK(Intersects(Point(Vec3f(1.4f, 0, 0), 0.5f), box));
-		HAPPYRAY_CHECK(NearlyEqual(BBoxExtractor<Point>::Get(Point(Vec3f(1, 2, 3), 0.5f)).max_bound, Vec3f(1.5f, 2.5f, 3.5f)));
+		HAPPYRAY_CHECK(
+			NearlyEqual(BBoxExtractor<Point>::Get(Point(Vec3f(1, 2, 3), 0.5f)).max_bound, Vec3f(1.5f, 2.5f, 3.5f)));
 
 		// Curve hits report their curve parameter; normals derive from it.
 		float u = -1.0f;
@@ -286,11 +287,17 @@ namespace
 		HAPPYRAY_CHECK(Intersects(curved_tube, BBox(Vec3f(0.45f, 0.7f, -0.05f), Vec3f(0.55f, 0.8f, 0.05f))));
 		HAPPYRAY_CHECK(!Intersects(curved_tube, BBox(Vec3f(0.45f, 0.85f, -0.05f), Vec3f(0.55f, 0.95f, 0.05f))));
 		// Rays starting inside a point's disc (AO rays) don't self-occlude.
-		HAPPYRAY_CHECK(!IntersectRayPoint(Ray(Vec3f(2, 0.05f, 0.001f), Vec3f(0.3f, -0.1f, 1)), Point(Vec3f(2, 0, 0), 0.1f), &t));
+		HAPPYRAY_CHECK(
+			!IntersectRayPoint(Ray(Vec3f(2, 0.05f, 0.001f), Vec3f(0.3f, -0.1f, 1)), Point(Vec3f(2, 0, 0), 0.1f), &t));
 		// Cells smaller than the ray tolerance still cover the ray test's capsule proxies.
-		const BezierCurve flat_curve(Vec3f(0, 0.7e-3f, 5e-4f), Vec3f(0.01f, 1.65e-3f, 5e-4f), Vec3f(0.02f, 1.65e-3f, 5e-4f), Vec3f(0.03f, 0.7e-3f, 5e-4f), 0.0f);
+		const BezierCurve flat_curve(Vec3f(0, 0.7e-3f, 5e-4f),
+									 Vec3f(0.01f, 1.65e-3f, 5e-4f),
+									 Vec3f(0.02f, 1.65e-3f, 5e-4f),
+									 Vec3f(0.03f, 0.7e-3f, 5e-4f),
+									 0.0f);
 		HAPPYRAY_CHECK(IntersectRayBezierCurve(Ray(Vec3f(0.015f, -1.25e-3f, -1), Vec3f(0, 0, 1)), flat_curve, &t));
-		HAPPYRAY_CHECK(Intersects(flat_curve, BBox(Vec3f(0.014995f, -0.002005f, -5e-6f), Vec3f(0.016005f, -0.000995f, 0.001005f))));
+		HAPPYRAY_CHECK(Intersects(flat_curve,
+								  BBox(Vec3f(0.014995f, -0.002005f, -5e-6f), Vec3f(0.016005f, -0.000995f, 0.001005f))));
 
 		const Triangle flat{
 			{Vec3f(0, 0, 0), Vec3f(2, 0, 0), Vec3f(0, 2, 0)}

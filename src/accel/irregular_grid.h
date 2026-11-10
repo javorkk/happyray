@@ -64,12 +64,12 @@
 #include <cstdint>
 #include <memory>
 
-#include "ray.h"
+#include "../app/scene.h"
+#include "../core/ray.h"
+#include "../core/triangle.h"
+#include "../core/vec.h"
 #include "sah_cost.h"
-#include "scene.h"
-#include "triangle.h"
 #include "uniform_grid.h"
-#include "vec.h"
 
 namespace happyray
 {
@@ -165,9 +165,9 @@ namespace happyray
 		// resolve to the same (now bigger) cell, possibly owned by a *different*
 		// top-level cell than the one whose local_entries slot is being read (see
 		// the file header comment above).
-		const uint32_t		*local_entries	  = nullptr;
-		const IrregularCell *local_cells	  = nullptr; // Combined across every top-level cell.
-		const uint32_t		*prim_indices = nullptr; // Combined sorted leaf CSR payload.
+		const uint32_t		*local_entries = nullptr;
+		const IrregularCell *local_cells   = nullptr; // Combined across every top-level cell.
+		const uint32_t		*prim_indices  = nullptr; // Combined sorted leaf CSR payload.
 		// The grid-wide shared lattice every IrregularCell's bounds are expressed
 		// in (see the file header comment above): `global_cell_size` is one shared
 		// lattice step's world-space size, and `global_resolution` is how many

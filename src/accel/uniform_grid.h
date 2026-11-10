@@ -19,14 +19,14 @@
 #include <cstdint>
 #include <memory>
 
-#include "bbox.h"
-#include "primitive.h"
-#include "primitive_traits.h"
-#include "ray.h"
+#include "../app/scene.h"
+#include "../core/bbox.h"
+#include "../core/primitive.h"
+#include "../core/primitive_traits.h"
+#include "../core/ray.h"
+#include "../core/triangle.h"
+#include "../core/vec.h"
 #include "sah_cost.h"
-#include "scene.h"
-#include "triangle.h"
-#include "vec.h"
 
 namespace happyray
 {
@@ -113,7 +113,7 @@ namespace happyray
 		Vec3f inv_cell_size;
 		Vec3i resolution = Vec3i(1, 1, 1);
 		// One begin/end pair per cell; empty cells have equal indices.
-		const CellRange *cell_ranges	  = nullptr;
+		const CellRange *cell_ranges  = nullptr;
 		const uint32_t	*prim_indices = nullptr; // Sorted by cell; indexes into SceneView.
 	};
 

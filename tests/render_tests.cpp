@@ -8,11 +8,11 @@
 #include <cstdlib>
 #include <string>
 
-#include "ao_integrator.h"
-#include "camera.h"
-#include "obj_loader.h"
-#include "scene.h"
-#include "simple_integrator.h"
+#include "../src/app/obj_loader.h"
+#include "../src/app/scene.h"
+#include "../src/render/ao_integrator.h"
+#include "../src/render/camera.h"
+#include "../src/render/simple_integrator.h"
 
 namespace
 {

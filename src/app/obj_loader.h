@@ -21,7 +21,7 @@
 
 #include <string>
 
-#include "mesh.h"
+#include "../core/mesh.h"
 
 namespace happyray
 {

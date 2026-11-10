@@ -17,9 +17,9 @@ namespace happyray
 
 		UniformGridView View() const
 		{
-			UniformGridView view  = geometry;
-			view.cell_ranges	  = thrust::raw_pointer_cast(cell_ranges.data());
-			view.prim_indices = thrust::raw_pointer_cast(prim_indices.data());
+			UniformGridView view = geometry;
+			view.cell_ranges	 = thrust::raw_pointer_cast(cell_ranges.data());
+			view.prim_indices	 = thrust::raw_pointer_cast(prim_indices.data());
 			return view;
 		}
 	};
