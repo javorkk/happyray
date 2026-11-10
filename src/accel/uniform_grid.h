@@ -551,6 +551,9 @@ namespace happyray
 
 		UniformGridView View() const;
 
+		// Total number of leaf cells, including empty cells.
+		uint32_t LeafCellCount() const;
+
 		// Total number of (cell, primitive) references stored by this grid.
 		uint32_t PrimIndexCount() const;
 

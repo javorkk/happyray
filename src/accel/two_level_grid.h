@@ -333,7 +333,7 @@ namespace happyray
 		// allocation introspection. `top_level`'s own cell count is
 		// `View().top_level.resolution`'s product, already public; these fill
 		// in the remaining counts that aren't otherwise derivable from the view.
-		uint32_t SecondLevelCellCount() const;
+		uint32_t LeafCellCount() const;
 		uint32_t SecondLevelPrimIndexCount() const;
 
 		// Structural SAH cost estimate for this grid as currently built (see

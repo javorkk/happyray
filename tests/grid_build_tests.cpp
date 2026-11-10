@@ -357,10 +357,11 @@ namespace
 
 		const happyray::UniformGrid uniform(scene, 128);
 		CheckFilteredFragments(host_scene, uniform.View());
-		const auto uniform_ranges =
-			Download(uniform.View().cell_ranges,
-					 uniform.View().resolution.x * uniform.View().resolution.y * uniform.View().resolution.z);
-		uint32_t uniform_reference_count = 0;
+		Check(uniform.LeafCellCount() == static_cast<uint32_t>(uniform.View().resolution.x) *
+											 uniform.View().resolution.y * uniform.View().resolution.z,
+			  "uniform leaf count includes every grid cell");
+		const auto uniform_ranges		   = Download(uniform.View().cell_ranges, uniform.LeafCellCount());
+		uint32_t   uniform_reference_count = 0;
 		for (const auto &range : uniform_ranges)
 		{
 			uniform_reference_count = std::max(uniform_reference_count, range.end);
@@ -372,12 +373,15 @@ namespace
 		auto						 two_view = two_level.View();
 		const uint32_t				 num_top_cells =
 			two_view.top_level.resolution.x * two_view.top_level.resolution.y * two_view.top_level.resolution.z;
-		const auto top_level_cells = Download(two_view.top_level_cells, num_top_cells);
-		two_view.top_level_cells   = top_level_cells.data();
-		uint32_t empty_top_cells   = 0;
-		uint32_t occupied_top_cell = num_top_cells;
+		const auto top_level_cells	 = Download(two_view.top_level_cells, num_top_cells);
+		two_view.top_level_cells	 = top_level_cells.data();
+		uint32_t empty_top_cells	 = 0;
+		uint32_t occupied_top_cell	 = num_top_cells;
+		uint32_t expected_leaf_count = 0;
 		for (uint32_t cell = 0; cell < num_top_cells; ++cell)
 		{
+			const uint32_t resolution = static_cast<uint32_t>(top_level_cells[cell].Resolution());
+			expected_leaf_count += resolution * resolution * resolution;
 			if (top_level_cells[cell].IsEmpty())
 			{
 				++empty_top_cells;
@@ -400,6 +404,8 @@ namespace
 				}
 			}
 		}
+		Check(two_level.LeafCellCount() == expected_leaf_count,
+			  "two-level leaf count includes all second-level cells, including empty cells");
 		Check(empty_top_cells > 0 && occupied_top_cell < num_top_cells,
 			  "top-level cell metadata distinguishes empty cells");
 		const auto second_level_view = happyray::SecondLevelView(two_view, occupied_top_cell);
@@ -416,11 +422,12 @@ namespace
 		}
 		CheckSatCellRanges(host_scene, second_level_view, second_level_ref_end);
 
-		const happyray::IrregularGrid	 irregular(scene, 0.12f, 128, 0, 0, 0);
-		const auto						 irregular_view = irregular.View();
-		const auto						 info			= Download(irregular_view.cell_infos, 1).front();
-		const uint32_t					 num_cells		= info.resolution.x * info.resolution.y * info.resolution.z;
-		const auto						 cells			= Download(irregular_view.local_cells, num_cells);
+		const happyray::IrregularGrid irregular(scene, 0.12f, 128, 0, 0, 0);
+		const auto					  irregular_view = irregular.View();
+		const auto					  info			 = Download(irregular_view.cell_infos, 1).front();
+		const uint32_t				  num_cells		 = info.resolution.x * info.resolution.y * info.resolution.z;
+		Check(irregular.LeafCellCount() == num_cells, "unmerged irregular leaf count matches finest grid");
+		const auto						 cells = Download(irregular_view.local_cells, num_cells);
 		std::vector<happyray::CellRange> ranges;
 		for (const auto &cell : cells)
 		{
@@ -437,6 +444,7 @@ namespace
 		CheckFilteredFragments(host_scene, finest);
 
 		const happyray::UniformGrid single_cell(scene, 1);
+		Check(single_cell.LeafCellCount() == 1, "single-cell uniform leaf count");
 		Check(single_cell.PrimIndexCount() == 1, "no rejected sentinel required for final cell");
 		const auto single_ranges = Download(single_cell.View().cell_ranges, 1);
 		Check(single_ranges[0].start == 0 && single_ranges[0].end == 1, "single occupied-cell range endpoints");

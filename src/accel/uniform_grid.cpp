@@ -63,6 +63,11 @@ namespace happyray
 		return impl_->View();
 	}
 
+	uint32_t UniformGrid::LeafCellCount() const
+	{
+		return static_cast<uint32_t>(impl_->cell_ranges.size());
+	}
+
 	uint32_t UniformGrid::PrimIndexCount() const
 	{
 		return static_cast<uint32_t>(impl_->prim_indices.size());

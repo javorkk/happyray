@@ -404,9 +404,9 @@ namespace happyray
 		// `local_entries` slots can resolve to the same cell. Used by callers that need to enumerate
 		// every distinct cell exactly once (e.g. tests/accel_performance_tests.cpp's SAH cost
 		// computation), mirroring UniformGrid::PrimIndexCount()'s existing precedent.
-		uint32_t LocalCellCount() const;
+		uint32_t LeafCellCount() const;
 
-		// Remaining per-array element counts needed (alongside LocalCellCount() above and
+		// Remaining per-array element counts needed (alongside LeafCellCount() above and
 		// View().top_level's own resolution) to compute an analytic memory-footprint estimate
 		// (count * sizeof(element)) without any CUDA-specific allocation introspection -- see
 		// tests/accel_performance_tests.cpp.
@@ -420,7 +420,7 @@ namespace happyray
 		// src/app/grid_density_search.h) uses to prefer one candidate density over another. Unlike the
 		// two-level grid, local cells here are individually sized (merge/expand grows some, leaves
 		// others at the finest voxel size), so this genuinely needs one term per distinct surviving
-		// cell -- LocalCellCount() above is exactly the count needed to enumerate `local_cells`
+		// cell -- LeafCellCount() above is exactly the count needed to enumerate `local_cells`
 		// without re-visiting any cell once per finest voxel it now spans.
 		float ComputeSahCost(const BBox &scene_bounds, const SahCostConstants &costs) const;
 

@@ -357,7 +357,7 @@ namespace happyray
 
 	TwoLevelGrid::~TwoLevelGrid() = default;
 
-	uint32_t TwoLevelGrid::SecondLevelCellCount() const
+	uint32_t TwoLevelGrid::LeafCellCount() const
 	{
 		return static_cast<uint32_t>(impl_->second_level_cell_ranges.size());
 	}

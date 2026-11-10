@@ -118,7 +118,7 @@ namespace
 
 	// Analytic per-grid-type memory-footprint estimate: count * sizeof(element), summed over every
 	// device buffer that grid type actually holds, using only its own plain public element-count
-	// accessors (PrimIndexCount(), LocalCellCount(), etc. -- see uniform_grid.h/two_level_grid.h/
+	// accessors (PrimIndexCount(), LeafCellCount(), etc. -- see uniform_grid.h/two_level_grid.h/
 	// irregular_grid.h) and View()'s own resolution fields -- no CUDA-specific allocation
 	// introspection (this file used to track real cudaMalloc/cudaFree calls via CUPTI) needed, at
 	// the cost of only reporting each structure's final, persistent footprint, not the transient
@@ -126,8 +126,7 @@ namespace
 	// class).
 	size_t GridMemoryBytes(const UniformGrid &grid)
 	{
-		const UniformGridView view = grid.View();
-		const auto num_cells	   = static_cast<size_t>(view.resolution.x) * view.resolution.y * view.resolution.z;
+		const auto num_cells = static_cast<size_t>(grid.LeafCellCount());
 		return num_cells * sizeof(CellRange) + static_cast<size_t>(grid.PrimIndexCount()) * sizeof(uint32_t);
 	}
 
@@ -138,7 +137,7 @@ namespace
 								   view.top_level.resolution.z;
 		size_t bytes = num_top_cells * sizeof(TopLevelCell);
 		bytes += num_top_cells * sizeof(uint32_t);
-		bytes += static_cast<size_t>(grid.SecondLevelCellCount()) * sizeof(CellRange);
+		bytes += static_cast<size_t>(grid.LeafCellCount()) * sizeof(CellRange);
 		bytes += static_cast<size_t>(grid.SecondLevelPrimIndexCount()) * sizeof(uint32_t);
 		return bytes;
 	}
@@ -153,7 +152,7 @@ namespace
 		bytes += num_top_cells * sizeof(IrregularCellInfo);
 		bytes += num_top_cells * sizeof(IrregularTopCell);
 		bytes += static_cast<size_t>(grid.LocalEntryCount()) * sizeof(uint32_t);
-		bytes += static_cast<size_t>(grid.LocalCellCount()) * sizeof(IrregularCell);
+		bytes += static_cast<size_t>(grid.LeafCellCount()) * sizeof(IrregularCell);
 		bytes += static_cast<size_t>(grid.PrimIndexCount()) * sizeof(uint32_t);
 		return bytes;
 	}

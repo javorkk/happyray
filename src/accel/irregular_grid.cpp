@@ -1179,7 +1179,7 @@ namespace happyray
 		return static_cast<uint32_t>(impl_->entries.size());
 	}
 
-	uint32_t IrregularGrid::LocalCellCount() const
+	uint32_t IrregularGrid::LeafCellCount() const
 	{
 		return static_cast<uint32_t>(impl_->cells.size());
 	}
@@ -1195,7 +1195,7 @@ namespace happyray
 		// detail::TraverseIrregularGrid walks the shared lattice directly (HAGrid-style), so
 		// top-level cells cost no traversal steps of their own -- only the irregular cells do.
 		float		   total		   = 0.0f;
-		const uint32_t num_local_cells = LocalCellCount();
+		const uint32_t num_local_cells = LeafCellCount();
 		if (num_local_cells > 0)
 		{
 			total += thrust::transform_reduce(thrust::counting_iterator<uint32_t>(0),

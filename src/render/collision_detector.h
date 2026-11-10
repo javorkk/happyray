@@ -40,18 +40,12 @@ namespace happyray
 		// `scene.object_ids` must be non-null (unless object_count < 2), with ids in
 		// [0, object_count). Overwrites all `scene.primitive_count` entries of
 		// `collision_ids`. Scenes with fewer than two objects skip the detection.
-		CollisionStats ComputeCollisions(const SceneView   &scene,
-										 uint32_t			object_count,
-										 const UniformGrid &grid,
-										 uint32_t		   *collision_ids) const;
-		CollisionStats ComputeCollisions(const SceneView	&scene,
-										 uint32_t			 object_count,
-										 const TwoLevelGrid &grid,
-										 uint32_t			*collision_ids) const;
-		CollisionStats ComputeCollisions(const SceneView	 &scene,
-										 uint32_t			  object_count,
-										 const IrregularGrid &grid,
-										 uint32_t			 *collision_ids) const;
+		// Instantiated for UniformGrid, TwoLevelGrid, and IrregularGrid.
+		template <typename Grid>
+		CollisionStats ComputeCollisions(const SceneView &scene,
+										 uint32_t		  object_count,
+										 const Grid		 &grid,
+										 uint32_t		 *collision_ids) const;
 	};
 
 } // namespace happyray

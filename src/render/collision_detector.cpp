@@ -21,6 +21,8 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
+#include <type_traits>
+#include <utility>
 
 #include "../core/primitive_traits.h"
 
@@ -168,123 +170,98 @@ namespace happyray
 			}
 		};
 
-		// `cells` iterates CellRange or IrregularCell leaves; their ranges index
-		// `prim_indices`.
-		template <typename CellIterator>
-		CollisionStats DetectCollisions(const SceneView &scene,
-										uint32_t		 object_count,
-										CellIterator	 cells,
-										uint32_t		 cell_count,
-										const uint32_t	*prim_indices,
-										uint32_t		*collision_ids)
-		{
-			const auto	   start_time = std::chrono::steady_clock::now();
-			CollisionStats stats;
-			stats.object_count = object_count;
-
-			const thrust::device_ptr<uint32_t> ids = thrust::device_pointer_cast(collision_ids);
-			thrust::fill(ids, ids + scene.primitive_count, kNoCollision);
-
-			if (object_count >= 2u && scene.object_ids && cell_count > 0)
-			{
-				// Delete all grid cells that contain primitives from a single object.
-				thrust::device_vector<CellRange> trimmed_cells(cell_count);
-				thrust::transform(cells,
-								  cells + cell_count,
-								  trimmed_cells.begin(),
-								  CellTrimmer{scene.object_ids, prim_indices});
-				thrust::device_vector<CellRange> candidate_cells(cell_count);
-				const auto						 candidate_cells_end = thrust::copy_if(trimmed_cells.begin(),
-																   trimmed_cells.end(),
-																   candidate_cells.begin(),
-																   NonEmptyRange());
-				stats.candidate_cell_count = static_cast<uint32_t>(candidate_cells_end - candidate_cells.begin());
-
-				if (stats.candidate_cell_count > 0)
-				{
-					thrust::device_vector<uint32_t> cell_ref_offsets(stats.candidate_cell_count);
-					thrust::transform_exclusive_scan(candidate_cells.begin(),
-													 candidate_cells_end,
-													 cell_ref_offsets.begin(),
-													 CellSize(),
-													 0u,
-													 thrust::plus<uint32_t>());
-					const CellRange last_cell		= candidate_cells[stats.candidate_cell_count - 1];
-					const uint32_t	work_item_count = cell_ref_offsets.back() + (last_cell.end - last_cell.start);
-
-					thrust::device_vector<BBox> boxes(scene.primitive_count);
-					DispatchPrimitive(scene.primitive_type,
-									  [&](auto tag)
-									  {
-										  thrust::transform(
-											  thrust::counting_iterator<uint32_t>(0),
-											  thrust::counting_iterator<uint32_t>(scene.primitive_count),
-											  boxes.begin(),
-											  PrimitiveBoundsFunctor<typename decltype(tag)::type>{scene});
-									  });
-					thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-									 thrust::counting_iterator<uint32_t>(work_item_count),
-									 CollisionOperator{scene.object_ids,
-													   thrust::raw_pointer_cast(boxes.data()),
-													   prim_indices,
-													   collision_ids,
-													   thrust::raw_pointer_cast(candidate_cells.data()),
-													   thrust::raw_pointer_cast(cell_ref_offsets.data()),
-													   stats.candidate_cell_count});
-				}
-
-				stats.colliding_primitive_count =
-					static_cast<uint32_t>(thrust::count_if(ids, ids + scene.primitive_count, IsColliding()));
-			}
-
-			stats.total_ms =
-				std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start_time).count();
-			return stats;
-		}
-
 	} // namespace
 
-	CollisionStats CollisionDetector::ComputeCollisions(const SceneView	  &scene,
-														uint32_t		   object_count,
-														const UniformGrid &grid,
-														uint32_t		  *collision_ids) const
+	template <typename Grid>
+	CollisionStats CollisionDetector::ComputeCollisions(const SceneView &scene,
+														uint32_t		 object_count,
+														const Grid		&grid,
+														uint32_t		*collision_ids) const
 	{
-		const UniformGridView view = grid.View();
-		const uint32_t cell_count  = static_cast<uint32_t>(view.resolution.x) * view.resolution.y * view.resolution.z;
-		return DetectCollisions(scene,
-								object_count,
-								thrust::device_pointer_cast(view.cell_ranges),
-								cell_count,
-								view.prim_indices,
-								collision_ids);
+		const auto view						  = grid.View();
+		const auto [leaf_cells, prim_indices] = [&]()
+		{
+			if constexpr (std::is_same_v<Grid, UniformGrid>)
+				return std::make_pair(view.cell_ranges, view.prim_indices);
+			else if constexpr (std::is_same_v<Grid, TwoLevelGrid>)
+				return std::make_pair(view.second_level_cell_ranges, view.second_level_prim_indices);
+			else
+				return std::make_pair(view.local_cells, view.prim_indices);
+		}();
+		const auto	   cells	  = thrust::device_pointer_cast(leaf_cells);
+		const uint32_t cell_count = grid.LeafCellCount();
+		const auto	   start_time = std::chrono::steady_clock::now();
+		CollisionStats stats;
+		stats.object_count = object_count;
+
+		const thrust::device_ptr<uint32_t> ids = thrust::device_pointer_cast(collision_ids);
+		thrust::fill(ids, ids + scene.primitive_count, kNoCollision);
+
+		if (object_count >= 2u && scene.object_ids && cell_count > 0)
+		{
+			// Delete all grid cells that contain primitives from a single object.
+			thrust::device_vector<CellRange> trimmed_cells(cell_count);
+			thrust::transform(cells,
+							  cells + cell_count,
+							  trimmed_cells.begin(),
+							  CellTrimmer{scene.object_ids, prim_indices});
+			thrust::device_vector<CellRange> candidate_cells(cell_count);
+			const auto						 candidate_cells_end =
+				thrust::copy_if(trimmed_cells.begin(), trimmed_cells.end(), candidate_cells.begin(), NonEmptyRange());
+			stats.candidate_cell_count = static_cast<uint32_t>(candidate_cells_end - candidate_cells.begin());
+
+			if (stats.candidate_cell_count > 0)
+			{
+				thrust::device_vector<uint32_t> cell_ref_offsets(stats.candidate_cell_count);
+				thrust::transform_exclusive_scan(candidate_cells.begin(),
+												 candidate_cells_end,
+												 cell_ref_offsets.begin(),
+												 CellSize(),
+												 0u,
+												 thrust::plus<uint32_t>());
+				const CellRange last_cell		= candidate_cells[stats.candidate_cell_count - 1];
+				const uint32_t	work_item_count = cell_ref_offsets.back() + (last_cell.end - last_cell.start);
+
+				thrust::device_vector<BBox> boxes(scene.primitive_count);
+				DispatchPrimitive(scene.primitive_type,
+								  [&](auto tag)
+								  {
+									  thrust::transform(thrust::counting_iterator<uint32_t>(0),
+														thrust::counting_iterator<uint32_t>(scene.primitive_count),
+														boxes.begin(),
+														PrimitiveBoundsFunctor<typename decltype(tag)::type>{scene});
+								  });
+				thrust::for_each(thrust::counting_iterator<uint32_t>(0),
+								 thrust::counting_iterator<uint32_t>(work_item_count),
+								 CollisionOperator{scene.object_ids,
+												   thrust::raw_pointer_cast(boxes.data()),
+												   prim_indices,
+												   collision_ids,
+												   thrust::raw_pointer_cast(candidate_cells.data()),
+												   thrust::raw_pointer_cast(cell_ref_offsets.data()),
+												   stats.candidate_cell_count});
+			}
+
+			stats.colliding_primitive_count =
+				static_cast<uint32_t>(thrust::count_if(ids, ids + scene.primitive_count, IsColliding()));
+		}
+
+		stats.total_ms =
+			std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+		return stats;
 	}
 
-	CollisionStats CollisionDetector::ComputeCollisions(const SceneView	   &scene,
-														uint32_t			object_count,
-														const TwoLevelGrid &grid,
-														uint32_t		   *collision_ids) const
-	{
-		const TwoLevelGridView view = grid.View();
-		return DetectCollisions(scene,
-								object_count,
-								thrust::device_pointer_cast(view.second_level_cell_ranges),
-								grid.SecondLevelCellCount(),
-								view.second_level_prim_indices,
-								collision_ids);
-	}
-
-	CollisionStats CollisionDetector::ComputeCollisions(const SceneView		&scene,
-														uint32_t			 object_count,
-														const IrregularGrid &grid,
-														uint32_t			*collision_ids) const
-	{
-		const IrregularGridView view = grid.View();
-		return DetectCollisions(scene,
-								object_count,
-								thrust::device_pointer_cast(view.local_cells),
-								grid.LocalCellCount(),
-								view.prim_indices,
-								collision_ids);
-	}
+	template CollisionStats CollisionDetector::ComputeCollisions<UniformGrid>(const SceneView &,
+																			  uint32_t,
+																			  const UniformGrid &,
+																			  uint32_t *) const;
+	template CollisionStats CollisionDetector::ComputeCollisions<TwoLevelGrid>(const SceneView &,
+																			   uint32_t,
+																			   const TwoLevelGrid &,
+																			   uint32_t *) const;
+	template CollisionStats CollisionDetector::ComputeCollisions<IrregularGrid>(const SceneView &,
+																				uint32_t,
+																				const IrregularGrid &,
+																				uint32_t *) const;
 
 } // namespace happyray
