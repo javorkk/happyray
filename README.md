@@ -14,6 +14,14 @@ Implements:
 Dependencies (CMake 3.25+, SDL2, libpng 1.6+, a GCC host compiler, CUDA and optionally TBB).
 CUDA toolkit required for thrust headers even if building for CPU.
 
+If using Rez, enter the build environment before running the commands below:
+
+```sh
+rez-env cuda-12.9 cmake-3.31 gcc-11 sdl tbb-2020 -- bash
+```
+
+For non-interactive build or test commands, use the same packages with `-- bash -c '<command>'`.
+
 ```sh
 cd HappyRay
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release # -DHAPPYRAY_THRUST_BACKEND=TBB
