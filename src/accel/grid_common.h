@@ -7,12 +7,15 @@
 
 #include <thrust/binary_search.h>
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
+
+#include "../core/thrust_scratch.h"
 
 namespace happyray
 {
@@ -117,21 +120,28 @@ namespace happyray
 		struct BuiltCellReferences
 		{
 			UniformGridView					 geometry;
-			thrust::device_vector<BBox>		 boxes;
-			thrust::device_vector<uint32_t>	 keys;
 			thrust::device_vector<uint32_t>	 prims;
 			thrust::device_vector<CellRange> ranges;
 			uint32_t						 reference_count = 0;
 		};
 
+		struct CellReferenceScratch
+		{
+			CachingAllocator				allocator;
+			thrust::device_vector<BBox>		boxes;
+			thrust::device_vector<uint32_t> counts, offsets, keys;
+		};
+
 		// Drops the invalid-key padding the kHybrid writing pass sorted to the end. Only `values`
 		// (kept by the grid) is reallocated; keys are build-time temporaries.
-		inline uint32_t TrimInvalidPairs(thrust::device_vector<uint32_t> *keys,
+		template <typename Policy>
+		inline uint32_t TrimInvalidPairs(const Policy					 &policy,
+										 thrust::device_vector<uint32_t> *keys,
 										 thrust::device_vector<uint32_t> *values,
 										 uint32_t						  invalid_key)
 		{
-			const uint32_t valid =
-				static_cast<uint32_t>(thrust::lower_bound(keys->begin(), keys->end(), invalid_key) - keys->begin());
+			const uint32_t valid = static_cast<uint32_t>(
+				thrust::lower_bound(policy, keys->begin(), keys->end(), invalid_key) - keys->begin());
 			if (valid < keys->size())
 			{
 				keys->resize(valid);
@@ -142,15 +152,17 @@ namespace happyray
 		}
 
 		template <typename P, CellOverlapMode Mode>
-		BuiltCellReferences BuildCellReferences(const SceneView &scene, float density)
+		BuiltCellReferences BuildCellReferences(const SceneView &scene, float density, CellReferenceScratch &scratch)
 		{
+			const auto			policy = thrust::device(scratch.allocator);
 			BuiltCellReferences built;
 			const uint32_t		n	  = scene.primitive_count;
 			const auto			first = thrust::counting_iterator<uint32_t>(0);
-			built.boxes.resize(n);
-			thrust::transform(first, first + n, built.boxes.begin(), PrimitiveBounds<P>{scene});
+			Reserve(&scratch.boxes, n);
+			thrust::transform(policy, first, first + n, scratch.boxes.begin(), PrimitiveBounds<P>{scene});
 			BBox bounds =
-				n > 0 ? thrust::reduce(built.boxes.begin(), built.boxes.end(), BBox(), BoundsUnion{}) : BBox();
+				n > 0 ? thrust::reduce(policy, scratch.boxes.begin(), scratch.boxes.begin() + n, BBox(), BoundsUnion{})
+					  : BBox();
 			const float diagonal = Length(bounds.Extent());
 			const float epsilon	 = diagonal > 0.0f ? diagonal * 1e-4f : 1e-4f;
 			bounds.min_bound -= Vec3f(epsilon);
@@ -160,48 +172,62 @@ namespace happyray
 			grid.bounds_max		 = bounds.max_bound;
 			grid.resolution		 = ComputeGridResolution(bounds, n, density);
 			grid.cell_size		 = Vec3f(bounds.Extent().x / grid.resolution.x,
-									 bounds.Extent().y / grid.resolution.y,
-									 bounds.Extent().z / grid.resolution.z);
+										 bounds.Extent().y / grid.resolution.y,
+										 bounds.Extent().z / grid.resolution.z);
 			grid.inv_cell_size	 = Vec3f(1.0f / grid.cell_size.x, 1.0f / grid.cell_size.y, 1.0f / grid.cell_size.z);
 			const uint32_t cells = static_cast<uint32_t>(grid.resolution.x) * grid.resolution.y * grid.resolution.z;
 
-			thrust::device_vector<uint32_t> counts(n), offsets(n);
-			const BBox					   *boxes = thrust::raw_pointer_cast(built.boxes.data());
-			thrust::transform(first, first + n, counts.begin(), CellFragments<P, Mode, false>{scene, grid, boxes});
-			thrust::exclusive_scan(counts.begin(), counts.end(), offsets.begin());
-			const uint32_t pairs = n > 0 ? offsets.back() + counts.back() : 0u;
-			built.keys.resize(pairs);
+			Reserve(&scratch.counts, n);
+			Reserve(&scratch.offsets, n);
+			thrust::device_vector<uint32_t> &counts	 = scratch.counts;
+			thrust::device_vector<uint32_t> &offsets = scratch.offsets;
+			const BBox						*boxes	 = thrust::raw_pointer_cast(scratch.boxes.data());
+			thrust::transform(policy,
+							  first,
+							  first + n,
+							  counts.begin(),
+							  CellFragments<P, Mode, false>{scene, grid, boxes});
+			thrust::exclusive_scan(policy, counts.begin(), counts.begin() + n, offsets.begin());
+			const uint32_t pairs = n > 0 ? offsets[n - 1] + counts[n - 1] : 0u;
+			Reserve(&scratch.keys, pairs);
+			scratch.keys.resize(pairs);
 			built.prims.resize(pairs);
-			thrust::for_each(first,
+			thrust::for_each(policy,
+							 first,
 							 first + n,
 							 CellFragments<P, Mode, true>{scene,
 														  grid,
 														  boxes,
 														  thrust::raw_pointer_cast(offsets.data()),
 														  thrust::raw_pointer_cast(counts.data()),
-														  thrust::raw_pointer_cast(built.keys.data()),
+														  thrust::raw_pointer_cast(scratch.keys.data()),
 														  thrust::raw_pointer_cast(built.prims.data())});
-			thrust::sort_by_key(built.keys.begin(), built.keys.end(), built.prims.begin());
+			thrust::sort_by_key(policy, scratch.keys.begin(), scratch.keys.end(), built.prims.begin());
 			built.reference_count = pairs;
 			if constexpr (Mode == CellOverlapMode::kHybrid)
-				built.reference_count = TrimInvalidPairs(&built.keys, &built.prims, cells);
+				built.reference_count = TrimInvalidPairs(policy, &scratch.keys, &built.prims, cells);
 			built.ranges.assign(cells, CellRange{});
-			thrust::for_each(first,
+			thrust::for_each(policy,
+							 first,
 							 first + built.reference_count,
-							 CellRangeExtractor{thrust::raw_pointer_cast(built.keys.data()),
+							 CellRangeExtractor{thrust::raw_pointer_cast(scratch.keys.data()),
 												thrust::raw_pointer_cast(built.ranges.data()),
 												built.reference_count,
 												cells});
 			return built;
 		}
 
-		inline BuiltCellReferences BuildCellReferences(const SceneView &scene, float density, CellOverlapMode mode)
+		inline BuiltCellReferences
+		BuildCellReferences(const SceneView &scene, float density, CellOverlapMode mode, CellReferenceScratch &scratch)
 		{
 			return DispatchBuild(
 				scene.primitive_type,
 				mode,
-				[&](auto prim, auto overlap) {
-					return BuildCellReferences<typename decltype(prim)::type, decltype(overlap)::value>(scene, density);
+				[&](auto prim, auto overlap)
+				{
+					return BuildCellReferences<typename decltype(prim)::type, decltype(overlap)::value>(scene,
+																										density,
+																										scratch);
 				});
 		}
 	} // namespace detail

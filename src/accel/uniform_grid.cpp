@@ -10,6 +10,7 @@ namespace happyray
 {
 	struct UniformGrid::Impl
 	{
+		detail::CellReferenceScratch	 scratch;
 		UniformGridView					 geometry;
 		uint32_t						 prim_reference_count = 0;
 		thrust::device_vector<CellRange> cell_ranges;
@@ -49,7 +50,7 @@ namespace happyray
 	UniformGrid::UniformGrid(const SceneView &scene, float density, CellOverlapMode mode)
 		: impl_(std::make_unique<Impl>())
 	{
-		auto built					= detail::BuildCellReferences(scene, density, mode);
+		auto built					= detail::BuildCellReferences(scene, density, mode, impl_->scratch);
 		impl_->geometry				= built.geometry;
 		impl_->prim_reference_count = built.reference_count;
 		impl_->cell_ranges			= std::move(built.ranges);
