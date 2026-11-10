@@ -489,6 +489,7 @@ namespace
 		thrust::device_vector<happyray::Point>		 points;
 		thrust::device_vector<happyray::Sphere>		 spheres;
 		thrust::device_vector<happyray::BezierCurve> curves;
+		thrust::device_vector<happyray::BBox>		 boxes;
 		happyray::SceneView							 view;
 
 		explicit DeviceFlatScene(const happyray::FlatScene &scene)
@@ -496,7 +497,8 @@ namespace
 			  indices(scene.indices.begin(), scene.indices.end()),
 			  material_ids(scene.material_ids.begin(), scene.material_ids.end()),
 			  points(scene.points.begin(), scene.points.end()), spheres(scene.spheres.begin(), scene.spheres.end()),
-			  curves(scene.curves.begin(), scene.curves.end()), view(scene.View())
+			  curves(scene.curves.begin(), scene.curves.end()), boxes(scene.boxes.begin(), scene.boxes.end()),
+			  view(scene.View())
 		{
 			view.positions				 = thrust::raw_pointer_cast(positions.data());
 			view.indices				 = thrust::raw_pointer_cast(indices.data());
@@ -507,6 +509,7 @@ namespace
 			view.points					 = thrust::raw_pointer_cast(points.data());
 			view.spheres				 = thrust::raw_pointer_cast(spheres.data());
 			view.curves					 = thrust::raw_pointer_cast(curves.data());
+			view.boxes					 = thrust::raw_pointer_cast(boxes.data());
 		}
 	};
 
@@ -516,10 +519,22 @@ namespace
 		using happyray::CellOverlapMode;
 		const happyray::PrimitiveType types[] = {happyray::PrimitiveType::kPoint,
 												 happyray::PrimitiveType::kSphere,
-												 happyray::PrimitiveType::kBezierCurve};
+												 happyray::PrimitiveType::kBezierCurve,
+												 happyray::PrimitiveType::kBox};
 		for (happyray::PrimitiveType type : types)
 		{
-			const DeviceFlatScene scene(happyray::FlattenScene(happyray::MakeAttractorScene(type, 2000)));
+			const bool			box = type == happyray::PrimitiveType::kBox;
+			happyray::FlatScene flat =
+				happyray::FlattenScene(happyray::MakeAttractorScene(box ? happyray::PrimitiveType::kSphere : type, 2000));
+			if (box)
+			{
+				// Boxes bounding the spheres.
+				flat.primitive_type = type;
+				for (const happyray::Sphere &sphere : flat.spheres)
+					flat.boxes.push_back(happyray::BBoxExtractor<happyray::Sphere>::Get(sphere));
+				flat.spheres.clear();
+			}
+			const DeviceFlatScene scene(flat);
 			const CellOverlapMode modes[] = {CellOverlapMode::kAabb, CellOverlapMode::kExact, CellOverlapMode::kHybrid};
 			uint32_t			  counts[3][3];
 			for (int m = 0; m < 3; ++m)
@@ -537,6 +552,9 @@ namespace
 			}
 			if (type == happyray::PrimitiveType::kBezierCurve)
 				Check(counts[0][0] > counts[1][0], "exact curve assignment rejects AABB-only cells");
+			if (box)
+				for (int grid = 0; grid < 3; ++grid)
+					Check(counts[0][grid] == counts[1][grid], "boxes overlap every cell of their AABB range");
 		}
 	}
 

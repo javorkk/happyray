@@ -24,7 +24,7 @@ namespace happyray
 	constexpr uint32_t kNoCollision = 0xffffffffu;
 
 	// Non-owning view over either host or device memory. Holds one primitive type: an indexed
-	// triangle soup, or one of the point/sphere/curve arrays.
+	// triangle soup, or one of the point/sphere/curve/box arrays.
 	struct SceneView
 	{
 		const Vec3f	   *positions	 = nullptr;
@@ -43,6 +43,7 @@ namespace happyray
 		const Point		  *points				= nullptr;
 		const Sphere	  *spheres				= nullptr;
 		const BezierCurve *curves				= nullptr;
+		const BBox		  *boxes				= nullptr; // Solid boxes (PrimitiveType::kBox).
 	};
 
 	HAPPYRAY_HD inline Triangle FetchTriangle(const SceneView &scene, uint32_t tri)
@@ -75,6 +76,7 @@ namespace happyray
 		std::vector<Point>		 points;
 		std::vector<Sphere>		 spheres;
 		std::vector<BezierCurve> curves;
+		std::vector<BBox>		 boxes;
 		std::vector<uint32_t>	 material_ids; // 1 per primitive.
 		std::vector<Vec3f>		 material_diffuse_colors;
 		// 1 per primitive, unique across meshes; empty means a single object.
@@ -90,6 +92,8 @@ namespace happyray
 				return static_cast<uint32_t>(spheres.size());
 			case PrimitiveType::kBezierCurve:
 				return static_cast<uint32_t>(curves.size());
+			case PrimitiveType::kBox:
+				return static_cast<uint32_t>(boxes.size());
 			default:
 				return static_cast<uint32_t>(indices.size() / 3);
 			}
@@ -109,6 +113,7 @@ namespace happyray
 			view.points					 = points.data();
 			view.spheres				 = spheres.data();
 			view.curves					 = curves.data();
+			view.boxes					 = boxes.data();
 			return view;
 		}
 	};
@@ -170,6 +175,35 @@ namespace happyray
 			flat.material_diffuse_colors.push_back(Vec3f(1.0f, 1.0f, 1.0f));
 		}
 		return flat;
+	}
+
+	// Box scene bounding each triangle of `a` over its linear motion to `b` between times `start`
+	// and `end` (0 and 1 are the keyframes): the union of the triangle's bounds at both times.
+	// Keyframes must be triangle scenes with identical topology (indices); each box takes the
+	// material and object id of its triangle in `a`.
+	inline FlatScene MakeSweptTriangleBoxes(const FlatScene &a, const FlatScene &b, float start, float end)
+	{
+		if (a.primitive_type != PrimitiveType::kTriangle || b.primitive_type != PrimitiveType::kTriangle)
+			throw std::invalid_argument("Swept boxes need triangle keyframes");
+		if (a.indices != b.indices || a.positions.size() != b.positions.size())
+			throw std::invalid_argument("Swept box keyframes must share their topology");
+		FlatScene boxes;
+		boxes.primitive_type		  = PrimitiveType::kBox;
+		boxes.material_ids			  = a.material_ids;
+		boxes.material_diffuse_colors = a.material_diffuse_colors;
+		boxes.object_ids			  = a.object_ids;
+		boxes.boxes.resize(a.PrimitiveCount());
+		for (size_t tri = 0; tri < boxes.boxes.size(); ++tri)
+		{
+			BBox &box = boxes.boxes[tri];
+			for (size_t corner = 0; corner < 3; ++corner)
+			{
+				const uint32_t index = a.indices[tri * 3 + corner];
+				box.Grow(Lerp(a.positions[index], b.positions[index], start));
+				box.Grow(Lerp(a.positions[index], b.positions[index], end));
+			}
+		}
+		return boxes;
 	}
 
 	inline double SceneEdgeLengthSquared(const Vec3f &a, const Vec3f &b)

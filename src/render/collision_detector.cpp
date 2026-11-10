@@ -1,7 +1,9 @@
 // Thrust implementation of CollisionDetector (see collision_detector.h), following
 // string2shape's CollisionDetector::computeCollisionGraph: trim single-object cells, compact
-// the remaining ones, then run primitive bounding-box overlap tests per cell reference. Compiles under
-// either the CUDA or the TBB Thrust backend, the same as the grid builders.
+// the remaining ones, sort their references by (cell, object), then run (and count) primitive
+// bounding-box overlap tests per cell reference against the cell's later objects. The grids are
+// not modified. Compiles under either the CUDA or the TBB Thrust backend, the same as the grid
+// builders.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
 #define THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_TBB
@@ -10,21 +12,27 @@
 #include "collision_detector.h"
 
 #include <chrono>
+#include <memory>
+#include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
+#include <thrust/sort.h>
 #include <thrust/transform.h>
+#include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
 #include <type_traits>
 #include <utility>
 
 #include "../core/primitive_traits.h"
+#include "../core/thrust_scratch.h"
 
 namespace happyray
 {
@@ -106,21 +114,32 @@ namespace happyray
 			}
 		};
 
-		// Tests all primitive pairs from different objects inside the candidate cells
-		// for bounding-box overlap. Unlike string2shape (one thread per cell), each work
-		// item is one reference of a candidate cell, tested against the cell's later
-		// references: the same pairs, but a cell with thousands of primitives (e.g. a
-		// uniform grid cell over dense geometry) no longer serializes O(k^2) tests on a
-		// single thread.
-		struct CollisionOperator
+		struct PairTestCounts
 		{
-			const uint32_t	*object_ids;
-			const BBox		*boxes;
-			const uint32_t	*prim_indices;
-			uint32_t		*collision_ids;
+			uint64_t tests	  = 0;
+			uint64_t overlaps = 0;
+		};
+
+		struct AddPairTestCounts
+		{
+			HAPPYRAY_HD PairTestCounts operator()(const PairTestCounts &a, const PairTestCounts &b) const
+			{
+				return {a.tests + b.tests, a.overlaps + b.overlaps};
+			}
+		};
+
+		// Copies every reference of the candidate cells into one array (work item w is reference
+		// w - cell_ref_offsets[cell] of candidate cell `cell`), keyed by (candidate cell, object id)
+		// so a sort groups each cell's references by object.
+		struct GatherCandidateRefs
+		{
 			const CellRange *cells;
-			const uint32_t	*cell_ref_offsets; // Exclusive scan of the cell sizes.
+			const uint32_t	*cell_ref_offsets; // Exclusive scan of the candidate cell sizes.
 			uint32_t		 cell_count;
+			const uint32_t	*prim_indices;
+			const uint32_t	*object_ids;
+			uint64_t		*ref_keys;
+			uint32_t		*ref_prims;
 
 			HAPPYRAY_HD void operator()(uint32_t work_item) const
 			{
@@ -134,31 +153,60 @@ namespace happyray
 					else
 						hi = mid;
 				}
-				const CellRange cell_range = cells[lo];
-				const uint32_t	ref		   = cell_range.start + (work_item - cell_ref_offsets[lo]);
+				const uint32_t prim = prim_indices[cells[lo].start + (work_item - cell_ref_offsets[lo])];
+				ref_keys[work_item]	 = (static_cast<uint64_t>(lo) << 32) | object_ids[prim];
+				ref_prims[work_item] = prim;
+			}
+		};
 
-				const uint32_t my_prim = prim_indices[ref];
-				const uint32_t my_obj  = object_ids[my_prim];
-				const BBox	   my_box  = boxes[my_prim];
+		// Tests all primitive pairs from different objects inside the candidate cells for
+		// bounding-box overlap. Unlike string2shape (one thread per cell), each work item is one
+		// reference of a candidate cell, tested against the cell's later references: the same
+		// pairs, but a cell with thousands of primitives (e.g. a uniform grid cell over dense
+		// geometry) no longer serializes O(k^2) tests on a single thread. References are sorted
+		// by (cell, object), so the loop starts past the reference's own object run and never
+		// visits same-object pairs, and reads contiguous memory.
+		struct CollisionOperator
+		{
+			const BBox	   *boxes;
+			const uint64_t *ref_keys;		   // Sorted (candidate cell << 32 | object id).
+			const uint32_t *ref_prims;		   // Primitive of each sorted reference.
+			const uint32_t *object_run_ends;   // First reference past each reference's (cell, object) run.
+			const uint32_t *cell_ref_offsets; // First reference of each candidate cell.
+			uint32_t		cell_count;
+			uint32_t		ref_count;
+			uint32_t	   *collision_ids;
 
-				for (uint32_t other_ref = ref + 1; other_ref < cell_range.end; ++other_ref)
+			// Returns the number of tests this work item executed and how many found an overlap.
+			HAPPYRAY_HD PairTestCounts operator()(uint32_t ref) const
+			{
+				const uint64_t key		= ref_keys[ref];
+				const uint32_t cell		= static_cast<uint32_t>(key >> 32);
+				const uint32_t cell_end = cell + 1 < cell_count ? cell_ref_offsets[cell + 1] : ref_count;
+				const uint32_t my_obj	= static_cast<uint32_t>(key);
+				const uint32_t my_prim	= ref_prims[ref];
+				const BBox	   my_box	= boxes[my_prim];
+				PairTestCounts counts;
+
+				for (uint32_t other_ref = object_run_ends[ref]; other_ref < cell_end; ++other_ref)
 				{
-					const uint32_t other_prim = prim_indices[other_ref];
-					const uint32_t other_obj  = object_ids[other_prim];
-					if (my_obj == other_obj)
-						continue;
+					const uint32_t other_obj  = static_cast<uint32_t>(ref_keys[other_ref]);
+					const uint32_t other_prim = ref_prims[other_ref];
 					// Per-primitive analog of string2shape's lastRecordedPair: skip the
 					// test if its outcome could not lower either recorded id.
 					if (LoadCollisionId(collision_ids + my_prim) <= other_obj &&
 						LoadCollisionId(collision_ids + other_prim) <= my_obj)
 						continue;
 
+					++counts.tests;
 					if (Overlaps(my_box, boxes[other_prim]))
 					{
+						++counts.overlaps;
 						AtomicMinCollisionId(collision_ids + my_prim, other_obj);
 						AtomicMinCollisionId(collision_ids + other_prim, my_obj);
 					}
 				}
+				return counts;
 			}
 		};
 
@@ -172,11 +220,29 @@ namespace happyray
 
 	} // namespace
 
+
+	struct CollisionDetector::Scratch
+	{
+		CachingAllocator				 allocator;
+		thrust::device_vector<CellRange> trimmed_cells, candidate_cells;
+		thrust::device_vector<uint32_t>	 cell_ref_offsets, ref_prims, object_run_ends;
+		thrust::device_vector<uint64_t>	 ref_keys;
+		thrust::device_vector<BBox>		 boxes;
+	};
+
+	CollisionDetector::CollisionDetector() : scratch_(std::make_unique<Scratch>())
+	{
+	}
+
+	CollisionDetector::~CollisionDetector()									  = default;
+	CollisionDetector::CollisionDetector(CollisionDetector &&) noexcept			  = default;
+	CollisionDetector &CollisionDetector::operator=(CollisionDetector &&) noexcept = default;
+
 	template <typename Grid>
 	CollisionStats CollisionDetector::ComputeCollisions(const SceneView &scene,
 														uint32_t		 object_count,
 														const Grid		&grid,
-														uint32_t		*collision_ids) const
+														uint32_t		*collision_ids)
 	{
 		const auto view						  = grid.View();
 		const auto [leaf_cells, prim_indices] = [&]()
@@ -193,57 +259,92 @@ namespace happyray
 		const auto	   start_time = std::chrono::steady_clock::now();
 		CollisionStats stats;
 		stats.object_count = object_count;
+		if (!scratch_) // Moved from.
+			scratch_ = std::make_unique<Scratch>();
+		Scratch	  &scratch = *scratch_;
+		const auto policy  = thrust::device(scratch.allocator);
 
 		const thrust::device_ptr<uint32_t> ids = thrust::device_pointer_cast(collision_ids);
-		thrust::fill(ids, ids + scene.primitive_count, kNoCollision);
+		thrust::fill(policy, ids, ids + scene.primitive_count, kNoCollision);
 
 		if (object_count >= 2u && scene.object_ids && cell_count > 0)
 		{
 			// Delete all grid cells that contain primitives from a single object.
-			thrust::device_vector<CellRange> trimmed_cells(cell_count);
-			thrust::transform(cells,
-							  cells + cell_count,
-							  trimmed_cells.begin(),
-							  CellTrimmer{scene.object_ids, prim_indices});
-			thrust::device_vector<CellRange> candidate_cells(cell_count);
-			const auto						 candidate_cells_end =
-				thrust::copy_if(trimmed_cells.begin(), trimmed_cells.end(), candidate_cells.begin(), NonEmptyRange());
-			stats.candidate_cell_count = static_cast<uint32_t>(candidate_cells_end - candidate_cells.begin());
+			const auto trimmed_cells = thrust::device_pointer_cast(Reserve(&scratch.trimmed_cells, cell_count));
+			thrust::transform(
+				policy, cells, cells + cell_count, trimmed_cells, CellTrimmer{scene.object_ids, prim_indices});
+			const auto candidate_cells = thrust::device_pointer_cast(Reserve(&scratch.candidate_cells, cell_count));
+			const auto candidate_cells_end =
+				thrust::copy_if(policy, trimmed_cells, trimmed_cells + cell_count, candidate_cells, NonEmptyRange());
+			stats.candidate_cell_count = static_cast<uint32_t>(candidate_cells_end - candidate_cells);
 
 			if (stats.candidate_cell_count > 0)
 			{
-				thrust::device_vector<uint32_t> cell_ref_offsets(stats.candidate_cell_count);
-				thrust::transform_exclusive_scan(candidate_cells.begin(),
+				const auto cell_ref_offsets =
+					thrust::device_pointer_cast(Reserve(&scratch.cell_ref_offsets, stats.candidate_cell_count));
+				thrust::transform_exclusive_scan(policy,
+												 candidate_cells,
 												 candidate_cells_end,
-												 cell_ref_offsets.begin(),
+												 cell_ref_offsets,
 												 CellSize(),
 												 0u,
 												 thrust::plus<uint32_t>());
-				const CellRange last_cell		= candidate_cells[stats.candidate_cell_count - 1];
-				const uint32_t	work_item_count = cell_ref_offsets.back() + (last_cell.end - last_cell.start);
+				const CellRange last_cell = candidate_cells[stats.candidate_cell_count - 1];
+				const uint32_t	ref_count =
+					cell_ref_offsets[stats.candidate_cell_count - 1] + (last_cell.end - last_cell.start);
+				const auto first = thrust::counting_iterator<uint32_t>(0);
 
-				thrust::device_vector<BBox> boxes(scene.primitive_count);
+				// Group each candidate cell's references by object.
+				const auto ref_keys	 = thrust::device_pointer_cast(Reserve(&scratch.ref_keys, ref_count));
+				const auto ref_prims = thrust::device_pointer_cast(Reserve(&scratch.ref_prims, ref_count));
+				thrust::for_each(policy,
+								 first,
+								 first + ref_count,
+								 GatherCandidateRefs{thrust::raw_pointer_cast(candidate_cells),
+													 thrust::raw_pointer_cast(cell_ref_offsets),
+													 stats.candidate_cell_count,
+													 prim_indices,
+													 scene.object_ids,
+													 thrust::raw_pointer_cast(ref_keys),
+													 thrust::raw_pointer_cast(ref_prims)});
+				thrust::sort_by_key(policy, ref_keys, ref_keys + ref_count, ref_prims);
+				const auto object_run_ends =
+					thrust::device_pointer_cast(Reserve(&scratch.object_run_ends, ref_count));
+				thrust::upper_bound(
+					policy, ref_keys, ref_keys + ref_count, ref_keys, ref_keys + ref_count, object_run_ends);
+
+				const auto boxes = thrust::device_pointer_cast(Reserve(&scratch.boxes, scene.primitive_count));
 				DispatchPrimitive(scene.primitive_type,
 								  [&](auto tag)
 								  {
-									  thrust::transform(thrust::counting_iterator<uint32_t>(0),
-														thrust::counting_iterator<uint32_t>(scene.primitive_count),
-														boxes.begin(),
+									  thrust::transform(policy,
+														first,
+														first + scene.primitive_count,
+														boxes,
 														PrimitiveBoundsFunctor<typename decltype(tag)::type>{scene});
 								  });
-				thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-								 thrust::counting_iterator<uint32_t>(work_item_count),
-								 CollisionOperator{scene.object_ids,
-												   thrust::raw_pointer_cast(boxes.data()),
-												   prim_indices,
-												   collision_ids,
-												   thrust::raw_pointer_cast(candidate_cells.data()),
-												   thrust::raw_pointer_cast(cell_ref_offsets.data()),
-												   stats.candidate_cell_count});
+				// The reduction evaluates the operator exactly once per work item, so its side effects
+				// (recording collision ids) happen exactly as with for_each.
+				const PairTestCounts counts =
+					thrust::transform_reduce(policy,
+											 first,
+											 first + ref_count,
+											 CollisionOperator{thrust::raw_pointer_cast(boxes),
+															   thrust::raw_pointer_cast(ref_keys),
+															   thrust::raw_pointer_cast(ref_prims),
+															   thrust::raw_pointer_cast(object_run_ends),
+															   thrust::raw_pointer_cast(cell_ref_offsets),
+															   stats.candidate_cell_count,
+															   ref_count,
+															   collision_ids},
+											 PairTestCounts{},
+											 AddPairTestCounts{});
+				stats.candidate_pair_count = counts.tests;
+				stats.colliding_pair_count = counts.overlaps;
 			}
 
 			stats.colliding_primitive_count =
-				static_cast<uint32_t>(thrust::count_if(ids, ids + scene.primitive_count, IsColliding()));
+				static_cast<uint32_t>(thrust::count_if(policy, ids, ids + scene.primitive_count, IsColliding()));
 		}
 
 		stats.total_ms =
@@ -254,14 +355,14 @@ namespace happyray
 	template CollisionStats CollisionDetector::ComputeCollisions<UniformGrid>(const SceneView &,
 																			  uint32_t,
 																			  const UniformGrid &,
-																			  uint32_t *) const;
+																			  uint32_t *);
 	template CollisionStats CollisionDetector::ComputeCollisions<TwoLevelGrid>(const SceneView &,
 																			   uint32_t,
 																			   const TwoLevelGrid &,
-																			   uint32_t *) const;
+																			   uint32_t *);
 	template CollisionStats CollisionDetector::ComputeCollisions<IrregularGrid>(const SceneView &,
 																				uint32_t,
 																				const IrregularGrid &,
-																				uint32_t *) const;
+																				uint32_t *);
 
 } // namespace happyray

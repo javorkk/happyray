@@ -150,6 +150,37 @@ namespace happyray
 		}
 	};
 
+	// Solid axis-aligned boxes; the hit face's axis travels in ClosestHit::u.
+	template <> struct PrimitiveTraits<BBox>
+	{
+		static constexpr PrimitiveType kType = PrimitiveType::kBox;
+		using CellOverlap					 = PrimitiveBoxIntersection<BBox>;
+
+		HAPPYRAY_HD static BBox Fetch(const SceneView &scene, uint32_t i)
+		{
+			return scene.boxes[i];
+		}
+
+		HAPPYRAY_HD static bool Intersect(const Ray &ray, const BBox &p, float *t, float *u, float *)
+		{
+			int axis;
+			if (!IntersectRayBoxSurface(ray, p, t, &axis))
+				return false;
+			*u = static_cast<float>(axis);
+			return true;
+		}
+
+		// The hit face's normal, facing the ray (hits from inside see the face from behind).
+		HAPPYRAY_HD static Vec3f Normal(const SceneView &, const Ray &ray, const ClosestHit &hit)
+		{
+			const int	axis	  = static_cast<int>(hit.u);
+			const float component = (&ray.direction.x)[axis];
+			Vec3f		normal(0.0f, 0.0f, 0.0f);
+			(&normal.x)[axis] = component > 0.0f ? -1.0f : 1.0f;
+			return normal;
+		}
+	};
+
 	template <typename P> HAPPYRAY_HD inline BBox ComputePrimitiveBBox(const SceneView &scene, uint32_t i)
 	{
 		return BBoxExtractor<P>::Get(PrimitiveTraits<P>::Fetch(scene, i));
@@ -169,6 +200,8 @@ namespace happyray
 			return fn(PrimitiveTag<Sphere>{});
 		case PrimitiveType::kBezierCurve:
 			return fn(PrimitiveTag<BezierCurve>{});
+		case PrimitiveType::kBox:
+			return fn(PrimitiveTag<BBox>{});
 		default:
 			return fn(PrimitiveTag<Triangle>{});
 		}

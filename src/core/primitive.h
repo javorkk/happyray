@@ -13,7 +13,8 @@ namespace happyray
 		kTriangle,
 		kPoint,
 		kSphere,
-		kBezierCurve
+		kBezierCurve,
+		kBox
 	};
 
 	inline const char *PrimitiveTypeName(PrimitiveType type)
@@ -26,6 +27,8 @@ namespace happyray
 			return "sphere";
 		case PrimitiveType::kBezierCurve:
 			return "curve";
+		case PrimitiveType::kBox:
+			return "box";
 		default:
 			return "triangle";
 		}

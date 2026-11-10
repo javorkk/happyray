@@ -596,6 +596,9 @@ namespace
 				HAPPYRAY_CHECK(renderer.LastCollisionStats().object_count == 3);
 				HAPPYRAY_CHECK(renderer.LastCollisionStats().candidate_cell_count > 0);
 				HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_primitive_count == CountCollisions(ids));
+				HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_pair_count > 0);
+				HAPPYRAY_CHECK(renderer.LastCollisionStats().candidate_pair_count >=
+							   renderer.LastCollisionStats().colliding_pair_count);
 			}
 		}
 		renderer.SetCellOverlapMode(DefaultCellOverlapMode());
@@ -656,12 +659,28 @@ namespace
 		}
 		HAPPYRAY_CHECK(red_pixels > 0);
 
+		// Box primitives (here the triangles' tight bounds) collide exactly when they overlap.
+		Renderer box_renderer(MakeSweptTriangleBoxes(scene, scene, 0.0f, 0.0f));
+		for (CellOverlapMode mode : modes)
+		{
+			box_renderer.SetCellOverlapMode(mode);
+			for (AccelType type : grids)
+			{
+				box_renderer.SetAccelType(type);
+				box_renderer.BuildAccelerationStructure();
+				HAPPYRAY_CHECK(box_renderer.CollisionIds() == bbox_expected);
+				HAPPYRAY_CHECK(box_renderer.LastCollisionStats().colliding_primitive_count ==
+							   CountCollisions(bbox_expected));
+			}
+		}
+
 		// A single-object scene has nothing to collide with.
 		FlatScene single_object = scene;
 		single_object.object_ids.clear();
 		renderer.UpdateScene(single_object);
 		HAPPYRAY_CHECK(renderer.LastCollisionStats().object_count == 1);
 		HAPPYRAY_CHECK(renderer.LastCollisionStats().colliding_primitive_count == 0);
+		HAPPYRAY_CHECK(renderer.LastCollisionStats().candidate_pair_count == 0);
 		HAPPYRAY_CHECK(renderer.CollisionIds() == std::vector<uint32_t>(view.primitive_count, kNoCollision));
 	}
 
@@ -754,6 +773,20 @@ namespace
 			camera.vertical_fov_deg = 30.0f;
 			integrator.max_distance = DefaultMaxDistance(scene);
 			TestSceneAcrossOverlapModes(PrimitiveTypeName(type), FlattenScene(scene), camera, integrator);
+		}
+
+		// Solid boxes bounding the attractor's spheres.
+		{
+			const Scene scene		= MakeAttractorScene(PrimitiveType::kSphere, 1500);
+			Camera		camera		= MakeDefaultCamera(scene);
+			camera.vertical_fov_deg = 30.0f;
+			integrator.max_distance = DefaultMaxDistance(scene);
+			FlatScene boxes			= FlattenScene(scene);
+			boxes.primitive_type	= PrimitiveType::kBox;
+			for (const Sphere &sphere : boxes.spheres)
+				boxes.boxes.push_back(BBoxExtractor<Sphere>::Get(sphere));
+			boxes.spheres.clear();
+			TestSceneAcrossOverlapModes(PrimitiveTypeName(PrimitiveType::kBox), boxes, camera, integrator);
 		}
 
 		// Larger screen-space radii cover more pixels.

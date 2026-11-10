@@ -1,7 +1,10 @@
 // Axis-aligned bounding box, used both as a general geometric utility and as the building
-// block for every acceleration structure (uniform grid, two-level grid, irregular grid).
+// block for every acceleration structure (uniform grid, two-level grid, irregular grid), and as
+// a solid box primitive (PrimitiveType::kBox).
 // BBoxExtractor computes bounds for any Primitive<N> (see primitive.h).
 #pragma once
+
+#include <cmath>
 
 #include "primitive.h"
 #include "ray.h"
@@ -60,6 +63,15 @@ namespace happyray
 		}
 	};
 
+	// A box is its own bounds when used as a primitive (PrimitiveType::kBox).
+	template <> struct BBoxExtractor<BBox>
+	{
+		HAPPYRAY_HD static BBox Get(const BBox &box)
+		{
+			return box;
+		}
+	};
+
 	// Slab-method ray/box intersection. On a hit, writes the entry/exit distances along the ray
 	// (clipped to the ray's own [t_min, t_max]) to `out_t_near` / `out_t_far`.
 	HAPPYRAY_HD inline bool IntersectRayBBox(const Ray &ray, const BBox &box, float *out_t_near, float *out_t_far)
@@ -108,6 +120,64 @@ namespace happyray
 	{
 		return a.min_bound.x <= b.max_bound.x && a.max_bound.x >= b.min_bound.x && a.min_bound.y <= b.max_bound.y &&
 			   a.max_bound.y >= b.min_bound.y && a.min_bound.z <= b.max_bound.z && a.max_bound.z >= b.min_bound.z;
+	}
+
+	// Box primitive / cell overlap (PrimitiveTraits<BBox>::CellOverlap).
+	HAPPYRAY_HD inline bool Intersects(const BBox &primitive, const BBox &box)
+	{
+		return !primitive.IsEmpty() && !box.IsEmpty() && Overlaps(primitive, box);
+	}
+
+	// Ray hit on the surface of a solid box: the entry point, or the exit point if the ray starts
+	// inside. Writes the hit distance and the axis (0..2) of the face that was hit.
+	HAPPYRAY_HD inline bool IntersectRayBoxSurface(const Ray &ray, const BBox &box, float *out_t, int *out_axis)
+	{
+		if (box.IsEmpty())
+			return false;
+		const float *ray_origin = &ray.origin.x;
+		const float *ray_dir	= &ray.direction.x;
+		const float *box_min	= &box.min_bound.x;
+		const float *box_max	= &box.max_bound.x;
+		float		 t_near = -INFINITY, t_far = INFINITY;
+		int			 near_axis = 0, far_axis = 0;
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			if (ray_dir[axis] == 0.0f)
+			{
+				if (ray_origin[axis] < box_min[axis] || ray_origin[axis] > box_max[axis])
+					return false;
+				continue;
+			}
+			const float inv_dir = 1.0f / ray_dir[axis];
+			const float t0		= (box_min[axis] - ray_origin[axis]) * inv_dir;
+			const float t1		= (box_max[axis] - ray_origin[axis]) * inv_dir;
+			const float entry = t0 < t1 ? t0 : t1, exit = t0 < t1 ? t1 : t0;
+			if (entry > t_near)
+			{
+				t_near	  = entry;
+				near_axis = axis;
+			}
+			if (exit < t_far)
+			{
+				t_far	 = exit;
+				far_axis = axis;
+			}
+		}
+		if (t_near > t_far)
+			return false;
+		if (t_near >= ray.t_min && t_near <= ray.t_max)
+		{
+			*out_t	  = t_near;
+			*out_axis = near_axis;
+			return true;
+		}
+		if (t_far >= ray.t_min && t_far <= ray.t_max)
+		{
+			*out_t	  = t_far;
+			*out_axis = far_axis;
+			return true;
+		}
+		return false;
 	}
 
 	// Whether segment [a, b] intersects `box`.

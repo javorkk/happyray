@@ -103,6 +103,7 @@ namespace happyray
 		thrust::device_vector<Point>	   points;
 		thrust::device_vector<Sphere>	   spheres;
 		thrust::device_vector<BezierCurve> curves;
+		thrust::device_vector<BBox>		   boxes;
 		// Scene-provided points/curves; `points`/`curves` hold the view-dependent copies.
 		thrust::device_vector<Point>	   scene_points;
 		thrust::device_vector<BezierCurve> scene_curves;
@@ -178,6 +179,7 @@ namespace happyray
 			view.points					 = thrust::raw_pointer_cast(points.data());
 			view.spheres				 = thrust::raw_pointer_cast(spheres.data());
 			view.curves					 = thrust::raw_pointer_cast(curves.data());
+			view.boxes					 = thrust::raw_pointer_cast(boxes.data());
 			return view;
 		}
 
@@ -218,6 +220,7 @@ namespace happyray
 		normals.assign(scene.normals.begin(), scene.normals.end());
 		indices.assign(scene.indices.begin(), scene.indices.end());
 		spheres.assign(scene.spheres.begin(), scene.spheres.end());
+		boxes.assign(scene.boxes.begin(), scene.boxes.end());
 		scene_points.assign(scene.points.begin(), scene.points.end());
 		scene_curves.assign(scene.curves.begin(), scene.curves.end());
 		ApplyViewDependentRadii();

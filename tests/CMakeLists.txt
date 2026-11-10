@@ -42,8 +42,22 @@ foreach(scene fairy conference ogre)
         PROPERTIES RUN_SERIAL TRUE LABELS "performance" TIMEOUT 300)
 endforeach()
 
+# Collision benchmark over the swept triangle bounding boxes of Fairy Forest frames 105-106. The
+# animated scene lives in the untracked scenes/ directory (extract scenes.7z), so the test only
+# exists if it does.
+add_executable(happyray_collision_performance_tests collision_performance_tests.cpp)
+target_link_libraries(happyray_collision_performance_tests PRIVATE
+    happyray_accel happyray_render happyray_obj_loader happyray_thrust_backend)
+set(HAPPYRAY_FAIRY_ANIMATION_DIR "${CMAKE_SOURCE_DIR}/scenes/fairy")
+if(EXISTS "${HAPPYRAY_FAIRY_ANIMATION_DIR}/f100.obj" AND EXISTS "${HAPPYRAY_FAIRY_ANIMATION_DIR}/f110.obj")
+    add_test(NAME collision_performance_fairy COMMAND happyray_collision_performance_tests
+        "${HAPPYRAY_FAIRY_ANIMATION_DIR}")
+    set_tests_properties(collision_performance_fairy
+        PROPERTIES RUN_SERIAL TRUE LABELS "performance" TIMEOUT 600)
+endif()
+
 if(HAPPYRAY_THRUST_BACKEND STREQUAL "CUDA")
-    set_source_files_properties(grid_build_tests.cpp accel_performance_tests.cpp
+    set_source_files_properties(grid_build_tests.cpp accel_performance_tests.cpp collision_performance_tests.cpp
         PROPERTIES LANGUAGE CUDA)
 endif()
 add_test(NAME grid_build_tests COMMAND happyray_grid_build_tests)

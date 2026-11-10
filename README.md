@@ -155,9 +155,13 @@ gets its own id (a new `o` resets the group; repeating a name continues the earl
 scenes with at least two objects, the renderer runs collision detection whenever it builds
 an acceleration structure (or switches to an already-built one), including on every animation
 frame. This follows string2shape's `CollisionDetector`. Leaf cells that hold primitives from only
-one object are dropped. In each remaining cell, every pair of primitives from different objects
-collides if their bounding boxes overlap, which works for every primitive type. Each primitive
-records the smallest id of another object it collides with. Colliding primitives are drawn with a
+one object are dropped. The remaining cells' references are copied out and sorted by (cell,
+object), leaving the grid untouched, so pairs from the same object are never visited. In each
+remaining cell, every pair of primitives from different objects
+collides if their bounding boxes overlap, which works for every primitive type (for box
+primitives the test is exact). Each primitive
+records the smallest id of another object it collides with, and `CollisionStats` also counts the
+pair tests executed and how many found an overlap. Colliding primitives are drawn with a
 red "collided" material. For such scenes the window title shows the latest detection time as
 `coll: <ms>`; the `build: <ms>` figure excludes it. While an animation is paused (`P`), its
 geometry doesn't change, so detection is skipped (density-search rebuilds and grid switches
@@ -227,13 +231,35 @@ ray generation and downloads. This file has no CUDA-specific dependency (pure Th
 rest of the accel/render code), so -- unlike previously -- it builds and runs under **both**
 backends; it carries the `performance` label and runs serially.
 
+### Collision performance test
+
+`collision_performance_fairy` benchmarks collision detection on the moving geometry of frames
+105 to 106 of the animated Fairy Forest, interpolated from `scenes/fairy/f100.obj` and `f110.obj`
+(`scenes/` is untracked; extract `scenes.7z` first -- the test is only registered if both files
+exist). Each triangle is replaced by the box bounding it at both frames (`MakeSweptTriangleBoxes`
+in `scene.h`), and each grid is built over these boxes as `PrimitiveType::kBox` primitives. The
+renderer's `CollisionDetector::ComputeCollisions` then runs on each grid. Per grid, the table
+reports total, build, and collision time (mean of 5 runs after one warmup), candidate pairs (box
+pairs from different objects the detector actually tested, counting a pair once per shared cell
+and excluding tests skipped because they could not change a recorded result), and colliding
+pairs (tests that found overlapping boxes). Both counts measure the work done, so they vary
+slightly between runs and backends. Per-box collision results must match a sweep-and-prune
+oracle (a parallel sort by minimum x, then every box's sweep split into fixed-size chunks
+tested in parallel, in Thrust on the same CUDA or TBB backend as the grids); its runtime, with the same warmup, averaging, and persistent temporary
+storage as the detector, is the "Baseline ms" column. Timings are informational.
+
+```sh
+ctest --test-dir build -R collision_performance -V
+```
+
 ## Architecture
 
 - `src/core/`: header-only, `HAPPYRAY_HD`-annotated math (`vec.h`, `mat4.h`, `quaternion.h`,
   `random.h`), geometry (`ray.h`, `primitive.h`, `point.h`, `sphere.h`, `bezier_curve.h`,
-  `bbox.h`, `triangle.h`), and scene mesh representation (`mesh.h`). Triangle, point, sphere, and
-  cubic Bezier tube geometry includes ray and box intersection predicates; triangle pairs also
-  have an intersection test. No Thrust/CUDA dependency.
+  `bbox.h`, `triangle.h`), and scene mesh representation (`mesh.h`). Triangle, point, sphere,
+  cubic Bezier tube, and solid box (`BBox` as `PrimitiveType::kBox`, held in the `boxes` arrays
+  of `SceneView`/`FlatScene`) geometry includes ray and box intersection predicates; triangle
+  pairs also have an intersection test.
   Each `Mesh` stores positions separately from packed `VertexAttributes` (normal and UV);
   both buffers have one entry per vertex and share the same triangle indices. OBJ attribute
   seams retain distinct vertex entries. Flattening extracts the positions and normals used by
@@ -309,7 +335,10 @@ backends; it carries the `performance` label and runs serially.
 
   `collision_detector.h`/`.cpp` reuse the leaf cells of any of the three grids for bounding-box
   object/object collision detection (see "Collision detection" above), parallelized per cell
-  reference with Thrust; the renderer runs it after every grid build.
+  reference with Thrust; the renderer runs it after every grid build. A `CollisionDetector` keeps
+  its temporary buffers and Thrust's scratch memory (through the caching allocator in
+  `src/core/thrust_scratch.h`) between calls, so repeated detections don't allocate; it is not
+  thread-safe.
   `simple_integrator.h` provides deterministic `SimpleIntegrator` cartoon shading with a
   configurable world-space `light_direction` and background color. Both integrators share the
   same host/device `Integrate()` interface. The renderer specializes its shared Thrust pixel

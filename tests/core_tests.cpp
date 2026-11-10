@@ -234,6 +234,11 @@ namespace
 		const BBox		  curve_bounds = BBoxExtractor<BezierCurve>::Get(curve);
 		HAPPYRAY_CHECK(NearlyEqual(curve_bounds.min_bound, Vec3f(-2.502f, -2.502f, -1.502f)));
 		HAPPYRAY_CHECK(NearlyEqual(curve_bounds.max_bound, Vec3f(4.502f, 3.502f, 5.502f)));
+
+		const BBox box(Vec3f(-1, 0, 2), Vec3f(3, 1, 4));
+		HAPPYRAY_CHECK(NearlyEqual(BBoxExtractor<BBox>::Get(box).min_bound, box.min_bound));
+		HAPPYRAY_CHECK(NearlyEqual(BBoxExtractor<BBox>::Get(box).max_bound, box.max_bound));
+		HAPPYRAY_CHECK(std::string(PrimitiveTypeName(PrimitiveType::kBox)) == "box");
 	}
 
 	void TestPrimitiveIntersections()
@@ -320,6 +325,21 @@ namespace
 		const Triangle degenerate_outside{
 			{Vec3f(3, 3, 0), Vec3f(3, 3, 0), Vec3f(3, 3, 0)}
 		};
+		// Solid boxes: entry face from outside, exit face from inside, touching boxes overlap.
+		const BBox solid(Vec3f(1, -1, -1), Vec3f(3, 1, 1));
+		int		   axis = -1;
+		HAPPYRAY_CHECK(IntersectRayBoxSurface(x_ray, solid, &t, &axis));
+		HAPPYRAY_CHECK(NearlyEqual(t, 1.0f) && axis == 0);
+		HAPPYRAY_CHECK(IntersectRayBoxSurface(Ray(Vec3f(2, 0, 0), Vec3f(0, 0.5f, 0)), solid, &t, &axis));
+		HAPPYRAY_CHECK(NearlyEqual(t, 2.0f) && axis == 1);
+		HAPPYRAY_CHECK(!IntersectRayBoxSurface(Ray(Vec3f(4, 0, 0), Vec3f(1, 0, 0)), solid, &t, &axis));
+		HAPPYRAY_CHECK(!IntersectRayBoxSurface(Ray(Vec3f(0, 2, 0), Vec3f(1, 0, 0)), solid, &t, &axis));
+		HAPPYRAY_CHECK(!IntersectRayBoxSurface(Ray(Vec3f(0, 0, 0), Vec3f(1, 0, 0), 1e-4f, 0.5f), solid, &t, &axis));
+		HAPPYRAY_CHECK(!IntersectRayBoxSurface(x_ray, BBox(), &t, &axis));
+		HAPPYRAY_CHECK(Intersects(solid, BBox(Vec3f(3, 1, 1), Vec3f(4, 2, 2))));
+		HAPPYRAY_CHECK(!Intersects(solid, BBox(Vec3f(3.01f, 0, 0), Vec3f(4, 1, 1))));
+		HAPPYRAY_CHECK(!Intersects(BBox(), solid));
+
 		HAPPYRAY_CHECK(IntersectTriangles(flat, crossing));
 		HAPPYRAY_CHECK(!IntersectTriangles(flat, separated));
 		HAPPYRAY_CHECK(IntersectTriangles(flat, coplanar_overlap));
@@ -513,6 +533,41 @@ namespace
 		HAPPYRAY_CHECK(flat.View().primitive_count == 2);
 	}
 
+	// Swept boxes bound each triangle at both ends of its motion and keep its ids.
+	void TestSweptTriangleBoxes()
+	{
+		using namespace happyray;
+		FlatScene a;
+		a.positions				  = {Vec3f(0, 0, 0), Vec3f(1, 0, 0), Vec3f(0, 1, 0)};
+		a.indices				  = {0, 1, 2};
+		a.material_ids			  = {3};
+		a.material_diffuse_colors = {Vec3f(1, 0, 0)};
+		a.object_ids			  = {7};
+		FlatScene b				  = a;
+		b.positions				  = {Vec3f(2, -1, 0), Vec3f(3, 0, 1), Vec3f(2, 1, 0)};
+		const FlatScene boxes	  = MakeSweptTriangleBoxes(a, b, 0.5f, 0.6f);
+		HAPPYRAY_CHECK(boxes.primitive_type == PrimitiveType::kBox);
+		HAPPYRAY_CHECK(boxes.PrimitiveCount() == 1);
+		HAPPYRAY_CHECK(boxes.View().boxes == boxes.boxes.data());
+		HAPPYRAY_CHECK(boxes.View().primitive_count == 1);
+		HAPPYRAY_CHECK(boxes.material_ids == a.material_ids && boxes.object_ids == a.object_ids);
+		HAPPYRAY_CHECK(NearlyEqual(boxes.boxes[0].min_bound, Vec3f(1, -0.6f, 0)));
+		HAPPYRAY_CHECK(NearlyEqual(boxes.boxes[0].max_bound, Vec3f(2.2f, 1, 0.6f)));
+
+		FlatScene other_topology = b;
+		other_topology.indices	 = {0, 2, 1};
+		bool threw				 = false;
+		try
+		{
+			MakeSweptTriangleBoxes(a, other_topology, 0.0f, 1.0f);
+		}
+		catch (const std::invalid_argument &)
+		{
+			threw = true;
+		}
+		HAPPYRAY_CHECK(threw);
+	}
+
 	// `o`/`g` statements become per-triangle object ids that survive subdivision and flattening.
 	void TestObjLoaderObjectIds()
 	{
@@ -657,6 +712,7 @@ int main(int argc, char **argv)
 	TestTriangleSubdivision();
 	TestDefaultMaxDistance();
 	TestFlattenScene();
+	TestSweptTriangleBoxes();
 	TestObjLoaderTriangleNoNormals(assets_dir);
 	TestObjLoaderAttributeSeam(assets_dir);
 	TestObjLoaderCubeWithMaterialsAndQuads(assets_dir);
