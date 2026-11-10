@@ -246,7 +246,8 @@ backends; it carries the `performance` label and runs serially.
   Each acceleration structure has one header and one implementation file.
   Grid views are primitive-agnostic; builders and leaf intersection are templated on the
   primitive type and dispatched once per build or kernel launch from `SceneView::primitive_type`.
-  Query functions default to `DynamicPrimitive`, which dispatches at runtime.
+  Shared `IntersectSceneGrid<P>` and `IsOccludedGrid<P>` templates in `scene_intersect.h`
+  accept any grid view. They default to `DynamicPrimitive`, which dispatches at runtime.
   `CellOverlapMode` selects how builders assign primitives to cells: `kAabb` (every cell of the
   primitive's AABB), `kExact` (exact, conservative primitive/cell tests for counting and writing;
   the CUDA default), or `kHybrid` (AABB counting, exact writing, trimmed padding; the TBB default).
@@ -271,7 +272,7 @@ backends; it carries the `performance` label and runs serially.
   minimum-dimension expression and uses a `switch` with constant indices into three-element
   cell/boundary arrays so the compiler can keep state in registers rather than memory.
   Zero-direction axes never step, and ties
-  retain the legacy z/y/x priority. All three pass a `CellRange` to shared closest-hit
+  retain the legacy z/y/x priority.   All three overload `detail::TraverseGrid` and pass a `CellRange` to shared closest-hit
   or occlusion visitors; SAH calibration uses the same loops with counting visitors.
   Counting and writing fragments share geometry setup through compile-time specialization.
   `irregular_grid.h`/`.cpp` build an irregular grid the HAGrid way: each top-level cell gets a
@@ -292,6 +293,20 @@ backends; it carries the `performance` label and runs serially.
   the integrator. `renderer.h`/`.cpp` is the `Renderer` engine: uploads scene geometry once,
   owns a `UniformGrid`, a `TwoLevelGrid`, and an `IrregularGrid`, and renders each frame via a
   single `thrust::for_each` over a `RenderPixelFunctor` (no `<<<...>>>` kernel launch anywhere).
+  `SetAccelType(type)` selects a grid without building it; call
+  `BuildAccelerationStructure(settings)` explicitly before rendering a missing grid.
+  `HasAccelerationStructure()` reports whether the selected structure is ready (always true
+  for brute force, whose build is a no-op). Rendering an unbuilt grid throws.
+  `GridBuildSettings` supplies densities, the dense-cell threshold, and irregular-grid
+  merge/expand parameters. Zero densities use renderer defaults: `{3, 0}` for uniform,
+  `{0.12, 2.4}` for nested grids. Scene updates and density tuning retain each grid's settings;
+  an explicit build with omitted settings uses defaults again. For example:
+
+  ```cpp
+  renderer.SetAccelType(happyray::AccelType::kTwoLevelGrid);
+  renderer.BuildAccelerationStructure({{0.12f, 1.2f}, 16});
+  ```
+
   `collision_detector.h`/`.cpp` reuse the leaf cells of any of the three grids for bounding-box
   object/object collision detection (see "Collision detection" above), parallelized per cell
   reference with Thrust; the renderer runs it after every grid build.

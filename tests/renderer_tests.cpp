@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -157,9 +158,7 @@ namespace
 		integrator.background_color			   = happyray::Vec3f(0.2f, 0.4f, 0.6f);
 		integrator.samples_per_pixel_per_frame = 4;
 		HAPPYRAY_CHECK(renderer.SampleCount() == 0);
-		HAPPYRAY_CHECK(!renderer.HasUniformGrid());
-		HAPPYRAY_CHECK(!renderer.HasTwoLevelGrid());
-		HAPPYRAY_CHECK(!renderer.HasIrregularGrid());
+		HAPPYRAY_CHECK(renderer.HasAccelerationStructure()); // Brute force needs no build.
 		renderer.ResizeFramebuffer(3, 2);
 		for (int frame = 0; frame < 3; ++frame)
 			renderer.RenderFrame(camera, integrator);
@@ -243,11 +242,71 @@ namespace
 			check_pixels(simple_renderer.ResolvedPixels());
 		}
 		check_sequence(9, 5);
-		progressive.BuildUniformGrid();
 		progressive.SetAccelType(happyray::AccelType::kUniformGrid);
+		progressive.BuildAccelerationStructure();
 		progressive.ResetAccumulation();
 		progressive.RenderProgressiveFrame(camera, ao, simple);
 		check_pixels(simple_renderer.ResolvedPixels());
+	}
+
+	void TestAccelerationStructureBuilds(const happyray::FlatScene &scene, const happyray::Camera &camera)
+	{
+		using namespace happyray;
+		Renderer renderer(scene);
+		renderer.ResizeFramebuffer(3, 2);
+		renderer.BuildAccelerationStructure(); // Brute force needs no allocation.
+		for (AccelType type : {AccelType::kUniformGrid, AccelType::kTwoLevelGrid, AccelType::kIrregularGrid})
+		{
+			renderer.SetAccelType(type);
+			HAPPYRAY_CHECK(!renderer.HasAccelerationStructure());
+			bool rejected = false;
+			try
+			{
+				renderer.RenderFrame(camera, SimpleIntegrator());
+			}
+			catch (const std::logic_error &)
+			{
+				rejected = true;
+			}
+			HAPPYRAY_CHECK(rejected);
+			HAPPYRAY_CHECK(renderer.SampleCount() == 0);
+
+			renderer.BuildAccelerationStructure();
+			HAPPYRAY_CHECK(renderer.HasAccelerationStructure());
+			HAPPYRAY_CHECK(renderer.CurrentGridDensities().top_level ==
+						   (type == AccelType::kUniformGrid ? 3.0f : 0.12f));
+			HAPPYRAY_CHECK(renderer.CurrentGridDensities().second_level ==
+						   (type == AccelType::kUniformGrid ? 0.0f : 2.4f));
+			renderer.BuildAccelerationStructure({
+				{0.25f, 1.5f},
+				4,
+				0.6f,
+				1
+			 });
+			renderer.UpdateScene(scene);
+			HAPPYRAY_CHECK(renderer.HasAccelerationStructure());
+			HAPPYRAY_CHECK(renderer.CurrentGridDensities().top_level == 0.25f);
+			HAPPYRAY_CHECK(renderer.CurrentGridDensities().second_level ==
+						   (type == AccelType::kUniformGrid ? 0.0f : 1.5f));
+			renderer.SetAccelType(AccelType::kBruteForce);
+			renderer.SetAccelType(type);
+			HAPPYRAY_CHECK(renderer.HasAccelerationStructure()); // Selection retains cached grids.
+			HAPPYRAY_CHECK(renderer.CurrentGridDensities().top_level == 0.25f);
+			rejected = false;
+			try
+			{
+				renderer.BuildAccelerationStructure({
+					{-1.0f, 1.5f}
+				 });
+			}
+			catch (const std::invalid_argument &)
+			{
+				rejected = true;
+			}
+			HAPPYRAY_CHECK(rejected);
+			HAPPYRAY_CHECK(renderer.HasAccelerationStructure());
+			HAPPYRAY_CHECK(renderer.CurrentGridDensities().top_level == 0.25f);
+		}
 	}
 
 	void TestDensitySearchScheduling()
@@ -323,9 +382,20 @@ namespace
 		Renderer renderer(scene), reference(scene);
 		renderer.ResizeFramebuffer(24, 16);
 		reference.ResizeFramebuffer(24, 16);
-		renderer.BuildUniformGrid();
-		renderer.BuildTwoLevelGrid(0.0625f, 1.2f, 4);
-		renderer.BuildIrregularGrid(0.12f, 2.4f, 4, 0.6f, 1);
+		renderer.SetAccelType(AccelType::kUniformGrid);
+		renderer.BuildAccelerationStructure();
+		renderer.SetAccelType(AccelType::kTwoLevelGrid);
+		renderer.BuildAccelerationStructure({
+			{0.0625f, 1.2f},
+			4
+		 });
+		renderer.SetAccelType(AccelType::kIrregularGrid);
+		renderer.BuildAccelerationStructure({
+			{0.12f, 2.4f},
+			4,
+			0.6f,
+			1
+		 });
 		AOIntegrator ao;
 		ao.max_distance = 1.5f;
 		SimpleIntegrator simple;
@@ -385,9 +455,7 @@ namespace
 		}
 		grid_renderer.UpdateScene(updated_scene);
 		reference_renderer.UpdateScene(updated_scene);
-		HAPPYRAY_CHECK(grid_renderer.HasUniformGrid());
-		HAPPYRAY_CHECK(!grid_renderer.HasTwoLevelGrid());
-		HAPPYRAY_CHECK(!grid_renderer.HasIrregularGrid());
+		HAPPYRAY_CHECK(grid_renderer.HasAccelerationStructure());
 
 		grid_renderer.ResizeFramebuffer(12, 8);
 		reference_renderer.ResizeFramebuffer(12, 8);
@@ -519,6 +587,7 @@ namespace
 			for (AccelType type : grids)
 			{
 				renderer.SetAccelType(type);
+				renderer.BuildAccelerationStructure();
 				renderer.DetectCollisions();
 				const std::vector<uint32_t> ids = renderer.CollisionIds();
 				HAPPYRAY_CHECK(CollisionsWithinBounds(ids, bbox_expected, exact_expected));
@@ -531,9 +600,17 @@ namespace
 		}
 		renderer.SetCellOverlapMode(DefaultCellOverlapMode());
 		// Refined second levels and small irregular cells exercise more leaves than the defaults.
-		renderer.BuildTwoLevelGrid(0.5f, 8.0f, 2);
+		renderer.SetAccelType(AccelType::kTwoLevelGrid);
+		renderer.BuildAccelerationStructure({
+			{0.5f, 8.0f},
+			2
+		 });
 		HAPPYRAY_CHECK(CollisionsWithinBounds(renderer.CollisionIds(), bbox_expected, exact_expected));
-		renderer.BuildIrregularGrid(0.5f, 8.0f, 2);
+		renderer.SetAccelType(AccelType::kIrregularGrid);
+		renderer.BuildAccelerationStructure({
+			{0.5f, 8.0f},
+			2
+		 });
 		const std::vector<uint32_t> expected	   = renderer.CollisionIds();
 		const uint32_t				expected_count = CountCollisions(expected);
 		HAPPYRAY_CHECK(CollisionsWithinBounds(expected, bbox_expected, exact_expected));
@@ -542,7 +619,10 @@ namespace
 		renderer.SetCollisionDetectionEnabled(false);
 		HAPPYRAY_CHECK(!renderer.CollisionDetectionEnabled());
 		const float last_collision_ms = renderer.LastCollisionStats().total_ms;
-		renderer.BuildUniformGrid(1.0f);
+		renderer.SetAccelType(AccelType::kUniformGrid);
+		renderer.BuildAccelerationStructure({
+			{1.0f, 0}
+		 });
 		renderer.SetAccelType(AccelType::kTwoLevelGrid);
 		HAPPYRAY_CHECK(renderer.CollisionIds() == expected);
 		HAPPYRAY_CHECK(renderer.LastCollisionStats().total_ms == last_collision_ms);
@@ -643,6 +723,7 @@ namespace
 			for (AccelType type : types)
 			{
 				renderer.SetAccelType(type);
+				renderer.BuildAccelerationStructure();
 				const std::string case_label = std::string(label) + " " + CellOverlapModeName(mode) + " " +
 											   (type == AccelType::kUniformGrid	   ? "uniform"
 												: type == AccelType::kTwoLevelGrid ? "two-level"
@@ -718,6 +799,7 @@ int main(int argc, char **argv)
 	camera.pitch_deg = -25.0f;
 
 	TestProgressiveBlend(flat_scene, camera);
+	TestAccelerationStructureBuilds(flat_scene, camera);
 	TestDensityGridRebuilds(flat_scene, camera);
 	TestAnimatedSceneUpdate(flat_scene, camera);
 	TestPrimitiveScenes(flat_scene, camera);
@@ -742,17 +824,23 @@ int main(int argc, char **argv)
 	renderer.SetAccelType(happyray::AccelType::kBruteForce);
 	CompareRendererToReference("brute force", &renderer, camera, integrator, kNumFrames, reference);
 
-	renderer.BuildUniformGrid();
 	renderer.SetAccelType(happyray::AccelType::kUniformGrid);
+	renderer.BuildAccelerationStructure();
 	CompareRendererToReference("uniform grid", &renderer, camera, integrator, kNumFrames, reference);
 
 	// Scene-loading subdivision increases triangle counts; force the sparse path explicitly.
-	renderer.BuildTwoLevelGrid(0.0625f, 1.2f, std::numeric_limits<uint32_t>::max());
 	renderer.SetAccelType(happyray::AccelType::kTwoLevelGrid);
+	renderer.BuildAccelerationStructure({
+		{0.0625f, 1.2f},
+		std::numeric_limits<uint32_t>::max()
+	});
 	CompareRendererToReference("two-level grid (degenerate)", &renderer, camera, integrator, kNumFrames, reference);
 
-	renderer.BuildIrregularGrid(0.12f, 2.4f, std::numeric_limits<uint32_t>::max());
 	renderer.SetAccelType(happyray::AccelType::kIrregularGrid);
+	renderer.BuildAccelerationStructure({
+		{0.12f, 2.4f},
+		std::numeric_limits<uint32_t>::max()
+	});
 	CompareRendererToReference("irregular grid (degenerate)", &renderer, camera, integrator, kNumFrames, reference);
 
 	happyray::SimpleIntegrator simple_integrator;
@@ -797,8 +885,8 @@ int main(int argc, char **argv)
 
 	happyray::Renderer dense_renderer(dense_flat_scene);
 	dense_renderer.ResizeFramebuffer(kWidth, kHeight);
-	dense_renderer.BuildTwoLevelGrid();
 	dense_renderer.SetAccelType(happyray::AccelType::kTwoLevelGrid);
+	dense_renderer.BuildAccelerationStructure();
 	CompareRendererToReference("two-level grid (refined)",
 							   &dense_renderer,
 							   dense_camera,
@@ -809,8 +897,8 @@ int main(int argc, char **argv)
 	// Same scene, now checking the irregular grid: its per-top-level-cell local grids are dense
 	// enough here to exercise real merge (collapsing empty/uniform regions) and expand
 	// (growing cells into subset-compatible neighbors), not just the degenerate case above.
-	dense_renderer.BuildIrregularGrid();
 	dense_renderer.SetAccelType(happyray::AccelType::kIrregularGrid);
+	dense_renderer.BuildAccelerationStructure();
 	CompareRendererToReference("irregular grid (merge+expand)",
 							   &dense_renderer,
 							   dense_camera,

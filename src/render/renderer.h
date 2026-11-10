@@ -29,6 +29,15 @@ namespace happyray
 		float second_level = 0; // Unused for a uniform grid.
 	};
 
+	struct GridBuildSettings
+	{
+		// Zero selects the renderer's default density for this grid type.
+		GridDensities densities;
+		uint32_t	  dense_cell_threshold = 16;
+		float		  merge_alpha		   = 0.7f; // Irregular grid only.
+		int			  expand_iterations	   = 2;	   // Irregular grid only.
+	};
+
 	class Renderer
 	{
 	  public:
@@ -54,32 +63,15 @@ namespace happyray
 
 		uint32_t SampleCount() const;
 
-		// Builds a uniform grid over the already-uploaded geometry (reusing it, not
-		// re-uploading it). Select it with SetAccelType(). Safe to call more than
-		// once (rebuilds in place).
-		void BuildUniformGrid(float target_prims_per_cell = 3.0f);
-		bool HasUniformGrid() const;
+		// (Re)builds the selected grid over uploaded geometry. A no-op for brute force.
+		// Settings are retained per grid for scene updates and density tuning.
+		// Nested grids default to densities {0.12, 2.4}; uniform defaults to {3, 0}.
+		void BuildAccelerationStructure(GridBuildSettings settings = {});
+		// Whether the selected structure is ready; brute force is always ready.
+		bool HasAccelerationStructure() const;
 
-		// Builds a two-level grid over the already-uploaded geometry; see
-		// TwoLevelGrid (src/accel/two_level_grid.h) for the parameter defaults'
-		// meaning.
-		void BuildTwoLevelGrid(float	top_level_density	 = 0.12f,
-							   float	second_level_density = 2.4f,
-							   uint32_t dense_cell_threshold = 16);
-		bool HasTwoLevelGrid() const;
-
-		// Builds an irregular grid over the already-uploaded geometry; see
-		// IrregularGrid (src/accel/irregular_grid.h) for the parameter defaults'
-		// meaning.
-		void BuildIrregularGrid(float	 top_level_density	  = 0.12f,
-								float	 second_level_density = 2.4f,
-								uint32_t dense_cell_threshold = 16,
-								float	 merge_alpha		  = 0.7f,
-								int		 expand_iterations	  = 2);
-		bool HasIrregularGrid() const;
-
-		// Selects which acceleration structure RenderFrame traces against. Builds a
-		// missing structure on demand. Does not reset accumulation itself.
+		// Selects the structure to trace against and refreshes collisions if it is built.
+		// Does not build missing grids or reset accumulation. Build explicitly before rendering.
 		void	  SetAccelType(AccelType type);
 		AccelType GetAccelType() const;
 
@@ -111,7 +103,7 @@ namespace happyray
 
 		const std::vector<Vec3f> &ResolvedPixels() const;
 
-		// Every Build*Grid call (including the on-demand builds of SetAccelType,
+		// Every BuildAccelerationStructure call (including rebuilds from
 		// UpdateScene and RebuildGridDensities) runs collision detection between
 		// the scene's objects (FlatScene::object_ids) over the new grid's leaf
 		// cells (see src/render/collision_detector.h): primitives sharing a cell

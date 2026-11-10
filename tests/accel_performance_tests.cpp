@@ -65,21 +65,6 @@ namespace
 		}
 	};
 
-	HAPPYRAY_HD bool Intersect(const SceneView &scene, const UniformGridView &grid, const Ray &ray, HitRecord *hit)
-	{
-		return IntersectSceneGrid<Triangle>(scene, grid, ray, hit);
-	}
-
-	HAPPYRAY_HD bool Intersect(const SceneView &scene, const TwoLevelGridView &grid, const Ray &ray, HitRecord *hit)
-	{
-		return IntersectSceneTwoLevelGrid<Triangle>(scene, grid, ray, hit);
-	}
-
-	HAPPYRAY_HD bool Intersect(const SceneView &scene, const IrregularGridView &grid, const Ray &ray, HitRecord *hit)
-	{
-		return IntersectSceneIrregularGrid<Triangle>(scene, grid, ray, hit);
-	}
-
 	template <typename View> struct Trace
 	{
 		SceneView  scene;
@@ -89,7 +74,7 @@ namespace
 		HAPPYRAY_HD float operator()(uint32_t i) const
 		{
 			HitRecord hit;
-			return Intersect(scene, grid, rays[i], &hit) ? hit.t : -1.0f;
+			return IntersectSceneGrid<Triangle>(scene, grid, rays[i], &hit) ? hit.t : -1.0f;
 		}
 	};
 

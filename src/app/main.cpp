@@ -347,6 +347,7 @@ int main(int argc, char **argv)
 	best_densities[static_cast<size_t>(happyray::AccelType::kIrregularGrid)] = {
 		happyray::IrregularGrid::kDefaultTopLevelDensity,
 		happyray::IrregularGrid::kDefaultSecondLevelDensity};
+	renderer.BuildAccelerationStructure({best_densities[static_cast<size_t>(accel_type)]});
 
 	happyray::GridDensitySearch density_search;
 	constexpr uint32_t			kMaxPrimitivesForDensitySearch = 1000000;
@@ -503,6 +504,8 @@ int main(int argc, char **argv)
 				{
 					accel_type = selected;
 					renderer.SetAccelType(accel_type);
+					if (!renderer.HasAccelerationStructure())
+						renderer.BuildAccelerationStructure({best_densities[static_cast<size_t>(accel_type)]});
 					camera_dirty = true;
 				}
 			}

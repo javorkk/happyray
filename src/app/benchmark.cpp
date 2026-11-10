@@ -269,10 +269,14 @@ int main(int argc, char **argv)
 		renderer.SetCellOverlapMode(options.overlap_mode);
 		renderer.SetScreenSpaceRadius(options.screen_space_radius);
 		renderer.UpdateViewDependentGeometry(camera);
-		const double build_ms[] = {0.0,
-								   MeasureBuildMs([&] { renderer.BuildUniformGrid(); }),
-								   MeasureBuildMs([&] { renderer.BuildTwoLevelGrid(); }),
-								   MeasureBuildMs([&] { renderer.BuildIrregularGrid(); })};
+		double build_ms[4] = {};
+		for (happyray::AccelType type : {happyray::AccelType::kUniformGrid,
+										 happyray::AccelType::kTwoLevelGrid,
+										 happyray::AccelType::kIrregularGrid})
+		{
+			renderer.SetAccelType(type);
+			build_ms[static_cast<size_t>(type)] = MeasureBuildMs([&] { renderer.BuildAccelerationStructure(); });
+		}
 
 		const size_t	  last_slash = scene_path.find_last_of('/');
 		const std::string scene_name = last_slash == std::string::npos ? scene_path : scene_path.substr(last_slash + 1);

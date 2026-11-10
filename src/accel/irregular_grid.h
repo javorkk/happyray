@@ -111,7 +111,7 @@ namespace happyray
 	// merge/expand's bbox-growing arithmetic stays exact integer math regardless
 	// of how many top-level cells a cell has grown across; traversal converts to
 	// world-space t-values itself using IrregularGridView's shared
-	// `global_cell_size` (see detail::TraverseIrregularGrid below).
+	// `global_cell_size` (see detail::TraverseGrid below).
 	struct alignas(16) IrregularCell
 	{
 		Vec3i	  min;
@@ -242,7 +242,7 @@ namespace happyray
 		// if `visit` did. Every step strictly advances at least one voxel coordinate monotonically, so
 		// the walk always terminates.
 		template <typename VisitFn>
-		HAPPYRAY_HD inline bool TraverseIrregularGrid(const IrregularGridView &grid, const Ray &ray, VisitFn &&visit)
+		HAPPYRAY_HD inline bool TraverseGrid(const IrregularGridView &grid, const Ray &ray, VisitFn &&visit)
 		{
 			const UniformGridView &top	   = grid.top_level;
 			const Vec3f			  &org	   = ray.origin;
@@ -322,51 +322,6 @@ namespace happyray
 		}
 
 	} // namespace detail
-
-	// Finds the closest hit by walking the irregular grid's cells front to back (see
-	// detail::TraverseIrregularGrid above). Returns false if the ray hits nothing.
-	template <typename P = DynamicPrimitive>
-	HAPPYRAY_HD inline bool IntersectSceneIrregularGrid(const SceneView			&scene,
-														const IrregularGridView &grid,
-														const Ray				&ray,
-														HitRecord				*out_hit)
-	{
-		if constexpr (std::is_same_v<P, DynamicPrimitive>)
-		{
-			return DispatchPrimitive(scene.primitive_type,
-									 [&](auto tag)
-									 {
-										 using Q = typename decltype(tag)::type;
-										 return IntersectSceneIrregularGrid<Q>(scene, grid, ray, out_hit);
-									 });
-		}
-		else
-		{
-			ClosestHit hit;
-			detail::TraverseIrregularGrid(grid, ray, detail::ClosestHitVisitor<P>{scene, grid.prim_indices, ray, hit});
-			return ResolveClosestHit<P>(scene, ray, hit, out_hit);
-		}
-	}
-
-	// Returns true as soon as any primitive in any irregular cell the ray visits occludes `ray`.
-	template <typename P = DynamicPrimitive>
-	HAPPYRAY_HD inline bool
-	IsOccludedIrregularGrid(const SceneView &scene, const IrregularGridView &grid, const Ray &ray)
-	{
-		if constexpr (std::is_same_v<P, DynamicPrimitive>)
-		{
-			return DispatchPrimitive(scene.primitive_type,
-									 [&](auto tag)
-									 {
-										 using Q = typename decltype(tag)::type;
-										 return IsOccludedIrregularGrid<Q>(scene, grid, ray);
-									 });
-		}
-		else
-		{
-			return detail::TraverseIrregularGrid(grid, ray, detail::OcclusionVisitor<P>{scene, grid.prim_indices, ray});
-		}
-	}
 
 	class IrregularGrid
 	{

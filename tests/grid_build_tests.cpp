@@ -53,15 +53,13 @@ namespace
 										   });
 			out[0] = count;
 			count  = 0;
-			happyray::detail::TraverseTwoLevelGrid(
-				two_level,
-				rays[i],
-				[](uint32_t) {},
-				[&](happyray::CellRange range, float *)
-				{
-					out[11 + count++] = range.start;
-					return false;
-				});
+			happyray::detail::TraverseGrid(two_level,
+										   rays[i],
+										   [&](happyray::CellRange range, float *)
+										   {
+											   out[11 + count++] = range.start;
+											   return false;
+										   });
 			out[10] = count;
 		}
 	};

@@ -1192,7 +1192,7 @@ namespace happyray
 	float IrregularGrid::ComputeSahCost(const BBox &scene_bounds, const SahCostConstants &costs) const
 	{
 		const IrregularGridView view = impl_->View();
-		// detail::TraverseIrregularGrid walks the shared lattice directly (HAGrid-style), so
+		// detail::TraverseGrid walks the shared lattice directly (HAGrid-style), so
 		// top-level cells cost no traversal steps of their own -- only the irregular cells do.
 		float		   total		   = 0.0f;
 		const uint32_t num_local_cells = LeafCellCount();

@@ -14,6 +14,60 @@
 namespace happyray
 {
 
+	// Shared queries for all grid views; traversal overloads remain grid-specific.
+	template <typename P = DynamicPrimitive, typename GridView>
+	HAPPYRAY_HD inline bool
+	IntersectSceneGrid(const SceneView &scene, const GridView &grid, const Ray &ray, HitRecord *out_hit)
+	{
+		if constexpr (std::is_same_v<P, DynamicPrimitive>)
+		{
+			return DispatchPrimitive(scene.primitive_type,
+									 [&](auto tag)
+									 {
+										 using Q = typename decltype(tag)::type;
+										 return IntersectSceneGrid<Q>(scene, grid, ray, out_hit);
+									 });
+		}
+		else
+		{
+			const uint32_t *prim_indices = [&]()
+			{
+				if constexpr (std::is_same_v<GridView, TwoLevelGridView>)
+					return grid.second_level_prim_indices;
+				else
+					return grid.prim_indices;
+			}();
+			ClosestHit hit;
+			detail::TraverseGrid(grid, ray, detail::ClosestHitVisitor<P>{scene, prim_indices, ray, hit});
+			return ResolveClosestHit<P>(scene, ray, hit, out_hit);
+		}
+	}
+
+	template <typename P = DynamicPrimitive, typename GridView>
+	HAPPYRAY_HD inline bool IsOccludedGrid(const SceneView &scene, const GridView &grid, const Ray &ray)
+	{
+		if constexpr (std::is_same_v<P, DynamicPrimitive>)
+		{
+			return DispatchPrimitive(scene.primitive_type,
+									 [&](auto tag)
+									 {
+										 using Q = typename decltype(tag)::type;
+										 return IsOccludedGrid<Q>(scene, grid, ray);
+									 });
+		}
+		else
+		{
+			const uint32_t *prim_indices = [&]()
+			{
+				if constexpr (std::is_same_v<GridView, TwoLevelGridView>)
+					return grid.second_level_prim_indices;
+				else
+					return grid.prim_indices;
+			}();
+			return detail::TraverseGrid(grid, ray, detail::OcclusionVisitor<P>{scene, prim_indices, ray});
+		}
+	}
+
 	// Finds the closest hit across every primitive in `scene`. Returns false if the ray hits
 	// nothing.
 	template <typename P = DynamicPrimitive>
@@ -93,9 +147,9 @@ namespace happyray
 		case AccelType::kUniformGrid:
 			return IntersectSceneGrid<P>(scene, accel.uniform_grid, ray, out_hit);
 		case AccelType::kTwoLevelGrid:
-			return IntersectSceneTwoLevelGrid<P>(scene, accel.two_level_grid, ray, out_hit);
+			return IntersectSceneGrid<P>(scene, accel.two_level_grid, ray, out_hit);
 		case AccelType::kIrregularGrid:
-			return IntersectSceneIrregularGrid<P>(scene, accel.irregular_grid, ray, out_hit);
+			return IntersectSceneGrid<P>(scene, accel.irregular_grid, ray, out_hit);
 		case AccelType::kBruteForce:
 		default:
 			return IntersectSceneBruteForce<P>(scene, ray, out_hit);
@@ -110,9 +164,9 @@ namespace happyray
 		case AccelType::kUniformGrid:
 			return IsOccludedGrid<P>(scene, accel.uniform_grid, ray);
 		case AccelType::kTwoLevelGrid:
-			return IsOccludedTwoLevelGrid<P>(scene, accel.two_level_grid, ray);
+			return IsOccludedGrid<P>(scene, accel.two_level_grid, ray);
 		case AccelType::kIrregularGrid:
-			return IsOccludedIrregularGrid<P>(scene, accel.irregular_grid, ray);
+			return IsOccludedGrid<P>(scene, accel.irregular_grid, ray);
 		case AccelType::kBruteForce:
 		default:
 			return IsOccludedBruteForce<P>(scene, ray);

@@ -346,7 +346,7 @@ namespace happyray
 		// increments the count -- by kMockIrregularCellsPerLeaf for the irregular grid
 		// -- and the walk never stops early) -- one functor per structure, each calling
 		// that structure's own real traversal code exactly as
-		// IntersectSceneGrid/IntersectSceneTwoLevelGrid/ IntersectSceneIrregularGrid
+		// IntersectSceneGrid
 		// do, just swapping the triangle-testing callback for a counter. `rays` is the
 		// one pregenerated, shared ray batch (see GenerateUnitCubeRays/
 		// kCalibrationRayCount above) -- read by index, not recomputed here.
@@ -377,15 +377,15 @@ namespace happyray
 			HAPPYRAY_HD float operator()(uint32_t i) const
 			{
 				uint32_t steps = 0;
-				detail::TraverseTwoLevelGrid(
+				detail::TraverseGrid(
 					grid,
 					rays[i],
-					[&](uint32_t) { ++steps; },
 					[&](CellRange, float *) -> bool
 					{
 						++steps;
 						return false;
-					});
+					},
+					[&](uint32_t) { ++steps; });
 				return static_cast<float>(steps);
 			}
 		};
@@ -398,13 +398,13 @@ namespace happyray
 			HAPPYRAY_HD float operator()(uint32_t i) const
 			{
 				uint32_t steps = 0;
-				detail::TraverseIrregularGrid(grid,
-											  rays[i],
-											  [&](CellRange, float *) -> bool
-											  {
-												  steps += kMockIrregularCellsPerLeaf;
-												  return false;
-											  });
+				detail::TraverseGrid(grid,
+									 rays[i],
+									 [&](CellRange, float *) -> bool
+									 {
+										 steps += kMockIrregularCellsPerLeaf;
+										 return false;
+									 });
 				return static_cast<float>(steps);
 			}
 		};

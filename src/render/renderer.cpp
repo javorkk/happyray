@@ -14,6 +14,7 @@
 #include "renderer.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <stdexcept>
 #include <thrust/copy.h>
@@ -124,17 +125,11 @@ namespace happyray
 		thrust::device_vector<Vec3f> preview;
 		std::vector<Vec3f>			 resolved_host;
 
-		std::unique_ptr<UniformGrid>   uniform_grid;
-		std::unique_ptr<TwoLevelGrid>  two_level_grid;
-		std::unique_ptr<IrregularGrid> irregular_grid;
-		AccelType					   accel_type = AccelType::kBruteForce;
-		GridDensities				   uniform_densities;
-		GridDensities				   two_level_densities;
-		GridDensities				   irregular_densities;
-		uint32_t					   two_level_threshold		   = 16;
-		uint32_t					   irregular_threshold		   = 16;
-		float						   irregular_merge_alpha	   = 0.7f;
-		int							   irregular_expand_iterations = 2;
+		std::unique_ptr<UniformGrid>	 uniform_grid;
+		std::unique_ptr<TwoLevelGrid>	 two_level_grid;
+		std::unique_ptr<IrregularGrid>	 irregular_grid;
+		AccelType						 accel_type = AccelType::kBruteForce;
+		std::array<GridBuildSettings, 4> grid_settings;
 
 		int		 width		  = 0;
 		int		 height		  = 0;
@@ -201,6 +196,10 @@ namespace happyray
 			else if (accel_type == AccelType::kIrregularGrid && irregular_grid)
 			{
 				accel.irregular_grid = irregular_grid->View();
+			}
+			else if (accel_type != AccelType::kBruteForce)
+			{
+				throw std::logic_error("Selected acceleration structure has not been built");
 			}
 			return accel;
 		}
@@ -341,32 +340,7 @@ namespace happyray
 		impl_->uniform_grid.reset();
 		impl_->two_level_grid.reset();
 		impl_->irregular_grid.reset();
-		switch (impl_->accel_type)
-		{
-		case AccelType::kUniformGrid:
-			BuildUniformGrid(impl_->uniform_densities.top_level > 0.0f ? impl_->uniform_densities.top_level
-																	   : UniformGrid::kDefaultDensity);
-			break;
-		case AccelType::kTwoLevelGrid:
-			BuildTwoLevelGrid(impl_->two_level_densities.top_level > 0.0f ? impl_->two_level_densities.top_level
-																		  : TwoLevelGrid::kDefaultTopLevelDensity,
-							  impl_->two_level_densities.second_level > 0.0f ? impl_->two_level_densities.second_level
-																			 : TwoLevelGrid::kDefaultSecondLevelDensity,
-							  impl_->two_level_threshold);
-			break;
-		case AccelType::kIrregularGrid:
-			BuildIrregularGrid(impl_->irregular_densities.top_level > 0.0f ? impl_->irregular_densities.top_level
-																		   : IrregularGrid::kDefaultTopLevelDensity,
-							   impl_->irregular_densities.second_level > 0.0f
-								   ? impl_->irregular_densities.second_level
-								   : IrregularGrid::kDefaultSecondLevelDensity,
-							   impl_->irregular_threshold,
-							   impl_->irregular_merge_alpha,
-							   impl_->irregular_expand_iterations);
-			break;
-		default:
-			break;
-		}
+		BuildAccelerationStructure(impl_->grid_settings[static_cast<size_t>(impl_->accel_type)]);
 	}
 
 	void Renderer::ResetAccumulation()
@@ -380,111 +354,77 @@ namespace happyray
 		return impl_->sample_count;
 	}
 
-	void Renderer::BuildUniformGrid(float target_prims_per_cell)
+	void Renderer::BuildAccelerationStructure(GridBuildSettings settings)
 	{
-		impl_->uniform_grid = std::make_unique<UniformGrid>(impl_->View(), target_prims_per_cell, impl_->overlap_mode);
-		impl_->ComputeCollisions(*impl_->uniform_grid);
-		impl_->uniform_densities = {target_prims_per_cell, 0};
-	}
-
-	bool Renderer::HasUniformGrid() const
-	{
-		return impl_->uniform_grid != nullptr;
-	}
-
-	void Renderer::BuildTwoLevelGrid(float top_level_density, float second_level_density, uint32_t dense_cell_threshold)
-	{
-		impl_->two_level_grid = std::make_unique<TwoLevelGrid>(impl_->View(),
-															   top_level_density,
-															   second_level_density,
-															   dense_cell_threshold,
-															   impl_->overlap_mode);
-		impl_->ComputeCollisions(*impl_->two_level_grid);
-		impl_->two_level_densities = {top_level_density, second_level_density};
-		impl_->two_level_threshold = dense_cell_threshold;
-	}
-
-	bool Renderer::HasTwoLevelGrid() const
-	{
-		return impl_->two_level_grid != nullptr;
-	}
-
-	void Renderer::BuildIrregularGrid(float	   top_level_density,
-									  float	   second_level_density,
-									  uint32_t dense_cell_threshold,
-									  float	   merge_alpha,
-									  int	   expand_iterations)
-	{
-		impl_->irregular_grid = std::make_unique<IrregularGrid>(impl_->View(),
-																top_level_density,
-																second_level_density,
-																dense_cell_threshold,
-																merge_alpha,
-																expand_iterations,
-																impl_->overlap_mode);
-		impl_->ComputeCollisions(*impl_->irregular_grid);
-		impl_->irregular_densities		   = {top_level_density, second_level_density};
-		impl_->irregular_threshold		   = dense_cell_threshold;
-		impl_->irregular_merge_alpha	   = merge_alpha;
-		impl_->irregular_expand_iterations = expand_iterations;
-	}
-
-	bool Renderer::HasIrregularGrid() const
-	{
-		return impl_->irregular_grid != nullptr;
-	}
-
-	void Renderer::SetAccelType(AccelType type)
-	{
-		impl_->accel_type = type;
-		switch (type)
+		if (impl_->accel_type == AccelType::kBruteForce)
+			return;
+		auto &densities = settings.densities;
+		if (!std::isfinite(densities.top_level) || densities.top_level < 0 ||
+			(impl_->accel_type != AccelType::kUniformGrid &&
+			 (!std::isfinite(densities.second_level) || densities.second_level < 0)))
+			throw std::invalid_argument("Grid densities must be finite and nonnegative (zero selects defaults)");
+		if (densities.top_level == 0)
+			densities.top_level = impl_->accel_type == AccelType::kUniformGrid ? UniformGrid::kDefaultDensity
+																			   : TwoLevelGrid::kDefaultTopLevelDensity;
+		if (densities.second_level == 0 && impl_->accel_type != AccelType::kUniformGrid)
+			densities.second_level = 2.4f;
+		switch (impl_->accel_type)
 		{
 		case AccelType::kUniformGrid:
-			if (!impl_->uniform_grid)
-			{
-				BuildUniformGrid(impl_->uniform_densities.top_level > 0.0f ? impl_->uniform_densities.top_level
-																		   : UniformGrid::kDefaultDensity);
-			}
-			else
-			{
-				impl_->ComputeCollisions(*impl_->uniform_grid);
-			}
+			densities.second_level = 0;
+			impl_->uniform_grid.reset();
+			impl_->uniform_grid =
+				std::make_unique<UniformGrid>(impl_->View(), densities.top_level, impl_->overlap_mode);
+			impl_->ComputeCollisions(*impl_->uniform_grid);
 			break;
 		case AccelType::kTwoLevelGrid:
-			if (!impl_->two_level_grid)
-			{
-				BuildTwoLevelGrid(impl_->two_level_densities.top_level > 0.0f ? impl_->two_level_densities.top_level
-																			  : TwoLevelGrid::kDefaultTopLevelDensity,
-								  impl_->two_level_densities.second_level > 0.0f
-									  ? impl_->two_level_densities.second_level
-									  : TwoLevelGrid::kDefaultSecondLevelDensity,
-								  impl_->two_level_threshold);
-			}
-			else
-			{
-				impl_->ComputeCollisions(*impl_->two_level_grid);
-			}
+			impl_->two_level_grid.reset();
+			impl_->two_level_grid = std::make_unique<TwoLevelGrid>(impl_->View(),
+																   densities.top_level,
+																   densities.second_level,
+																   settings.dense_cell_threshold,
+																   impl_->overlap_mode);
+			impl_->ComputeCollisions(*impl_->two_level_grid);
 			break;
 		case AccelType::kIrregularGrid:
-			if (!impl_->irregular_grid)
-			{
-				BuildIrregularGrid(impl_->irregular_densities.top_level > 0.0f ? impl_->irregular_densities.top_level
-																			   : IrregularGrid::kDefaultTopLevelDensity,
-								   impl_->irregular_densities.second_level > 0.0f
-									   ? impl_->irregular_densities.second_level
-									   : IrregularGrid::kDefaultSecondLevelDensity,
-								   impl_->irregular_threshold,
-								   impl_->irregular_merge_alpha,
-								   impl_->irregular_expand_iterations);
-			}
-			else
-			{
-				impl_->ComputeCollisions(*impl_->irregular_grid);
-			}
+			impl_->irregular_grid.reset();
+			impl_->irregular_grid = std::make_unique<IrregularGrid>(impl_->View(),
+																	densities.top_level,
+																	densities.second_level,
+																	settings.dense_cell_threshold,
+																	settings.merge_alpha,
+																	settings.expand_iterations,
+																	impl_->overlap_mode);
+			impl_->ComputeCollisions(*impl_->irregular_grid);
 			break;
 		default:
 			break;
 		}
+		impl_->grid_settings[static_cast<size_t>(impl_->accel_type)] = settings;
+	}
+
+	bool Renderer::HasAccelerationStructure() const
+	{
+		switch (impl_->accel_type)
+		{
+		case AccelType::kUniformGrid:
+			return impl_->uniform_grid != nullptr;
+		case AccelType::kTwoLevelGrid:
+			return impl_->two_level_grid != nullptr;
+		case AccelType::kIrregularGrid:
+			return impl_->irregular_grid != nullptr;
+		default:
+			return true;
+		}
+	}
+
+	void Renderer::SetAccelType(AccelType type)
+	{
+		if (type < AccelType::kBruteForce || type > AccelType::kIrregularGrid)
+			throw std::invalid_argument("Unknown acceleration structure type");
+		impl_->accel_type = type;
+		if (impl_->collision_detection_enabled)
+			DetectCollisions();
 	}
 
 	AccelType Renderer::GetAccelType() const
@@ -494,17 +434,9 @@ namespace happyray
 
 	GridDensities Renderer::CurrentGridDensities() const
 	{
-		switch (impl_->accel_type)
-		{
-		case AccelType::kUniformGrid:
-			return impl_->uniform_densities;
-		case AccelType::kTwoLevelGrid:
-			return impl_->two_level_densities;
-		case AccelType::kIrregularGrid:
-			return impl_->irregular_densities;
-		default:
+		if (impl_->accel_type == AccelType::kBruteForce)
 			throw std::logic_error("Density tuning requires an active grid");
-		}
+		return impl_->grid_settings[static_cast<size_t>(impl_->accel_type)].densities;
 	}
 
 	void Renderer::RebuildGridDensities(GridDensities candidate)
@@ -514,33 +446,13 @@ namespace happyray
 			 (!std::isfinite(candidate.second_level) || candidate.second_level <= 0)))
 			throw std::invalid_argument("Grid densities must be finite and positive");
 
-		switch (impl_->accel_type)
-		{
-		case AccelType::kUniformGrid:
-			if (!impl_->uniform_grid)
-				throw std::logic_error("Uniform grid has not been built");
-			impl_->uniform_grid.reset();
-			BuildUniformGrid(candidate.top_level);
-			break;
-		case AccelType::kTwoLevelGrid:
-			if (!impl_->two_level_grid)
-				throw std::logic_error("Two-level grid has not been built");
-			impl_->two_level_grid.reset();
-			BuildTwoLevelGrid(candidate.top_level, candidate.second_level, impl_->two_level_threshold);
-			break;
-		case AccelType::kIrregularGrid:
-			if (!impl_->irregular_grid)
-				throw std::logic_error("Irregular grid has not been built");
-			impl_->irregular_grid.reset();
-			BuildIrregularGrid(candidate.top_level,
-							   candidate.second_level,
-							   impl_->irregular_threshold,
-							   impl_->irregular_merge_alpha,
-							   impl_->irregular_expand_iterations);
-			break;
-		default:
+		if (impl_->accel_type == AccelType::kBruteForce)
 			throw std::logic_error("Density tuning requires an active grid");
-		}
+		if (!HasAccelerationStructure())
+			throw std::logic_error("Selected acceleration structure has not been built");
+		auto settings	   = impl_->grid_settings[static_cast<size_t>(impl_->accel_type)];
+		settings.densities = candidate;
+		BuildAccelerationStructure(settings);
 	}
 
 	float Renderer::ComputeCurrentGridSahCost(const BBox &scene_bounds, const SahCostConstants &costs) const

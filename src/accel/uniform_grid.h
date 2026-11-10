@@ -1,6 +1,6 @@
 // The uniform grid: a flat, non-owning view with one explicit start/end range
-// for traversal (UniformGridView, FlattenCellIndex,
-// IntersectSceneGrid/IsOccludedGrid -- all HAPPYRAY_HD, so this exact traversal
+// for traversal (UniformGridView, FlattenCellIndex, detail::TraverseGrid --
+// all HAPPYRAY_HD, so this exact traversal
 // code runs on whichever hardware the active Renderer, src/render/renderer.h,
 // does), plus the owning builder (UniformGrid) that constructs one and exposes
 // it as a UniformGridView.
@@ -492,48 +492,6 @@ namespace happyray
 			}
 		};
 	} // namespace detail
-
-	// Finds the closest hit across the primitives referenced by `grid`'s cells, in the same sense as
-	// IntersectSceneBruteForce. Returns false if the ray hits nothing.
-	template <typename P = DynamicPrimitive>
-	HAPPYRAY_HD inline bool
-	IntersectSceneGrid(const SceneView &scene, const UniformGridView &grid, const Ray &ray, HitRecord *out_hit)
-	{
-		if constexpr (std::is_same_v<P, DynamicPrimitive>)
-		{
-			return DispatchPrimitive(scene.primitive_type,
-									 [&](auto tag)
-									 {
-										 using Q = typename decltype(tag)::type;
-										 return IntersectSceneGrid<Q>(scene, grid, ray, out_hit);
-									 });
-		}
-		else
-		{
-			ClosestHit hit;
-			detail::TraverseGrid(grid, ray, detail::ClosestHitVisitor<P>{scene, grid.prim_indices, ray, hit});
-			return ResolveClosestHit<P>(scene, ray, hit, out_hit);
-		}
-	}
-
-	// Returns true as soon as any primitive referenced by `grid`'s cells occludes `ray`.
-	template <typename P = DynamicPrimitive>
-	HAPPYRAY_HD inline bool IsOccludedGrid(const SceneView &scene, const UniformGridView &grid, const Ray &ray)
-	{
-		if constexpr (std::is_same_v<P, DynamicPrimitive>)
-		{
-			return DispatchPrimitive(scene.primitive_type,
-									 [&](auto tag)
-									 {
-										 using Q = typename decltype(tag)::type;
-										 return IsOccludedGrid<Q>(scene, grid, ray);
-									 });
-		}
-		else
-		{
-			return detail::TraverseGrid(grid, ray, detail::OcclusionVisitor<P>{scene, grid.prim_indices, ray});
-		}
-	}
 
 	class UniformGrid
 	{

@@ -92,6 +92,13 @@ namespace happyray
 	namespace detail
 	{
 
+		struct IgnoreTopCell
+		{
+			HAPPYRAY_HD void operator()(uint32_t) const
+			{
+			}
+		};
+
 		// Two-level traversal, ported from happyray's TLGridTraverser: the outer DDA
 		// directly initializes an inner DDA for each non-empty top-level cell, with no
 		// recursive traversal calls or second-level box test. Top-level cells with no
@@ -99,11 +106,9 @@ namespace happyray
 		// `visit_top(top_index)` is called for every top-level cell visited (a no-op
 		// for queries; the SAH calibration counts steps with it);
 		// `visit_leaf(range, &ray_t_max)` for every second-level cell.
-		template <typename VisitTopFn, typename VisitLeafFn>
-		HAPPYRAY_HD inline bool TraverseTwoLevelGrid(const TwoLevelGridView &grid,
-													 const Ray				&ray,
-													 VisitTopFn			   &&visit_top,
-													 VisitLeafFn		   &&visit_leaf)
+		template <typename VisitLeafFn, typename VisitTopFn = IgnoreTopCell>
+		HAPPYRAY_HD inline bool
+		TraverseGrid(const TwoLevelGridView &grid, const Ray &ray, VisitLeafFn &&visit_leaf, VisitTopFn visit_top = {})
 		{
 			const GridBoundsView &top	  = grid.top_level;
 			const Vec3f			  inv_dir = SafeRcp(ray.direction);
@@ -255,58 +260,6 @@ namespace happyray
 		}
 
 	} // namespace detail
-
-	// Finds the closest hit by walking the top-level grid and, for every non-empty
-	// cell the ray passes through, its second-level grid (see
-	// detail::TraverseTwoLevelGrid above). Returns false if the ray hits nothing.
-	template <typename P = DynamicPrimitive>
-	HAPPYRAY_HD inline bool
-	IntersectSceneTwoLevelGrid(const SceneView &scene, const TwoLevelGridView &grid, const Ray &ray, HitRecord *out_hit)
-	{
-		if constexpr (std::is_same_v<P, DynamicPrimitive>)
-		{
-			return DispatchPrimitive(scene.primitive_type,
-									 [&](auto tag)
-									 {
-										 using Q = typename decltype(tag)::type;
-										 return IntersectSceneTwoLevelGrid<Q>(scene, grid, ray, out_hit);
-									 });
-		}
-		else
-		{
-			ClosestHit hit;
-			detail::TraverseTwoLevelGrid(
-				grid,
-				ray,
-				[](uint32_t) {},
-				detail::ClosestHitVisitor<P>{scene, grid.second_level_prim_indices, ray, hit});
-			return ResolveClosestHit<P>(scene, ray, hit, out_hit);
-		}
-	}
-
-	// Returns true as soon as any primitive in any second-level cell the ray visits
-	// occludes `ray`.
-	template <typename P = DynamicPrimitive>
-	HAPPYRAY_HD inline bool IsOccludedTwoLevelGrid(const SceneView &scene, const TwoLevelGridView &grid, const Ray &ray)
-	{
-		if constexpr (std::is_same_v<P, DynamicPrimitive>)
-		{
-			return DispatchPrimitive(scene.primitive_type,
-									 [&](auto tag)
-									 {
-										 using Q = typename decltype(tag)::type;
-										 return IsOccludedTwoLevelGrid<Q>(scene, grid, ray);
-									 });
-		}
-		else
-		{
-			return detail::TraverseTwoLevelGrid(
-				grid,
-				ray,
-				[](uint32_t) {},
-				detail::OcclusionVisitor<P>{scene, grid.second_level_prim_indices, ray});
-		}
-	}
 
 	class TwoLevelGrid
 	{
