@@ -1,13 +1,15 @@
 // Collision detection benchmark: frames 105 to 106 of the Fairy Forest animation, interpolated
 // from keyframes f100.obj and f110.obj (frame 105 = 0.5, frame 106 = 0.6 between them). Each
 // triangle is replaced by the box bounding its motion over the interval (MakeSweptTriangleBoxes),
-// every grid is built over these boxes as PrimitiveType::kBox primitives, and the renderer's
+// every grid is built over these boxes as PrimitiveType::kBox primitives (with densities tuned
+// per backend for this benchmark, see kDensities), and the renderer's
 // collision detection (CollisionDetector::ComputeCollisions) tests boxes from different objects
 // sharing a leaf cell for overlap. Reports, per grid, build, collision, and total time, the pair
 // tests executed (candidate pairs), and how many of them overlapped (colliding pairs), next to
 // the runtime of a sweep-and-prune oracle (baseline) running on the same Thrust backend, with the
 // same persistent temporary storage as the detector. Per-box
 // collision results must match the oracle; timings are informational.
+// With --search-densities, also searches each grid's densities for the lowest total time.
 // Pure Thrust, so it compiles for the CUDA (nvcc) or TBB (g++) backend like the other tests.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
@@ -16,12 +18,15 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <map>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <thrust/binary_search.h>
@@ -60,6 +65,21 @@ namespace
 	constexpr const char *kBackendName = "TBB";
 #else
 	constexpr const char *kBackendName = "CUDA";
+#endif
+
+	// Grid densities minimizing this benchmark's total (build + collision) time per backend, found
+	// with --search-densities (half-octave lattice values, 2^(k/2)). The renderer keeps its own
+	// defaults, which are tuned for ray tracing.
+	struct BenchmarkDensities
+	{
+		float uniform;
+		float two_level_top, two_level_leaf;
+		float irregular_top, irregular_leaf;
+	};
+#if HAPPYRAY_THRUST_BACKEND_IS_TBB
+	constexpr BenchmarkDensities kDensities{1.4142135f, 0.044194173f, 0.044194173f, 0.022097087f, 0.03125f};
+#else
+	constexpr BenchmarkDensities kDensities{16.0f, 0.0625f, 0.25f, 0.125f, 0.088388347f};
 #endif
 
 	template <typename T> const T *Raw(const thrust::device_vector<T> &values)
@@ -125,9 +145,13 @@ namespace
 		std::vector<uint32_t> collision_ids; // From the last run.
 	};
 
-	// One untimed warmup, then the mean of kMeasuredRuns (build + collision detection) runs.
+	// One untimed warmup, then the mean of `runs` (build + collision detection) runs.
 	template <typename MakeGrid>
-	Measurement Measure(const std::string &name, MakeGrid make_grid, const SceneView &scene, uint32_t object_count)
+	Measurement Measure(const std::string &name,
+						MakeGrid		   make_grid,
+						const SceneView	  &scene,
+						uint32_t		   object_count,
+						int				   runs = kMeasuredRuns)
 	{
 		CollisionDetector				detector;
 		thrust::device_vector<uint32_t> collision_ids(scene.primitive_count);
@@ -139,7 +163,7 @@ namespace
 		}
 		Measurement result;
 		result.name = name;
-		for (int run = 0; run < kMeasuredRuns; ++run)
+		for (int run = 0; run < runs; ++run)
 		{
 			const auto build_start = std::chrono::steady_clock::now();
 			const auto grid		   = make_grid();
@@ -154,10 +178,10 @@ namespace
 			result.colliding_pairs += static_cast<double>(stats.colliding_pair_count);
 			result.colliding_primitives = stats.colliding_primitive_count;
 		}
-		result.build_ms /= kMeasuredRuns;
-		result.collision_ms /= kMeasuredRuns;
-		result.candidate_pairs /= kMeasuredRuns;
-		result.colliding_pairs /= kMeasuredRuns;
+		result.build_ms /= runs;
+		result.collision_ms /= runs;
+		result.candidate_pairs /= runs;
+		result.colliding_pairs /= runs;
 		const thrust::host_vector<uint32_t> host_ids = collision_ids;
 		result.collision_ids.assign(host_ids.begin(), host_ids.end());
 		return result;
@@ -326,7 +350,121 @@ namespace
 		return FlattenScene(scene);
 	}
 
-	void Run(const std::string &scene_dir)
+	// Coarse-to-fine search for the densities minimizing total (build + collision) time. Densities
+	// lie on a half-octave lattice, 2^(k/2) for integer k: a 2x-spaced coarse sweep, a hill climb
+	// over the sqrt(2)-spaced neighbors of the best point until it stops moving, then the best few
+	// and the benchmark's current densities re-measured with more runs. `make_grid(top, leaf)` builds a grid;
+	// single-level grids ignore `top`. Every configuration must match the oracle.
+	template <typename MakeGrid>
+	void SearchDensities(const char					 *name,
+						 bool						  nested,
+						 float						  current_top,
+						 float						  current_leaf,
+						 MakeGrid					  make_grid,
+						 const SceneView			 &view,
+						 uint32_t					  object_count,
+						 const std::vector<uint32_t> &expected)
+	{
+		constexpr int kSearchRuns = 5, kFinalRuns = 15, kFinalists = 5, kMaxConfigurations = 200;
+		using Exponents							   = std::pair<int, int>; // (top, leaf) half-octaves.
+		auto density = [](int k) { return static_cast<float>(std::exp2(0.5 * k)); };
+		auto total	 = [](const Measurement &m) { return m.build_ms + m.collision_ms; };
+		auto measure = [&](float top, float leaf, int runs)
+		{
+			Measurement m = Measure(name, [&] { return make_grid(top, leaf); }, view, object_count, runs);
+			if (m.collision_ids != expected)
+				throw std::runtime_error(std::string(name) + ": collision results disagree with the oracle at top=" +
+										 std::to_string(top) + ", leaf=" + std::to_string(leaf));
+			m.collision_ids.clear();
+			return m;
+		};
+		std::map<Exponents, double> searched; // Mean total ms.
+		auto						evaluate = [&](int top, int leaf)
+		{
+			if (!nested)
+				top = 0;
+			if (!searched.count({top, leaf}))
+				searched[{top, leaf}] = total(measure(density(top), density(leaf), kSearchRuns));
+		};
+		auto ranked = [&]
+		{
+			std::vector<std::pair<Exponents, double>> order(searched.begin(), searched.end());
+			std::sort(order.begin(), order.end(), [](const auto &a, const auto &b) { return a.second < b.second; });
+			return order;
+		};
+
+		// Coarse: tops 1/256..1 and leaves 1/16..16 (nested), or densities 1/8..64.
+		for (int top = nested ? -16 : 0; top <= 0; top += 2)
+			for (int leaf = nested ? -8 : -6; leaf <= (nested ? 8 : 12); leaf += 2)
+				evaluate(top, leaf);
+		for (Exponents best = ranked().front().first, previous = {1 << 20, 1 << 20};
+			 best != previous && searched.size() < kMaxConfigurations;
+			 previous = best, best = ranked().front().first)
+		{
+			for (int dt = -1; dt <= 1; ++dt)
+				for (int dl = -1; dl <= 1; ++dl)
+					evaluate(best.first + dt, best.second + dl);
+		}
+
+		struct Finalist
+		{
+			float		top, leaf;
+			bool		is_current;
+			Measurement measurement;
+		};
+		std::vector<Finalist> finalists;
+		for (const auto &[exponents, ms] : ranked())
+		{
+			if (finalists.size() == kFinalists)
+				break;
+			const float top = nested ? density(exponents.first) : 0.0f, leaf = density(exponents.second);
+			finalists.push_back({top, leaf, false, measure(top, leaf, kFinalRuns)});
+		}
+		auto same = [](float a, float b) { return std::fabs(a - b) <= 1e-4f * std::fmax(a, b); };
+		bool current_measured = false;
+		for (Finalist &finalist : finalists)
+		{
+			finalist.is_current = (!nested || same(finalist.top, current_top)) && same(finalist.leaf, current_leaf);
+			current_measured	= current_measured || finalist.is_current;
+		}
+		if (!current_measured)
+			finalists.push_back({current_top, current_leaf, true, measure(current_top, current_leaf, kFinalRuns)});
+		std::sort(finalists.begin(),
+				  finalists.end(),
+				  [&](const Finalist &a, const Finalist &b) { return total(a.measurement) < total(b.measurement); });
+
+		std::printf("\n%s: %zu configurations searched (%d runs each); finalists re-measured with %d runs\n",
+					name,
+					searched.size(),
+					kSearchRuns,
+					kFinalRuns);
+		std::printf("%10s %10s %12s %12s %14s %12s %12s\n",
+					"Top",
+					"Leaf",
+					"Total ms",
+					"Build ms",
+					"Collision ms",
+					"Candidates",
+					"Colliding");
+		for (const Finalist &finalist : finalists)
+		{
+			char top_text[16] = "-";
+			if (nested)
+				std::snprintf(top_text, sizeof(top_text), "%.4g", finalist.top);
+			const Measurement &m = finalist.measurement;
+			std::printf("%10s %10.4g %12.1f %12.1f %14.1f %12.0f %12.0f%s\n",
+						top_text,
+						finalist.leaf,
+						total(m),
+						m.build_ms,
+						m.collision_ms,
+						m.candidate_pairs,
+						m.colliding_pairs,
+						finalist.is_current ? "  (benchmark)" : "");
+		}
+	}
+
+	void Run(const std::string &scene_dir, bool search_densities)
 	{
 		const float		span  = kKeyframeB - kKeyframeA;
 		const FlatScene boxes = MakeSweptTriangleBoxes(LoadKeyframe(scene_dir + "/f100.obj"),
@@ -345,37 +483,37 @@ namespace
 		{
 			char text[96];
 			if (top > 0)
-				std::snprintf(text, sizeof(text), "%s (top=%g, leaf=%g)", name, top, leaf);
+				std::snprintf(text, sizeof(text), "%s (top=%.3g, leaf=%.3g)", name, top, leaf);
 			else
-				std::snprintf(text, sizeof(text), "%s (density=%g)", name, leaf);
+				std::snprintf(text, sizeof(text), "%s (density=%.3g)", name, leaf);
 			return std::string(text);
 		};
 
 		std::vector<Measurement> results;
 		results.push_back(Measure(
-			label("uniform", 0, UniformGrid::kDefaultDensity),
-			[&] { return std::make_unique<UniformGrid>(view, UniformGrid::kDefaultDensity, kAabb); },
+			label("uniform", 0, kDensities.uniform),
+			[&] { return std::make_unique<UniformGrid>(view, kDensities.uniform, kAabb); },
 			view,
 			object_count));
 		results.push_back(Measure(
-			label("two-level", TwoLevelGrid::kDefaultTopLevelDensity, TwoLevelGrid::kDefaultSecondLevelDensity),
+			label("two-level", kDensities.two_level_top, kDensities.two_level_leaf),
 			[&]
 			{
 				return std::make_unique<TwoLevelGrid>(view,
-													  TwoLevelGrid::kDefaultTopLevelDensity,
-													  TwoLevelGrid::kDefaultSecondLevelDensity,
+													  kDensities.two_level_top,
+													  kDensities.two_level_leaf,
 													  16,
 													  kAabb);
 			},
 			view,
 			object_count));
 		results.push_back(Measure(
-			label("irregular", IrregularGrid::kDefaultTopLevelDensity, IrregularGrid::kDefaultSecondLevelDensity),
+			label("irregular", kDensities.irregular_top, kDensities.irregular_leaf),
 			[&]
 			{
 				return std::make_unique<IrregularGrid>(view,
-													   IrregularGrid::kDefaultTopLevelDensity,
-													   IrregularGrid::kDefaultSecondLevelDensity,
+													   kDensities.irregular_top,
+													   kDensities.irregular_leaf,
 													   16,
 													   0.7f,
 													   2,
@@ -412,7 +550,7 @@ namespace
 					kMeasuredRuns,
 					kBackendName);
 		std::printf("%-38s %12s %12s %12s %14s %12s %12s\n",
-					"Grid (default densities)",
+					"Grid (tuned densities)",
 					"Baseline ms",
 					"Total ms",
 					"Build ms",
@@ -447,6 +585,38 @@ namespace
 		}
 		if (!correct)
 			throw std::runtime_error("Collision results disagree with the oracle");
+
+		if (!search_densities)
+			return;
+		std::printf("\nDensity search (minimizing total ms)\n");
+		SearchDensities(
+			"uniform",
+			false,
+			0.0f,
+			kDensities.uniform,
+			[&](float, float leaf) { return std::make_unique<UniformGrid>(view, leaf, kAabb); },
+			view,
+			object_count,
+			expected);
+		SearchDensities(
+			"two-level",
+			true,
+			kDensities.two_level_top,
+			kDensities.two_level_leaf,
+			[&](float top, float leaf) { return std::make_unique<TwoLevelGrid>(view, top, leaf, 16, kAabb); },
+			view,
+			object_count,
+			expected);
+		SearchDensities(
+			"irregular",
+			true,
+			kDensities.irregular_top,
+			kDensities.irregular_leaf,
+			[&](float top, float leaf)
+			{ return std::make_unique<IrregularGrid>(view, top, leaf, 16, 0.7f, 2, kAabb); },
+			view,
+			object_count,
+			expected);
 	}
 
 } // namespace
@@ -455,9 +625,11 @@ int main(int argc, char **argv)
 {
 	try
 	{
-		if (argc != 2)
-			throw std::runtime_error("Usage: happyray_collision_performance_tests <fairy scene directory>");
-		Run(argv[1]);
+		const bool search = argc == 3 && std::string(argv[2]) == "--search-densities";
+		if (argc != 2 && !search)
+			throw std::runtime_error(
+				"Usage: happyray_collision_performance_tests <fairy scene directory> [--search-densities]");
+		Run(argv[1], search);
 		return EXIT_SUCCESS;
 	}
 	catch (const std::exception &error)

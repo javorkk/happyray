@@ -237,7 +237,9 @@ backends; it carries the `performance` label and runs serially.
 105 to 106 of the animated Fairy Forest, interpolated from `scenes/fairy/f100.obj` and `f110.obj`
 (`scenes/` is untracked; extract `scenes.7z` first -- the test is only registered if both files
 exist). Each triangle is replaced by the box bounding it at both frames (`MakeSweptTriangleBoxes`
-in `scene.h`), and each grid is built over these boxes as `PrimitiveType::kBox` primitives. The
+in `scene.h`), and each grid is built over these boxes as `PrimitiveType::kBox` primitives,
+with densities tuned per backend for this benchmark (found with `--search-densities`, below;
+the renderer's defaults are unchanged). The
 renderer's `CollisionDetector::ComputeCollisions` then runs on each grid. Per grid, the table
 reports total, build, and collision time (mean of 5 runs after one warmup), candidate pairs (box
 pairs from different objects the detector actually tested, counting a pair once per shared cell
@@ -250,6 +252,15 @@ storage as the detector, is the "Baseline ms" column. Timings are informational.
 
 ```sh
 ctest --test-dir build -R collision_performance -V
+```
+
+Run the test binary with `--search-densities` (not part of CTest) to additionally search each
+grid's densities for the lowest total time: a 2x-spaced coarse sweep followed by a hill climb
+over half-octave (sqrt(2)) steps, then the best five and the benchmark's current densities
+re-measured with 15 runs.
+
+```sh
+./build/tests/happyray_collision_performance_tests scenes/fairy --search-densities
 ```
 
 ## Architecture
