@@ -264,10 +264,14 @@ namespace happyray
 	class TwoLevelGrid
 	{
 	  public:
+		// Densities are target cells per primitive (see ComputeGridResolution).
 		static constexpr float kDefaultTopLevelDensity	  = 0.12f;
 		static constexpr float kDefaultSecondLevelDensity = 1.2f;
 		// `scene` must point at memory reachable by the selected Thrust backend.
-		// Cells at or below `dense_cell_threshold` use a 1x1x1 second-level grid.
+		// `top_level_density` sizes the top level from all primitives; `second_level_density`
+		// sizes each top-level cell's grid from the primitives overlapping that cell. Both are
+		// target cells per primitive. Cells at or below `dense_cell_threshold` use a 1x1x1
+		// second-level grid.
 		explicit TwoLevelGrid(const SceneView &scene,
 							  float			   top_level_density	= kDefaultTopLevelDensity,
 							  float			   second_level_density = kDefaultSecondLevelDensity,

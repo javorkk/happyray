@@ -51,9 +51,10 @@ namespace happyray
 	};
 	static_assert(sizeof(CellRange) == 2 * sizeof(uint32_t));
 
-	// Sizes a grid from the expanded geometry bounds and target primitive density.
-	HAPPYRAY_HD inline Vec3i
-	ComputeGridResolution(const BBox &bounds, uint32_t primitive_count, float target_prims_per_cell)
+	// Sizes a grid from the expanded geometry bounds and `density`, the target number of cells per
+	// primitive: the grid gets about density * primitive_count cubic-ish cells, so a higher
+	// density means more, smaller cells.
+	HAPPYRAY_HD inline Vec3i ComputeGridResolution(const BBox &bounds, uint32_t primitive_count, float density)
 	{
 		if (primitive_count == 0)
 		{
@@ -71,7 +72,7 @@ namespace happyray
 
 		const float volume = extent.x * extent.y * extent.z;
 		const float cells_per_unit_volume =
-			std::cbrt(target_prims_per_cell * static_cast<float>(primitive_count) / volume);
+			std::cbrt(density * static_cast<float>(primitive_count) / volume);
 
 		return Vec3i(
 			extent.x * cells_per_unit_volume + 0.5f > 1.0f ? static_cast<int>(extent.x * cells_per_unit_volume + 0.5f)
@@ -496,13 +497,15 @@ namespace happyray
 	class UniformGrid
 	{
 	  public:
+		// Densities are target cells per primitive (see ComputeGridResolution).
 		static constexpr float kDefaultDensity = 3.0f;
 		// `scene` must point at memory reachable by whichever Thrust backend this
 		// binary was built with (device memory for the CUDA backend, ordinary host
-		// memory for the TBB backend).
+		// memory for the TBB backend). `density` is the target number of cells per
+		// primitive.
 		explicit UniformGrid(const SceneView &scene,
-							 float			  target_prims_per_cell = kDefaultDensity,
-							 CellOverlapMode  mode					= DefaultCellOverlapMode());
+							 float			  density = kDefaultDensity,
+							 CellOverlapMode  mode	  = DefaultCellOverlapMode());
 		~UniformGrid();
 		UniformGrid(const UniformGrid &)			= delete;
 		UniformGrid &operator=(const UniformGrid &) = delete;

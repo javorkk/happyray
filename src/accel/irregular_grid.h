@@ -326,13 +326,15 @@ namespace happyray
 	class IrregularGrid
 	{
 	  public:
+		// Densities are target cells per primitive (see ComputeGridResolution).
 		static constexpr float kDefaultTopLevelDensity	  = 0.12f;
 		static constexpr float kDefaultSecondLevelDensity = 2.4f;
 		// `scene` must point at memory reachable by whichever Thrust backend this
 		// binary was built with (device memory for the CUDA backend, ordinary host
 		// memory for the TBB backend).
 		// `top_level_density`/`second_level_density`/`dense_cell_threshold` match
-		// TwoLevelGrid's defaults and meaning (second_level_density sizes each
+		// TwoLevelGrid's meaning (both densities are target cells per primitive;
+		// second_level_density sizes each
 		// top-level cell's *finest* local grid before it gets rounded up to a power
 		// of 2; dense_cell_threshold forces sparse cells straight to a 1x1x1 local
 		// grid, since merging could never shrink them further anyway). `merge_alpha`

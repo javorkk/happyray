@@ -23,6 +23,8 @@
 namespace happyray
 {
 
+	// Target cells per primitive for each grid level (see ComputeGridResolution); a uniform grid
+	// uses `top_level` as its only density.
 	struct GridDensities
 	{
 		float top_level	   = 0;

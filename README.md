@@ -334,7 +334,8 @@ re-measured with 15 runs.
   `BuildAccelerationStructure(settings)` explicitly before rendering a missing grid.
   `HasAccelerationStructure()` reports whether the selected structure is ready (always true
   for brute force, whose build is a no-op). Rendering an unbuilt grid throws.
-  `GridBuildSettings` supplies densities, the dense-cell threshold, and irregular-grid
+  `GridBuildSettings` supplies densities (target cells per primitive, per grid level; higher
+  means more, smaller cells), the dense-cell threshold, and irregular-grid
   merge/expand parameters. Zero densities use renderer defaults: `{3, 0}` for uniform,
   `{0.12, 2.4}` for nested grids. Scene updates and density tuning retain each grid's settings;
   an explicit build with omitted settings uses defaults again. For example:
