@@ -7,9 +7,15 @@ target_link_libraries(happyray_screenshot_tests PRIVATE happyray_screenshot)
 add_test(NAME screenshot_tests COMMAND happyray_screenshot_tests)
 
 add_executable(happyray_core_tests core_tests.cpp)
-target_link_libraries(happyray_core_tests PRIVATE happyray_core happyray_obj_loader)
+target_link_libraries(happyray_core_tests PRIVATE happyray_core happyray_obj_loader happyray_usd_loader)
 
 add_test(NAME core_tests COMMAND happyray_core_tests "${CMAKE_SOURCE_DIR}/assets")
+
+if(HAPPYRAY_ENABLE_USD)
+    add_executable(happyray_usd_loader_tests usd_loader_tests.cpp)
+    target_link_libraries(happyray_usd_loader_tests PRIVATE happyray_core happyray_obj_loader happyray_usd_loader)
+    add_test(NAME usd_loader_tests COMMAND happyray_usd_loader_tests)
+endif()
 
 add_executable(happyray_render_tests render_tests.cpp)
 target_link_libraries(happyray_render_tests PRIVATE happyray_core happyray_render happyray_obj_loader)

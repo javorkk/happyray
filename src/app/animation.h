@@ -1,4 +1,4 @@
-// In-memory OBJ keyframe loading and frame-step interpolation for the viewer.
+// In-memory OBJ/USD keyframe loading and frame-step interpolation for the viewer.
 #pragma once
 
 #include <algorithm>
@@ -13,6 +13,7 @@
 
 #include "obj_loader.h"
 #include "scene.h"
+#include "usd_loader.h"
 
 namespace happyray
 {
@@ -44,11 +45,19 @@ namespace happyray
 				return false;
 			}
 			const std::filesystem::path config_directory = std::filesystem::path(config_path).parent_path();
-			config.prefix								 = ResolvePath(config_directory, config.prefix);
 			if (!config.camera_path.empty())
 			{
 				config.camera_path = ResolvePath(config_directory, config.camera_path);
 			}
+			if (!config.usd_path.empty())
+			{
+				return LoadUsd(ResolvePath(config_directory, config.usd_path),
+							   config.usd_options,
+							   config.frame_step,
+							   config.camera_path,
+							   first_scene);
+			}
+			config.prefix = ResolvePath(config_directory, config.prefix);
 
 			std::vector<std::string> paths;
 			if (!MakeFramePaths(config.prefix, config.suffix, config.frame_count, &paths))
@@ -56,6 +65,46 @@ namespace happyray
 				return false;
 			}
 			return LoadFrames(paths, config.frame_step, config.camera_path, first_scene);
+		}
+
+		// Loads the frames of a USD file (see usd_loader.h) as an animation. A file with a single
+		// frame loads successfully but is not an animation (IsLoaded() stays false); its geometry
+		// is returned in `first_scene`. `camera_path` defaults to `<usd stem>.camera.cfg` next to
+		// the USD file.
+		bool LoadUsd(const std::string		&usd_path,
+					 const UsdLoadOptions	&options,
+					 float					 frame_step,
+					 const std::string		&camera_path,
+					 Scene					*first_scene)
+		{
+			frames_.clear();
+			frame_step_	  = frame_step;
+			current_time_ = 0.0f;
+			paused_		  = false;
+			camera_config_path_.clear();
+			if (!first_scene)
+			{
+				return false;
+			}
+			Scene first_frame_scene;
+			if (!LoadUsdFrames(usd_path, options, &frames_, &first_frame_scene))
+			{
+				return false;
+			}
+			*first_scene		= std::move(first_frame_scene);
+			camera_config_path_ = camera_path;
+			if (camera_config_path_.empty() || !std::filesystem::exists(camera_config_path_))
+			{
+				std::filesystem::path path(usd_path);
+				path.replace_filename(path.stem().string() + ".camera.cfg");
+				camera_config_path_ = path.string();
+			}
+			return true;
+		}
+
+		bool LoadUsd(const std::string &usd_path, Scene *first_scene)
+		{
+			return LoadUsd(usd_path, UsdLoadOptions{}, 0.4f, std::string(), first_scene);
 		}
 
 		bool IsLoaded() const
@@ -122,6 +171,8 @@ namespace happyray
 			std::string prefix;
 			std::string suffix;
 			std::string camera_path;
+			std::string usd_path;
+			UsdLoadOptions usd_options;
 			size_t		frame_count = 0;
 			float		frame_step	= 0.4f;
 		};
@@ -193,6 +244,32 @@ namespace happyray
 						config->frame_step = 0.4f;
 					}
 				}
+				else if (key == "usd" || key == "usd file")
+				{
+					config->usd_path = value;
+				}
+				else if (key == "start time" || key == "end time")
+				{
+					try
+					{
+						(key == "start time" ? config->usd_options.start_time : config->usd_options.end_time) =
+							std::stod(value);
+					}
+					catch (...)
+					{
+					}
+				}
+				else if (key == "frame stride")
+				{
+					try
+					{
+						config->usd_options.stride = static_cast<uint32_t>(std::stoul(value));
+					}
+					catch (...)
+					{
+						config->usd_options.stride = 1;
+					}
+				}
 				else if (key == "camera")
 				{
 					config->camera_path = value;
@@ -203,7 +280,8 @@ namespace happyray
 
 		static bool HasConfiguredSequence(const Config &config)
 		{
-			return !config.prefix.empty() && !config.suffix.empty() && config.frame_count > 1;
+			return !config.usd_path.empty() ||
+				   (!config.prefix.empty() && !config.suffix.empty() && config.frame_count > 1);
 		}
 
 		static bool MakeFramePaths(const std::string		&prefix,

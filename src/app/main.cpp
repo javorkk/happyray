@@ -177,7 +177,7 @@ int main(int argc, char **argv)
 	if (argc < 2)
 	{
 		std::fprintf(stderr,
-					 "Usage: %s <scene.obj|animation.cfg|attractor:<points|spheres|curves>[:count]> [width] "
+					 "Usage: %s <scene.obj|scene.usd[a|c|z]|animation.cfg|attractor:<points|spheres|curves>[:count]> [width] "
 					 "[height]\n",
 					 argv[0]);
 		return EXIT_FAILURE;
@@ -196,7 +196,8 @@ int main(int argc, char **argv)
 	happyray::Scene				scene;
 	happyray::KeyframeAnimation animation;
 	const std::string			input_extension	 = std::filesystem::path(argv[1]).extension().string();
-	const bool					animation_loaded = input_extension == ".cfg";
+	const bool					is_usd			 = happyray::IsUsdPath(argv[1]);
+	bool						animation_loaded = input_extension == ".cfg";
 	happyray::PrimitiveType		attractor_type;
 	uint32_t					attractor_count = 0;
 	if (happyray::ParseAttractorSpec(argv[1], &attractor_type, &attractor_count))
@@ -210,6 +211,15 @@ int main(int argc, char **argv)
 			std::fprintf(stderr, "Failed to load animation configuration '%s'\n", argv[1]);
 			return EXIT_FAILURE;
 		}
+		animation_loaded = animation.IsLoaded();
+	}
+	else if (is_usd)
+	{
+		if (!animation.LoadUsd(argv[1], &scene))
+		{
+			return EXIT_FAILURE;
+		}
+		animation_loaded = animation.IsLoaded();
 	}
 	else if (input_extension == ".obj")
 	{
@@ -220,11 +230,11 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-		std::fprintf(stderr, "Input must be an OBJ scene or animation CFG file\n");
+		std::fprintf(stderr, "Input must be an OBJ/USD scene or animation CFG file\n");
 		return EXIT_FAILURE;
 	}
 	const std::string camera_config_path =
-		animation_loaded ? animation.CameraConfigPath() : happyray::CameraConfigPathFor(argv[1]);
+		animation.CameraConfigPath().empty() ? happyray::CameraConfigPathFor(argv[1]) : animation.CameraConfigPath();
 	std::printf("Loaded '%s': %u %s primitive(s), %u material(s)\n",
 				argv[1],
 				scene.PrimitiveCount(),

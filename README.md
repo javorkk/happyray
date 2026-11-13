@@ -17,14 +17,14 @@ CUDA toolkit required for thrust headers even if building for CPU.
 If using Rez, enter the build environment before running the commands below:
 
 ```sh
-rez-env cuda-12.9 cmake-3.31 gcc-11 sdl tbb-2020 -- bash
+rez-env cuda-12.9 cmake-3.31 gcc-11 sdl tbb-2020 usdBase-0.24.3.1.4 -- bash
 ```
 
 For non-interactive build or test commands, use the same packages with `-- bash -c '<command>'`.
 
 ```sh
 cd HappyRay
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release # -DHAPPYRAY_THRUST_BACKEND=TBB
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release # -DHAPPYRAY_THRUST_BACKEND=TBB -DHAPPYRAY_ENABLE_USD=ON
 cmake --build build --parallel "$(nproc)"
 ctest --test-dir build --output-on-failure
 ```
@@ -147,6 +147,39 @@ acceleration structure's own real traversal code and one shared ray/triangle int
 against small synthetic test cases (`happyray::MeasureSahCalibration()`).
 This adaptive search is disabled for scenes with more than 1,000,000 primitives; those scenes
 keep the grid's default densities.
+
+### USD scenes and animations
+
+With `-DHAPPYRAY_ENABLE_USD=ON` (needs OpenUSD; under Rez add `usdBase-0.24.3.1.4` to the
+`rez-env` packages above, and CMake finds it through `REZ_USDBASE_ROOT`) the viewer also loads
+`.usd`/`.usda`/`.usdc`/`.usdz` files:
+
+```sh
+./build/happyray scene.usdc [width] [height]
+```
+
+Every visible default/render-purpose `Mesh` prim is triangulated with its world transform baked
+in (Z-up stages are rotated to Y-up), with smooth vertex normals recomputed per frame and one
+material per mesh from the average `displayColor`. Each authored time sample of the meshes'
+points (and of any xform) becomes a keyframe that plays back like an OBJ animation (`P` pauses);
+a file without time samples loads as a static scene. The mesh set is fixed by the first frame,
+and every frame must keep each mesh's point count (triangle connectivity may change). All frames
+are held in memory. Without USD support the viewer reports an error for these files.
+
+To subsample, set the frame step or give a camera, use an animation `.cfg` (paths relative to
+the `.cfg`; `camera` defaults to `<usd name>.camera.cfg` next to the USD file):
+
+```ini
+usd = my_scene.usdc
+start time = 951     # optional, inclusive, in stage time codes
+end time = 1188      # optional, inclusive
+frame stride = 2     # optional, keep every 2nd time sample
+frame step = 0.5
+camera = my_scene.camera.cfg
+```
+
+The default camera frames the first frame's bounding box only; for animations that travel far,
+supply a `camera` file (press `C` in the viewer to print the current one).
 
 ### Collision detection
 
