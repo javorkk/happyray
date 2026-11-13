@@ -441,13 +441,11 @@ namespace happyray
 		HAPPYRAY_HD inline bool LookupGlobalCell(const IrregularCellInfo *cell_infos,
 												 const uint32_t			 *entries,
 												 const int				  pos[3],
-												 const Vec3i			 &global_resolution,
+												 const Vec3i			 &global_shift,
 												 const Vec3i			 &top_resolution,
 												 uint32_t				 *out_index)
 		{
-			const int global_shift[3]		 = {Log2Ceil(global_resolution.x),
-												Log2Ceil(global_resolution.y),
-												Log2Ceil(global_resolution.z)};
+			const int global_shift_axes[3]	 = {global_shift.x, global_shift.y, global_shift.z};
 			const int top_resolution_axes[3] = {top_resolution.x, top_resolution.y, top_resolution.z};
 			int		  top_coord[3];
 			for (int a = 0; a < 3; ++a)
@@ -456,7 +454,7 @@ namespace happyray
 				{
 					return false;
 				}
-				top_coord[a] = pos[a] >> global_shift[a];
+				top_coord[a] = pos[a] >> global_shift_axes[a];
 				if (top_coord[a] >= top_resolution_axes[a])
 				{
 					return false;
@@ -514,7 +512,7 @@ namespace happyray
 			const uint32_t			*prim_indices;
 			int						 axis;
 			Vec3f					 global_cell_size;
-			Vec3i					 global_resolution;
+			Vec3i					 global_shift;
 			Vec3i					 top_resolution;
 
 			HAPPYRAY_HD MergeCandidate operator()(uint32_t i) const
@@ -531,7 +529,7 @@ namespace happyray
 				int next_pos[3] = {cell_min[0], cell_min[1], cell_min[2]};
 				next_pos[axis]	= cell_max[axis];
 				uint32_t next_index;
-				if (!LookupGlobalCell(cell_infos, entries, next_pos, global_resolution, top_resolution, &next_index))
+				if (!LookupGlobalCell(cell_infos, entries, next_pos, global_shift, top_resolution, &next_index))
 				{
 					return result; // Scene edge, or an incompatibly-scaled neighbor.
 				}
@@ -752,7 +750,7 @@ namespace happyray
 						thrust::device_vector<uint32_t>				   *entries,
 						thrust::device_vector<uint32_t>				   *prim_indices,
 						const Vec3f									   &global_cell_size,
-						const Vec3i									   &global_resolution,
+						const Vec3i									   &global_shift,
 						const Vec3i									   &top_resolution)
 		{
 			const uint32_t n = static_cast<uint32_t>(cells->size());
@@ -779,7 +777,7 @@ namespace happyray
 													thrust::raw_pointer_cast(prim_indices->data()),
 													axis,
 													global_cell_size,
-													global_resolution,
+													global_shift,
 													top_resolution});
 
 			thrust::fill(policy, scratch.prev.begin(), scratch.prev.begin() + n, -1);
@@ -845,10 +843,10 @@ namespace happyray
 			prim_indices->swap(scratch.new_triangle_indices);
 		}
 		// ---------------------------------------------------------------------------------------------
-		// Phase C: subset-safe directional expand passes (HAGrid's expand.cu), allowed to cross
+		// Phase C: subset-safe bidirectional expand passes (HAGrid's expand.cu), allowed to cross
 		// top-level cell boundaries the same way merge is (see this file's top comment). Unlike merge,
 		// this never changes the number of cells or `entries` -- only bounding boxes -- so it's one
-		// in-place-equivalent transform (via a swap buffer) per axis/direction.
+		// in-place-equivalent transform (via a swap buffer) per axis.
 		// ---------------------------------------------------------------------------------------------
 
 		struct ExpandFunctor
@@ -858,21 +856,19 @@ namespace happyray
 			const uint32_t			*entries;
 			const uint32_t			*prim_indices;
 			int						 axis;
-			int						 dir; // -1 or +1.
-			Vec3i					 global_resolution;
+			Vec3i					 global_shift;
 			Vec3i					 top_resolution;
 
-			HAPPYRAY_HD IrregularCell operator()(uint32_t i) const
+			HAPPYRAY_HD IrregularCell ExpandDirection(const IrregularCell &cell, int dir) const
 			{
-				const IrregularCell cell = cells[i];
-				int					cell_min[3], cell_max[3];
+				int cell_min[3], cell_max[3];
 				CellMinArr(cell, cell_min);
 				CellMaxArr(cell, cell_max);
 
 				int next_pos[3] = {cell_min[0], cell_min[1], cell_min[2]};
 				next_pos[axis]	= dir > 0 ? cell_max[axis] : cell_min[axis] - 1;
 				uint32_t next_index;
-				if (!LookupGlobalCell(cell_infos, entries, next_pos, global_resolution, top_resolution, &next_index))
+				if (!LookupGlobalCell(cell_infos, entries, next_pos, global_shift, top_resolution, &next_index))
 				{
 					return cell; // Scene edge, or an incompatibly-scaled neighbor.
 				}
@@ -909,6 +905,17 @@ namespace happyray
 				{
 					cell_min[axis] = next_min[axis];
 				}
+				return MakeCell(cell_min, cell_max, cell.references.start, cell.references.end);
+			}
+
+			HAPPYRAY_HD IrregularCell operator()(uint32_t i) const
+			{
+				const IrregularCell cell	 = cells[i];
+				const IrregularCell negative = ExpandDirection(cell, -1);
+				const IrregularCell positive = ExpandDirection(cell, 1);
+				int					cell_min[3], cell_max[3];
+				CellMinArr(negative, cell_min);
+				CellMaxArr(positive, cell_max);
 				return MakeCell(cell_min, cell_max, cell.references.start, cell.references.end);
 			}
 		};
@@ -1027,6 +1034,9 @@ namespace happyray
 										 top_view.cell_size.y / global_resolution.y,
 										 top_view.cell_size.z / global_resolution.z);
 		impl_->global_resolution = global_resolution;
+		const Vec3i global_shift(Log2Ceil(global_resolution.x),
+								 Log2Ceil(global_resolution.y),
+								 Log2Ceil(global_resolution.z));
 		if (num_top_cells > 0)
 		{
 			thrust::transform(
@@ -1149,7 +1159,7 @@ namespace happyray
 						   &entries,
 						   &prim_indices,
 						   impl_->global_cell_size,
-						   global_resolution,
+						   global_shift,
 						   top_view.resolution);
 				MergeRound(policy,
 						   impl_->merge_scratch,
@@ -1159,7 +1169,7 @@ namespace happyray
 						   &entries,
 						   &prim_indices,
 						   impl_->global_cell_size,
-						   global_resolution,
+						   global_shift,
 						   top_view.resolution);
 				MergeRound(policy,
 						   impl_->merge_scratch,
@@ -1169,7 +1179,7 @@ namespace happyray
 						   &entries,
 						   &prim_indices,
 						   impl_->global_cell_size,
-						   global_resolution,
+						   global_shift,
 						   top_view.resolution);
 				const uint32_t new_count = static_cast<uint32_t>(cells.size());
 				if (new_count >= merge_alpha * prev_count)
@@ -1185,29 +1195,25 @@ namespace happyray
 		{
 			for (int axis = 0; axis < 3; ++axis)
 			{
-				for (int dir = -1; dir <= 1; dir += 2)
+				const uint32_t n = static_cast<uint32_t>(cells.size());
+				if (n == 0)
 				{
-					const uint32_t n = static_cast<uint32_t>(cells.size());
-					if (n == 0)
-					{
-						continue;
-					}
-					Reserve(&impl_->merge_scratch.expanded_cells, n);
-					impl_->merge_scratch.expanded_cells.resize(n);
-					thrust::transform(policy,
-									  thrust::counting_iterator<uint32_t>(0),
-									  thrust::counting_iterator<uint32_t>(n),
-									  impl_->merge_scratch.expanded_cells.begin(),
-									  ExpandFunctor{thrust::raw_pointer_cast(cells.data()),
-													thrust::raw_pointer_cast(infos.data()),
-													thrust::raw_pointer_cast(entries.data()),
-													thrust::raw_pointer_cast(prim_indices.data()),
-													axis,
-													dir,
-													global_resolution,
-													top_view.resolution});
-					cells.swap(impl_->merge_scratch.expanded_cells);
+					continue;
 				}
+				Reserve(&impl_->merge_scratch.expanded_cells, n);
+				impl_->merge_scratch.expanded_cells.resize(n);
+				thrust::transform(policy,
+								  thrust::counting_iterator<uint32_t>(0),
+								  thrust::counting_iterator<uint32_t>(n),
+								  impl_->merge_scratch.expanded_cells.begin(),
+								  ExpandFunctor{thrust::raw_pointer_cast(cells.data()),
+												thrust::raw_pointer_cast(infos.data()),
+												thrust::raw_pointer_cast(entries.data()),
+												thrust::raw_pointer_cast(prim_indices.data()),
+												axis,
+												global_shift,
+												top_view.resolution});
+				cells.swap(impl_->merge_scratch.expanded_cells);
 			}
 		}
 
