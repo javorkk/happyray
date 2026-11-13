@@ -71,11 +71,11 @@ namespace happyray
 		// frame loads successfully but is not an animation (IsLoaded() stays false); its geometry
 		// is returned in `first_scene`. `camera_path` defaults to `<usd stem>.camera.cfg` next to
 		// the USD file.
-		bool LoadUsd(const std::string		&usd_path,
-					 const UsdLoadOptions	&options,
-					 float					 frame_step,
-					 const std::string		&camera_path,
-					 Scene					*first_scene)
+		bool LoadUsd(const std::string	  &usd_path,
+					 const UsdLoadOptions &options,
+					 float				   frame_step,
+					 const std::string	  &camera_path,
+					 Scene				  *first_scene)
 		{
 			frames_.clear();
 			frame_step_	  = frame_step;
@@ -162,19 +162,37 @@ namespace happyray
 			{
 				result.normals[i] = Normalize(Lerp(first.normals[i], result.normals[i], amount));
 			}
+			const size_t point_count = std::min(first.points.size(), result.points.size());
+			for (size_t i = 0; i < point_count; ++i)
+			{
+				result.points[i].vtx[0] = Lerp(first.points[i].vtx[0], result.points[i].vtx[0], amount);
+				result.points[i].radius =
+					first.points[i].radius + (result.points[i].radius - first.points[i].radius) * amount;
+			}
+			const size_t curve_count = std::min(first.curves.size(), result.curves.size());
+			for (size_t i = 0; i < curve_count; ++i)
+			{
+				for (int control = 0; control < BezierCurve::kNumVertices; ++control)
+				{
+					result.curves[i].vtx[control] =
+						Lerp(first.curves[i].vtx[control], result.curves[i].vtx[control], amount);
+				}
+				result.curves[i].radius =
+					first.curves[i].radius + (result.curves[i].radius - first.curves[i].radius) * amount;
+			}
 			return result;
 		}
 
 	  private:
 		struct Config
 		{
-			std::string prefix;
-			std::string suffix;
-			std::string camera_path;
-			std::string usd_path;
+			std::string	   prefix;
+			std::string	   suffix;
+			std::string	   camera_path;
+			std::string	   usd_path;
 			UsdLoadOptions usd_options;
-			size_t		frame_count = 0;
-			float		frame_step	= 0.4f;
+			size_t		   frame_count = 0;
+			float		   frame_step  = 0.4f;
 		};
 
 		static std::string Trim(std::string value)

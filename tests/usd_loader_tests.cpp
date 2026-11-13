@@ -158,18 +158,93 @@ namespace
 	void TestAnimationConfig(const std::filesystem::path &directory)
 	{
 		WriteFile(directory, "cfg_quad.usda", QuadStage("Y", false));
-		const std::string config = WriteFile(directory,
-											 "scene.cfg",
-											 "usd = cfg_quad.usda\n"
-											 "start time = 2\n"
-											 "frame step = 0.5\n"
-											 "camera = quad.camera.cfg\n");
+		const std::string			config = WriteFile(directory,
+													   "scene.cfg",
+													   "usd = cfg_quad.usda\n"
+													   "start time = 2\n"
+													   "frame step = 0.5\n"
+													   "camera = quad.camera.cfg\n");
 		happyray::KeyframeAnimation animation;
 		happyray::Scene				scene;
 		HAPPYRAY_CHECK(animation.LoadConfig(config, &scene));
 		HAPPYRAY_CHECK(animation.IsLoaded()); // Time codes 2 and 3.
 		HAPPYRAY_CHECK(NearlyEqual(animation.FrameStep(), 0.5f));
 		HAPPYRAY_CHECK(animation.InterpolatedScene().positions.size() == 4);
+	}
+
+	void TestAnimatedPoints(const std::filesystem::path &directory)
+	{
+		const std::string path =
+			WriteFile(directory,
+					  "points.usda",
+					  "#usda 1.0\n(\n    upAxis = \"Z\"\n)\n"
+					  "def Xform \"root\"\n{\n"
+					  "    double3 xformOp:translate = (10, 0, 0)\n"
+					  "    uniform token[] xformOpOrder = [\"xformOp:translate\"]\n"
+					  "    def Points \"cloud\"\n    {\n"
+					  "        point3f[] points.timeSamples = {\n"
+					  "            1: [(0, 0, 0), (1, 0, 0)],\n"
+					  "            2: [(0, 0, 1), (1, 0, 1)],\n"
+					  "        }\n"
+					  "        float[] widths = [0.2, 0.4]\n"
+					  "        color3f[] primvars:displayColor = [(0, 1, 0)] (interpolation = \"constant\")\n"
+					  "    }\n}\n");
+		std::vector<happyray::FlatScene> frames;
+		happyray::Scene					 first;
+		HAPPYRAY_CHECK(happyray::LoadUsdFrames(path, {}, &frames, &first));
+		HAPPYRAY_CHECK(first.Type() == happyray::PrimitiveType::kPoint);
+		HAPPYRAY_CHECK(first.points.size() == 2 && first.PrimitiveCount() == 2);
+		HAPPYRAY_CHECK(frames.size() == 2);
+		if (first.points.size() == 2 && frames.size() == 2)
+		{
+			HAPPYRAY_CHECK(NearlyEqual(first.points[0].vtx[0], happyray::Vec3f(10.0f, 0.0f, 0.0f)));
+			HAPPYRAY_CHECK(NearlyEqual(first.points[0].radius, 0.1f));
+			HAPPYRAY_CHECK(NearlyEqual(first.points[1].radius, 0.2f));
+			HAPPYRAY_CHECK(NearlyEqual(frames[1].points[0].vtx[0], happyray::Vec3f(10.0f, 1.0f, 0.0f)));
+		}
+		happyray::KeyframeAnimation animation(frames, 0.5f);
+		animation.Advance();
+		const happyray::FlatScene interpolated = animation.InterpolatedScene();
+		if (!interpolated.points.empty())
+		{
+			HAPPYRAY_CHECK(NearlyEqual(interpolated.points[0].vtx[0], happyray::Vec3f(10.0f, 0.5f, 0.0f)));
+		}
+	}
+
+	void TestAnimatedBasisCurves(const std::filesystem::path &directory)
+	{
+		const std::string path = WriteFile(directory,
+										   "curves.usda",
+										   "#usda 1.0\n(\n    startTimeCode = 1\n    endTimeCode = 2\n)\n"
+										   "def BasisCurves \"hair\"\n{\n"
+										   "    uniform token type = \"cubic\"\n"
+										   "    uniform token basis = \"bezier\"\n"
+										   "    uniform token wrap = \"nonperiodic\"\n"
+										   "    int[] curveVertexCounts = [4]\n"
+										   "    float[] widths = [0.2, 0.2, 0.2, 0.2]\n"
+										   "    point3f[] points.timeSamples = {\n"
+										   "        1: [(0, 0, 0), (1, 0, 0), (2, 0, 0), (3, 0, 0)],\n"
+										   "        2: [(0, 1, 0), (1, 1, 0), (2, 1, 0), (3, 1, 0)],\n"
+										   "    }\n}\n");
+		std::vector<happyray::FlatScene> frames;
+		happyray::Scene					 first;
+		HAPPYRAY_CHECK(happyray::LoadUsdFrames(path, {}, &frames, &first));
+		HAPPYRAY_CHECK(first.Type() == happyray::PrimitiveType::kBezierCurve);
+		HAPPYRAY_CHECK(first.curves.size() == 1 && first.PrimitiveCount() == 1);
+		HAPPYRAY_CHECK(frames.size() == 2);
+		if (first.curves.size() == 1 && frames.size() == 2)
+		{
+			HAPPYRAY_CHECK(NearlyEqual(first.curves[0].vtx[0], happyray::Vec3f(0.0f, 0.0f, 0.0f)));
+			HAPPYRAY_CHECK(NearlyEqual(first.curves[0].radius, 0.1f));
+			HAPPYRAY_CHECK(NearlyEqual(frames[1].curves[0].vtx[3], happyray::Vec3f(3.0f, 1.0f, 0.0f)));
+		}
+		happyray::KeyframeAnimation animation(frames, 0.5f);
+		animation.Advance();
+		const happyray::FlatScene interpolated = animation.InterpolatedScene();
+		if (!interpolated.curves.empty())
+		{
+			HAPPYRAY_CHECK(NearlyEqual(interpolated.curves[0].vtx[0], happyray::Vec3f(0.0f, 0.5f, 0.0f)));
+		}
 	}
 
 	void TestFailures(const std::filesystem::path &directory)
@@ -185,6 +260,16 @@ namespace
 
 		const std::string no_meshes = WriteFile(directory, "empty.usda", "#usda 1.0\ndef Xform \"root\"\n{\n}\n");
 		HAPPYRAY_CHECK(!happyray::LoadUsdFrames(no_meshes, {}, &frames, &first));
+
+		const std::string mixed = WriteFile(directory,
+											"mixed.usda",
+											"#usda 1.0\ndef Xform \"root\"\n{\n"
+											"    def Points \"cloud\" { point3f[] points = [(0, 0, 0)] }\n"
+											"    def Mesh \"tri\" { point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, "
+											"0)] int[] faceVertexCounts = [3] int[] faceVertexIndices = [0, 1, 2] }\n"
+											"}\n");
+		HAPPYRAY_CHECK(!happyray::LoadUsdFrames(mixed, {}, &frames, &first));
+		HAPPYRAY_CHECK(frames.empty());
 	}
 
 } // namespace
@@ -198,6 +283,8 @@ int main()
 	TestLoadsAnimatedQuad(directory);
 	TestOptionsAndZUp(directory);
 	TestAnimationConfig(directory);
+	TestAnimatedPoints(directory);
+	TestAnimatedBasisCurves(directory);
 	TestFailures(directory);
 
 	std::filesystem::remove_all(directory);
