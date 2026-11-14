@@ -34,6 +34,23 @@ namespace happyray
 	namespace
 	{
 
+		// Rays are assigned to threads in 8x4 pixel tiles, one tile per 32 consecutive thread
+		// indices (a CUDA warp), instead of one 32x1 row strip: the rays of a warp then start closer
+		// together and diverge less, so they walk more of the same grid cells and test more of the
+		// same primitives, and those loads hit in L1/L2 more often. On the TBB backend the order only
+		// changes which pixels a task processes.
+		constexpr int kTileWidth  = 8;
+		constexpr int kTileHeight = 4;
+		static_assert(kTileWidth * kTileHeight == 32, "One tile per warp");
+
+		// Number of thread indices covering a width x height frame in whole tiles.
+		inline uint32_t TiledPixelCount(int width, int height)
+		{
+			const uint32_t tiles_x = static_cast<uint32_t>(width + kTileWidth - 1) / kTileWidth;
+			const uint32_t tiles_y = static_cast<uint32_t>(height + kTileHeight - 1) / kTileHeight;
+			return tiles_x * tiles_y * kTileWidth * kTileHeight;
+		}
+
 		// Camera-ray generation and integrator dispatch, independent of the shading algorithm. `P` and
 		// `A` fix the primitive type and acceleration structure at compile time, so each kernel
 		// contains only the one traversal it runs (see AccelTag in intersect_common.h).
@@ -49,10 +66,18 @@ namespace happyray
 			int				width;
 			int				height;
 
-			HAPPYRAY_HD void operator()(uint32_t pixel_index) const
+			// `thread_index` ranges over TiledPixelCount(width, height); padding threads past the
+			// right or bottom edge do nothing.
+			HAPPYRAY_HD void operator()(uint32_t thread_index) const
 			{
-				const int x			  = static_cast<int>(pixel_index % width);
-				const int y			  = static_cast<int>(pixel_index / width);
+				const uint32_t tile	   = thread_index / (kTileWidth * kTileHeight);
+				const uint32_t lane	   = thread_index % (kTileWidth * kTileHeight);
+				const uint32_t tiles_x = static_cast<uint32_t>(width + kTileWidth - 1) / kTileWidth;
+				const int	   x	   = static_cast<int>((tile % tiles_x) * kTileWidth + lane % kTileWidth);
+				const int	   y	   = static_cast<int>((tile / tiles_x) * kTileHeight + lane / kTileWidth);
+				if (x >= width || y >= height)
+					return;
+				const uint32_t pixel_index = static_cast<uint32_t>(y) * width + x;
 				const Ray primary_ray = camera.GenerateRay(static_cast<float>(x), static_cast<float>(y), width, height);
 				const Vec3f	   sample = integrator.template Integrate<P, A>(scene,
 																			accel,
@@ -515,9 +540,10 @@ namespace happyray
 													sample_offset,
 													width,
 													height};
-												thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-																 thrust::counting_iterator<uint32_t>(pixel_count),
-																 render);
+												thrust::for_each(
+													thrust::counting_iterator<uint32_t>(0),
+													thrust::counting_iterator<uint32_t>(TiledPixelCount(width, height)),
+													render);
 											});
 						  });
 		++sample_count;
