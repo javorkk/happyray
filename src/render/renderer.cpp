@@ -34,8 +34,10 @@ namespace happyray
 	namespace
 	{
 
-		// Camera-ray generation and integrator dispatch, independent of the shading algorithm.
-		template <typename Integrator, typename P> struct RenderPixelFunctor
+		// Camera-ray generation and integrator dispatch, independent of the shading algorithm. `P` and
+		// `A` fix the primitive type and acceleration structure at compile time, so each kernel
+		// contains only the one traversal it runs (see AccelTag in intersect_common.h).
+		template <typename Integrator, typename P, typename A> struct RenderPixelFunctor
 		{
 			SceneView		scene;
 			AccelStructures accel;
@@ -52,11 +54,11 @@ namespace happyray
 				const int x			  = static_cast<int>(pixel_index % width);
 				const int y			  = static_cast<int>(pixel_index / width);
 				const Ray primary_ray = camera.GenerateRay(static_cast<float>(x), static_cast<float>(y), width, height);
-				const Vec3f sample	  = integrator.template Integrate<P>(scene,
-																		 accel,
-																		 primary_ray,
-																		 sample_offset,
-																		 pixel_jitter[pixel_index]);
+				const Vec3f	   sample = integrator.template Integrate<P, A>(scene,
+																			accel,
+																			primary_ray,
+																			sample_offset,
+																			pixel_jitter[pixel_index]);
 				accumulated[pixel_index] += sample;
 			}
 		};
@@ -494,23 +496,29 @@ namespace happyray
 
 		const uint32_t pixel_count = static_cast<uint32_t>(width) * height;
 
+		const AccelStructures accel = CurrentAccel();
 		DispatchPrimitive(primitive_type,
-						  [&](auto tag)
+						  [&](auto prim_tag)
 						  {
-							  using P = typename decltype(tag)::type;
-							  const RenderPixelFunctor<Integrator, P> render{
-								  View(),
-								  CurrentAccel(),
-								  camera,
-								  integrator,
-								  thrust::raw_pointer_cast(pixel_jitter.data()),
-								  thrust::raw_pointer_cast(accumulated.data()),
-								  sample_offset,
-								  width,
-								  height};
-							  thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-											   thrust::counting_iterator<uint32_t>(pixel_count),
-											   render);
+							  DispatchAccel(accel.type,
+											[&](auto accel_tag)
+											{
+												using P = typename decltype(prim_tag)::type;
+												using A = decltype(accel_tag);
+												const RenderPixelFunctor<Integrator, P, A> render{
+													View(),
+													accel,
+													camera,
+													integrator,
+													thrust::raw_pointer_cast(pixel_jitter.data()),
+													thrust::raw_pointer_cast(accumulated.data()),
+													sample_offset,
+													width,
+													height};
+												thrust::for_each(thrust::counting_iterator<uint32_t>(0),
+																 thrust::counting_iterator<uint32_t>(pixel_count),
+																 render);
+											});
 						  });
 		++sample_count;
 

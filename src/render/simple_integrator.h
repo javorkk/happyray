@@ -11,7 +11,7 @@ namespace happyray
 		Vec3f light_direction  = Vec3f(0.0f, 0.0f, 1.0f);
 		Vec3f background_color = Vec3f(0.05f, 0.05f, 0.08f);
 
-		template <typename P = DynamicPrimitive>
+		template <typename P = DynamicPrimitive, typename A = DynamicAccel>
 		HAPPYRAY_HD Vec3f Integrate(const SceneView		  &scene,
 									const AccelStructures &accel,
 									const Ray			  &primary_ray,
@@ -19,7 +19,7 @@ namespace happyray
 									const Vec2f & /*pixel_jitter*/) const
 		{
 			HitRecord hit;
-			if (!IntersectScene<P>(scene, accel, primary_ray, &hit))
+			if (!IntersectScene<P, A>(scene, accel, primary_ray, &hit))
 			{
 				return background_color;
 			}

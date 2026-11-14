@@ -4,6 +4,8 @@
 // for every acceleration structure.
 #pragma once
 
+#include <type_traits>
+
 #include "../app/scene.h"
 #include "../core/primitive.h"
 #include "../core/primitive_traits.h"
@@ -221,10 +223,7 @@ namespace happyray
 		}
 	}
 
-	// Selects which acceleration structure (if any) IntersectScene/IsOccluded
-	// trace against. Each later phase adds one more AccelType enum value and one more (optional)
-	// *View member here -- the dispatch in IntersectScene/IsOccluded stays a simple switch, same
-	// cost on CPU and GPU.
+	// Selects which acceleration structure (if any) IntersectScene/IsOccluded trace against.
 	enum class AccelType
 	{
 		kBruteForce,
@@ -241,40 +240,75 @@ namespace happyray
 		IrregularGridView irregular_grid; // Valid/meaningful only when type == kIrregularGrid.
 	};
 
-	// `P` selects the primitive type at compile time; DynamicPrimitive dispatches at runtime.
-	template <typename P = DynamicPrimitive>
-	HAPPYRAY_HD inline bool
-	IntersectScene(const SceneView &scene, const AccelStructures &accel, const Ray &ray, HitRecord *out_hit)
+	// Compile-time acceleration structure selector; DynamicAccel switches on AccelStructures::type
+	// at runtime instead. Fixing it at compile time matters on the GPU: a kernel that contains
+	// every traversal pays the register footprint of the largest one plus spills, which limits
+	// occupancy and with it how much memory latency the SM can hide.
+	template <AccelType A> struct AccelTag
 	{
-		switch (accel.type)
+		static constexpr AccelType value = A;
+	};
+
+	struct DynamicAccel
+	{
+	};
+
+	// Calls `fn(AccelTag<type>{})`.
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+	template <typename Fn> HAPPYRAY_HD inline decltype(auto) DispatchAccel(AccelType type, Fn &&fn)
+	{
+		switch (type)
 		{
 		case AccelType::kUniformGrid:
-			return IntersectSceneGrid<P>(scene, accel.uniform_grid, ray, out_hit);
+			return fn(AccelTag<AccelType::kUniformGrid>{});
 		case AccelType::kTwoLevelGrid:
-			return IntersectSceneGrid<P>(scene, accel.two_level_grid, ray, out_hit);
+			return fn(AccelTag<AccelType::kTwoLevelGrid>{});
 		case AccelType::kIrregularGrid:
-			return IntersectSceneGrid<P>(scene, accel.irregular_grid, ray, out_hit);
-		case AccelType::kBruteForce:
+			return fn(AccelTag<AccelType::kIrregularGrid>{});
 		default:
-			return IntersectSceneBruteForce<P>(scene, ray, out_hit);
+			return fn(AccelTag<AccelType::kBruteForce>{});
 		}
 	}
 
-	template <typename P = DynamicPrimitive>
+	// `P` selects the primitive type and `A` the acceleration structure at compile time;
+	// DynamicPrimitive/DynamicAccel dispatch at runtime.
+	template <typename P = DynamicPrimitive, typename A = DynamicAccel>
+	HAPPYRAY_HD inline bool
+	IntersectScene(const SceneView &scene, const AccelStructures &accel, const Ray &ray, HitRecord *out_hit)
+	{
+		if constexpr (std::is_same_v<A, DynamicAccel>)
+		{
+			return DispatchAccel(accel.type,
+								 [&](auto tag)
+								 { return IntersectScene<P, decltype(tag)>(scene, accel, ray, out_hit); });
+		}
+		else if constexpr (A::value == AccelType::kUniformGrid)
+			return IntersectSceneGrid<P>(scene, accel.uniform_grid, ray, out_hit);
+		else if constexpr (A::value == AccelType::kTwoLevelGrid)
+			return IntersectSceneGrid<P>(scene, accel.two_level_grid, ray, out_hit);
+		else if constexpr (A::value == AccelType::kIrregularGrid)
+			return IntersectSceneGrid<P>(scene, accel.irregular_grid, ray, out_hit);
+		else
+			return IntersectSceneBruteForce<P>(scene, ray, out_hit);
+	}
+
+	template <typename P = DynamicPrimitive, typename A = DynamicAccel>
 	HAPPYRAY_HD inline bool IsOccluded(const SceneView &scene, const AccelStructures &accel, const Ray &ray)
 	{
-		switch (accel.type)
+		if constexpr (std::is_same_v<A, DynamicAccel>)
 		{
-		case AccelType::kUniformGrid:
-			return IsOccludedGrid<P>(scene, accel.uniform_grid, ray);
-		case AccelType::kTwoLevelGrid:
-			return IsOccludedGrid<P>(scene, accel.two_level_grid, ray);
-		case AccelType::kIrregularGrid:
-			return IsOccludedGrid<P>(scene, accel.irregular_grid, ray);
-		case AccelType::kBruteForce:
-		default:
-			return IsOccludedBruteForce<P>(scene, ray);
+			return DispatchAccel(accel.type, [&](auto tag) { return IsOccluded<P, decltype(tag)>(scene, accel, ray); });
 		}
+		else if constexpr (A::value == AccelType::kUniformGrid)
+			return IsOccludedGrid<P>(scene, accel.uniform_grid, ray);
+		else if constexpr (A::value == AccelType::kTwoLevelGrid)
+			return IsOccludedGrid<P>(scene, accel.two_level_grid, ray);
+		else if constexpr (A::value == AccelType::kIrregularGrid)
+			return IsOccludedGrid<P>(scene, accel.irregular_grid, ray);
+		else
+			return IsOccludedBruteForce<P>(scene, ray);
 	}
 
 } // namespace happyray

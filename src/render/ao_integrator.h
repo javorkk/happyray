@@ -17,7 +17,7 @@ namespace happyray
 
 		// Averages cosine-weighted visibility and tints it by the surface's diffuse color.
 		// sample_offset and stable per-pixel jitter preserve progressive Halton sampling.
-		template <typename P = DynamicPrimitive>
+		template <typename P = DynamicPrimitive, typename A = DynamicAccel>
 		HAPPYRAY_HD Vec3f Integrate(const SceneView		  &scene,
 									const AccelStructures &accel,
 									const Ray			  &primary_ray,
@@ -25,7 +25,7 @@ namespace happyray
 									const Vec2f			  &pixel_jitter) const
 		{
 			HitRecord hit;
-			if (!IntersectScene<P>(scene, accel, primary_ray, &hit))
+			if (!IntersectScene<P, A>(scene, accel, primary_ray, &hit))
 			{
 				return background_color;
 			}
@@ -36,7 +36,7 @@ namespace happyray
 				const Vec2f u		   = Halton2D(sample_offset + static_cast<uint32_t>(i), pixel_jitter);
 				const Vec3f sample_dir = SampleCosineHemisphere(hit.normal, u.x, u.y);
 				const Ray	occlusion_ray(hit.position + hit.normal * 1e-3f, sample_dir, 1e-4f, max_distance);
-				if (!IsOccluded<P>(scene, accel, occlusion_ray))
+				if (!IsOccluded<P, A>(scene, accel, occlusion_ray))
 				{
 					++unoccluded;
 				}
