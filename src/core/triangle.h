@@ -14,15 +14,17 @@ namespace happyray
 
 	using Triangle = Primitive<3>;
 
-	// Moller-Trumbore ray/triangle intersection, from the first vertex and the two edges leaving it.
-	HAPPYRAY_HD inline bool IntersectRayTriangleEdges(const Ray	  &ray,
-													  const Vec3f &v0,
-													  const Vec3f &edge1,
-													  const Vec3f &edge2,
-													  float		  *out_t,
-													  float		  *out_u,
-													  float		  *out_v)
+	// Moller-Trumbore ray/triangle intersection.
+	HAPPYRAY_HD inline bool IntersectRayTriangle(const Ray	 &ray,
+												 const Vec3f &v0,
+												 const Vec3f &v1,
+												 const Vec3f &v2,
+												 float		 *out_t,
+												 float		 *out_u,
+												 float		 *out_v)
 	{
+		const Vec3f edge1 = v1 - v0;
+		const Vec3f edge2 = v2 - v0;
 		const Vec3f pvec  = Cross(ray.direction, edge2);
 		const float det	  = Dot(edge1, pvec);
 		if (det > -1e-8f && det < 1e-8f)
@@ -53,36 +55,86 @@ namespace happyray
 		return true;
 	}
 
-	// Moller-Trumbore ray/triangle intersection.
-	HAPPYRAY_HD inline bool IntersectRayTriangle(const Ray	 &ray,
-												 const Vec3f &v0,
-												 const Vec3f &v1,
-												 const Vec3f &v2,
-												 float		 *out_t,
-												 float		 *out_u,
-												 float		 *out_v)
+	// One row of TriangleWoop's affine transform: `Dot(axis, p) + offset`.
+	struct alignas(16) WoopRow
 	{
-		return IntersectRayTriangleEdges(ray, v0, v1 - v0, v2 - v0, out_t, out_u, out_v);
-	}
+		Vec3f axis;
+		float offset = 0.0f;
 
-	// Traversal-only triangle record: the first vertex and both edges, precomputed and stored
-	// directly per triangle. Fetching one is three 16-byte loads (see LoadRO), against the
-	// indexed layout's three index loads followed by nine 4-byte vertex loads that have to wait
-	// for them. The edges are the exact floats IntersectRayTriangle computes, so results match it.
-	struct alignas(16) TriangleLeaf
-	{
-		Vec3fA v0, edge1, edge2;
-
-		HAPPYRAY_HD static TriangleLeaf FromTriangle(const Triangle &triangle)
+		HAPPYRAY_HD float Apply(const Vec3f &p) const
 		{
-			TriangleLeaf leaf;
-			leaf.v0.v	 = triangle.vtx[0];
-			leaf.edge1.v = triangle.vtx[1] - triangle.vtx[0];
-			leaf.edge2.v = triangle.vtx[2] - triangle.vtx[0];
-			return leaf;
+			return Dot(axis, p) + offset;
 		}
 	};
-	static_assert(sizeof(TriangleLeaf) == 48);
+
+	// Traversal-only triangle record for Woop's unit-triangle test (legacy branch: WoopTriAccel):
+	// the first three rows of the inverse of the affine map [normal | edge2 | edge1 | v0], which
+	// takes a world point p to its coordinates (n, v, u) in p = v0 + n * normal + v * edge2 + u * edge1.
+	// The ray hits where n = 0, and u, v there are the same barycentrics IntersectRayTriangle returns.
+	// Fetching one is three 16-byte loads (see LoadRO), against the indexed layout's three index
+	// loads followed by nine 4-byte vertex loads that have to wait for them; the test itself needs
+	// no cross products.
+	struct alignas(16) TriangleWoop
+	{
+		WoopRow normal_row, u_row, v_row;
+
+		// Inverted in double precision; it runs once per triangle at upload. A degenerate triangle
+		// gets rows that never report a hit (n = 1 everywhere).
+		HAPPYRAY_HD static TriangleWoop FromTriangle(const Triangle &triangle)
+		{
+			using Vec3d		  = Vec3<double>;
+			const auto	 to_d = [](const Vec3f &p) { return Vec3d(p.x, p.y, p.z); };
+			const Vec3d	 v0	  = to_d(triangle.vtx[0]);
+			const Vec3d	 e1	  = to_d(triangle.vtx[1]) - v0;
+			const Vec3d	 e2	  = to_d(triangle.vtx[2]) - v0;
+			const Vec3d	 n	  = Cross(e1, e2);
+			const double det  = Dot(n, Cross(e2, e1));
+			TriangleWoop woop;
+			if (det == 0.0)
+			{
+				woop.normal_row.offset = 1.0f;
+				return woop;
+			}
+			// Rows of the inverse of the column matrix [n | e2 | e1] are the cross products of the
+			// other two columns over the determinant.
+			const auto row = [&](const Vec3d &axis)
+			{
+				WoopRow		r;
+				const Vec3d scaled = axis * (1.0 / det);
+				r.axis =
+					Vec3f(static_cast<float>(scaled.x), static_cast<float>(scaled.y), static_cast<float>(scaled.z));
+				r.offset = static_cast<float>(-Dot(scaled, v0));
+				return r;
+			};
+			woop.normal_row = row(Cross(e2, e1));
+			woop.v_row		= row(Cross(e1, n));
+			woop.u_row		= row(Cross(n, e2));
+			return woop;
+		}
+	};
+	static_assert(sizeof(TriangleWoop) == 48);
+
+	// Woop's unit-triangle test: transform the ray into the triangle's space, intersect the n = 0
+	// plane, and check the barycentrics there.
+	HAPPYRAY_HD inline bool
+	IntersectRayTriangleWoop(const Ray &ray, const TriangleWoop &tri, float *out_t, float *out_u, float *out_v)
+	{
+		const float origin_n	= tri.normal_row.Apply(ray.origin);
+		const float direction_n = Dot(tri.normal_row.axis, ray.direction);
+		const float t			= -origin_n / direction_n;
+		if (!(t >= ray.t_min && t <= ray.t_max)) // Also rejects NaN (ray parallel to the plane).
+			return false;
+		const float u = tri.u_row.Apply(ray.origin) + t * Dot(tri.u_row.axis, ray.direction);
+		if (u < 0.0f || u > 1.0f)
+			return false;
+		const float v = tri.v_row.Apply(ray.origin) + t * Dot(tri.v_row.axis, ray.direction);
+		if (v < 0.0f || u + v > 1.0f)
+			return false;
+		*out_t = t;
+		*out_u = u;
+		*out_v = v;
+		return true;
+	}
 
 	struct TriangleBoxIntersection
 	{

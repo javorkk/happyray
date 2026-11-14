@@ -213,13 +213,4 @@ namespace happyray
 #endif
 	}
 
-	// Vec3f padded to 16 bytes so the GPU can fetch it with one 128-bit load instead of three
-	// 32-bit ones (see LoadRO).
-	struct alignas(16) Vec3fA
-	{
-		Vec3f v;
-		float pad = 0.0f;
-	};
-	static_assert(sizeof(Vec3fA) == 16);
-
 } // namespace happyray

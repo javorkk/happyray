@@ -90,18 +90,21 @@ namespace happyray
 			}
 		};
 
-		struct MakeTriangleLeaf
+		using TracedTriangle = TriangleWoop;
+
+		struct MakeTracedTriangle
 		{
-			SceneView				 scene;
-			HAPPYRAY_HD TriangleLeaf operator()(uint32_t tri) const
+			SceneView				   scene;
+			HAPPYRAY_HD TracedTriangle operator()(uint32_t tri) const
 			{
-				return TriangleLeaf::FromTriangle(FetchTriangle(scene, tri));
+				return TracedTriangle::FromTriangle(FetchTriangle(scene, tri));
 			}
 		};
 
-		// The primitive layout render kernels trace: triangles through their TriangleLeaf records,
+		// The primitive layout render kernels trace: triangles through their TracedTriangle records,
 		// every other type as stored.
-		template <typename P> using TracedPrimitive = std::conditional_t<std::is_same_v<P, Triangle>, TriangleLeaf, P>;
+		template <typename P>
+		using TracedPrimitive = std::conditional_t<std::is_same_v<P, Triangle>, TracedTriangle, P>;
 
 		// Resolves the frame average, optionally fading it over a separate preview.
 		struct ResolveFunctor
@@ -142,7 +145,7 @@ namespace happyray
 		thrust::device_vector<Vec3f>	   positions;
 		thrust::device_vector<Vec3f>	   normals;
 		thrust::device_vector<uint32_t>	   indices;
-		thrust::device_vector<TriangleLeaf> triangle_leaves; // Triangle scenes only.
+		thrust::device_vector<TracedTriangle> traced_triangles; // Triangle scenes only.
 		thrust::device_vector<Point>	   points;
 		thrust::device_vector<Sphere>	   spheres;
 		thrust::device_vector<BezierCurve> curves;
@@ -223,7 +226,7 @@ namespace happyray
 			view.spheres				 = thrust::raw_pointer_cast(spheres.data());
 			view.curves					 = thrust::raw_pointer_cast(curves.data());
 			view.boxes					 = thrust::raw_pointer_cast(boxes.data());
-			view.triangle_leaves		 = thrust::raw_pointer_cast(triangle_leaves.data());
+			view.triangle_woop			 = thrust::raw_pointer_cast(traced_triangles.data());
 			return view;
 		}
 
@@ -268,14 +271,14 @@ namespace happyray
 		scene_points.assign(scene.points.begin(), scene.points.end());
 		scene_curves.assign(scene.curves.begin(), scene.curves.end());
 		ApplyViewDependentRadii();
-		triangle_leaves.clear();
+		traced_triangles.clear();
 		if (primitive_type == PrimitiveType::kTriangle)
 		{
-			triangle_leaves.resize(primitive_count);
+			traced_triangles.resize(primitive_count);
 			thrust::transform(thrust::counting_iterator<uint32_t>(0),
 							  thrust::counting_iterator<uint32_t>(static_cast<uint32_t>(primitive_count)),
-							  triangle_leaves.begin(),
-							  MakeTriangleLeaf{View()});
+							  traced_triangles.begin(),
+							  MakeTracedTriangle{View()});
 		}
 		material_ids.assign(scene.material_ids.begin(), scene.material_ids.end());
 		std::vector<Vec3f> colors = scene.material_diffuse_colors;

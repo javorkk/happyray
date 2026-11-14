@@ -84,21 +84,22 @@ namespace happyray
 		}
 	};
 
-	// Traversal-only view of a triangle scene through SceneView::triangle_leaves (which must be
-	// set): same hits as PrimitiveTraits<Triangle>, fewer and wider loads. It has no CellOverlap, so
-	// grids are built with Triangle and traced with TriangleLeaf.
-	template <> struct PrimitiveTraits<TriangleLeaf>
+	// Traversal-only view of a triangle scene through SceneView::triangle_woop (which must be set),
+	// intersected with Woop's unit-triangle test: nearly the same hits as PrimitiveTraits<Triangle>
+	// (they can differ on shared edges), fewer and wider loads. It has no CellOverlap, so grids are
+	// built with Triangle and traced with TriangleWoop.
+	template <> struct PrimitiveTraits<TriangleWoop>
 	{
 		static constexpr PrimitiveType kType = PrimitiveType::kTriangle;
 
-		HAPPYRAY_HD static TriangleLeaf Fetch(const SceneView &scene, uint32_t i)
+		HAPPYRAY_HD static TriangleWoop Fetch(const SceneView &scene, uint32_t i)
 		{
-			return LoadRO(scene.triangle_leaves + i);
+			return LoadRO(scene.triangle_woop + i);
 		}
 
-		HAPPYRAY_HD static bool Intersect(const Ray &ray, const TriangleLeaf &p, float *t, float *u, float *v)
+		HAPPYRAY_HD static bool Intersect(const Ray &ray, const TriangleWoop &p, float *t, float *u, float *v)
 		{
-			return IntersectRayTriangleEdges(ray, p.v0.v, p.edge1.v, p.edge2.v, t, u, v);
+			return IntersectRayTriangleWoop(ray, p, t, u, v);
 		}
 
 		HAPPYRAY_HD static Vec3f Normal(const SceneView &scene, const Ray &ray, const ClosestHit &hit)
