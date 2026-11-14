@@ -1,11 +1,4 @@
-// Thrust implementation of the render engine (see renderer.h). Evaluates the integrator
-// for each camera ray with a plain Thrust functor invoked via thrust::for_each -- so
-// this file is parallelized entirely through Thrust algorithms, with no CUDA-specific launch
-// syntax (<<<...>>>, blockIdx/threadIdx, cudaGetLastError/cudaDeviceSynchronize). That is what
-// lets the exact same source compile either under Thrust's CUDA backend (nvcc, runs on the GPU)
-// or its TBB backend (plain g++, runs in parallel on the CPU) -- see CMakeLists.txt's
-// HAPPYRAY_THRUST_BACKEND option, which picks the backend by choosing the compiler/language this
-// file is built with (and, for TBB, defining THRUST_HOST_SYSTEM/THRUST_DEVICE_SYSTEM below).
+// Thrust render engine (no hand-written CUDA kernels), so it builds for the CUDA and TBB backends.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
 #define THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_TBB
@@ -36,16 +29,12 @@ namespace happyray
 	namespace
 	{
 
-		// Rays are assigned to threads in 8x4 pixel tiles, one tile per 32 consecutive thread
-		// indices (a CUDA warp), instead of one 32x1 row strip: the rays of a warp then start closer
-		// together and diverge less, so they walk more of the same grid cells and test more of the
-		// same primitives, and those loads hit in L1/L2 more often. On the TBB backend the order only
-		// changes which pixels a task processes.
+		// Rays are assigned in 8x4 pixel tiles per 32 threads (a warp), so warp rays stay coherent
+		// and share more cache lines than a 32x1 row strip.
 		constexpr int kTileWidth  = 8;
 		constexpr int kTileHeight = 4;
 		static_assert(kTileWidth * kTileHeight == 32, "One tile per warp");
 
-		// Number of thread indices covering a width x height frame in whole tiles.
 		inline uint32_t TiledPixelCount(int width, int height)
 		{
 			const uint32_t tiles_x = static_cast<uint32_t>(width + kTileWidth - 1) / kTileWidth;
@@ -53,9 +42,7 @@ namespace happyray
 			return tiles_x * tiles_y * kTileWidth * kTileHeight;
 		}
 
-		// Camera-ray generation and integrator dispatch, independent of the shading algorithm. `P` and
-		// `A` fix the primitive type and acceleration structure at compile time, so each kernel
-		// contains only the one traversal it runs (see AccelTag in intersect_common.h).
+		// `P` and `A` are fixed at compile time so each kernel contains only one traversal.
 		template <typename Integrator, typename P, typename A> struct RenderPixelFunctor
 		{
 			SceneView		scene;
@@ -106,7 +93,6 @@ namespace happyray
 		template <typename P>
 		using TracedPrimitive = std::conditional_t<std::is_same_v<P, Triangle>, TracedTriangle, P>;
 
-		// Resolves the frame average, optionally fading it over a separate preview.
 		struct ResolveFunctor
 		{
 			float		 inv_sample_count;
@@ -185,7 +171,6 @@ namespace happyray
 		void UploadScene(const FlatScene &scene);
 		void ApplyViewDependentRadii();
 
-		// Runs collision detection over `grid`'s leaf cells, refreshing collision_ids.
 		template <typename Grid> void RunCollisionDetection(const Grid &grid)
 		{
 			collision_stats = collision_detector.ComputeCollisions(View(),
@@ -194,7 +179,6 @@ namespace happyray
 																   thrust::raw_pointer_cast(collision_ids.data()));
 		}
 
-		// Per-build detection, skipped while disabled.
 		template <typename Grid> void ComputeCollisions(const Grid &grid)
 		{
 			if (collision_detection_enabled)
@@ -254,7 +238,6 @@ namespace happyray
 		}
 	};
 
-	// Red diffuse color that replaces the material of primitives colliding with another object.
 	const Vec3f kCollidedDiffuseColor(1.0f, 0.0f, 0.0f);
 
 	void Renderer::Impl::UploadScene(const FlatScene &scene)
@@ -339,8 +322,7 @@ namespace happyray
 		impl_->resolved_host.resize(pixel_count);
 		impl_->sample_count = 0;
 
-		// A stable per-pixel random offset that decorrelates the otherwise pixel-independent Halton
-		// sequence (see random.h); generated once per resolution on the host, then uploaded.
+		// Per-pixel offset that decorrelates the Halton sequence (see random.h).
 		std::vector<Vec2f> jitter(pixel_count);
 		for (int y = 0; y < height; ++y)
 		{

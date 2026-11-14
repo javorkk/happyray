@@ -1,8 +1,5 @@
-// Automated regression test for the brute-force ambient-occlusion integrator
-// (src/render/ao_integrator.h): checks that AO is measurably lower near the base of a box resting
-// on a floor (where the box occludes part of the hemisphere) than on open floor far from any
-// occluder, and that a ray with no hit returns the background color untouched. Also covers the
-// Camera's quaternion-based orientation (src/render/camera.h).
+// AO regression test: AO is lower next to a box on a floor than on open floor, and missed rays
+// return the background. Also covers the camera's quaternion orientation.
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -38,8 +35,7 @@ namespace
 		return NearlyEqual(a.x, b.x, eps) && NearlyEqual(a.y, b.y, eps) && NearlyEqual(a.z, b.z, eps);
 	}
 
-	// Shoots a straight-down primary ray from `origin_above` and averages many AO occlusion
-	// samples (not just the 1-per-frame the interactive viewer uses) for a low-noise estimate.
+	// Averages many AO samples for a low-noise estimate.
 	float MeasureAoAtPoint(const happyray::SceneView &scene, const happyray::Vec3f &origin_above, float ao_radius)
 	{
 		happyray::AOIntegrator integrator;
@@ -179,10 +175,7 @@ int main(int argc, char **argv)
 	const happyray::FlatScene flat_scene = happyray::FlattenScene(scene);
 	const happyray::SceneView view		 = flat_scene.View();
 
-	// Floor is at y = 0; a point just above the floor and right next to the 1x1x1 box (centered
-	// at the origin, so its vertical faces sit at |x| = 0.5 / |z| = 0.5) should see significant
-	// occlusion from the box within a 1.5-unit AO radius. A point far out on the open floor
-	// should see almost none.
+	// The 1x1x1 box at the origin occludes the floor next to it within the 1.5-unit AO radius.
 	const float ao_near_box		= MeasureAoAtPoint(view, happyray::Vec3f(0.55f, 0.01f, 0.0f), 1.5f);
 	const float ao_far_from_box = MeasureAoAtPoint(view, happyray::Vec3f(2.5f, 0.01f, 0.0f), 1.5f);
 

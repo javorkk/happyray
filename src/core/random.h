@@ -1,5 +1,4 @@
-// Host/device-compatible PCG32, Halton low-discrepancy sequences, and cosine-weighted
-// hemisphere sampling for the ambient-occlusion integrator.
+// Host/device PCG32, Halton sequences, and cosine-weighted hemisphere sampling.
 #pragma once
 
 #include <cstdint>
@@ -38,15 +37,13 @@ namespace happyray
 			return (xorshifted >> rot) | (xorshifted << ((~rot + 1u) & 31u));
 		}
 
-		// Uniform float in [0, 1).
 		HAPPYRAY_HD float NextFloat()
 		{
 			return static_cast<float>(NextUint32()) * (1.0f / 4294967296.0f);
 		}
 	};
 
-	// Combines a few integer coordinates (pixel x/y, frame index, sample index) into a seed, so
-	// every (pixel, frame, sample) tuple gets its own decorrelated RNG stream.
+	// Decorrelated seed per (pixel, frame, sample) tuple.
 	HAPPYRAY_HD inline uint64_t HashSeed(uint32_t a, uint32_t b, uint32_t c)
 	{
 		uint64_t h = (static_cast<uint64_t>(a) * 2654435761u) ^ (static_cast<uint64_t>(b) * 2246822519u) ^
@@ -57,8 +54,7 @@ namespace happyray
 		return h;
 	}
 
-	// Radical inverse of `index` in the given prime `base`: reflects the digits of `index` (written
-	// in that base) around the "decimal" point, e.g. base 2: 1 -> 0.5, 2 -> 0.25, 3 -> 0.75, ...
+	// Reflects the base-`base` digits of `index` around the radix point.
 	HAPPYRAY_HD inline float HaltonRadicalInverse(uint32_t index, uint32_t base)
 	{
 		float result   = 0.0f;
@@ -73,8 +69,7 @@ namespace happyray
 		return result;
 	}
 
-	// The 2D Halton sample at `index`, using the standard base-2/base-3 pair (the lowest two
-	// primes, which is sufficient for a 2D hemisphere-direction sample).
+	// Bases 2 and 3.
 	HAPPYRAY_HD inline Vec2f Halton2D(uint32_t index)
 	{
 		return Vec2f(HaltonRadicalInverse(index, 2u), HaltonRadicalInverse(index, 3u));
@@ -85,10 +80,8 @@ namespace happyray
 		return v - static_cast<float>(static_cast<int>(v)) + (v < 0.0f ? 1.0f : 0.0f);
 	}
 
-	// Cranley-Patterson rotation: toroidally shifts a [0,1) low-discrepancy sample by a per-pixel
-	// random `offset` (also in [0,1)). This decorrelates the (otherwise identical) Halton sequence
-	// across pixels while preserving its low-discrepancy progression as `index` increases, which is
-	// exactly what a progressive per-pixel accumulator needs.
+	// Cranley-Patterson rotation: a toroidal per-pixel shift that decorrelates pixels while keeping
+	// the low-discrepancy progression.
 	HAPPYRAY_HD inline float CranleyPattersonRotate(float value, float offset)
 	{
 		return Frac(value + offset);
@@ -99,15 +92,12 @@ namespace happyray
 		return Vec2f(CranleyPattersonRotate(value.x, offset.x), CranleyPattersonRotate(value.y, offset.y));
 	}
 
-	// Convenience: the Cranley-Patterson-rotated 2D Halton sample at `index`, decorrelated per
-	// pixel by `pixel_offset`.
 	HAPPYRAY_HD inline Vec2f Halton2D(uint32_t index, const Vec2f &pixel_offset)
 	{
 		return CranleyPattersonRotate(Halton2D(index), pixel_offset);
 	}
 
-	// Builds an orthonormal basis around unit vector `n` (Duff et al., "Building an Orthonormal
-	// Basis, Revisited"), used to transform hemisphere samples from local space into world space.
+	// Duff et al., "Building an Orthonormal Basis, Revisited".
 	HAPPYRAY_HD inline void MakeOrthonormalBasis(const Vec3f &n, Vec3f *tangent, Vec3f *bitangent)
 	{
 		const float sign = n.z >= 0.0f ? 1.0f : -1.0f;
@@ -117,7 +107,6 @@ namespace happyray
 		*bitangent		 = Vec3f(b, sign + n.y * n.y * a, -n.y);
 	}
 
-	// Cosine-weighted sample over the hemisphere around normal `n`.
 	HAPPYRAY_HD inline Vec3f SampleCosineHemisphere(const Vec3f &n, float u1, float u2)
 	{
 		const float r		= std::sqrt(u1);

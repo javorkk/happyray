@@ -1,5 +1,4 @@
-// Host/device quaternion math, used by Camera for gimbal/roll-safe rotation and (later) for
-// keyframed mesh/camera animation, where Slerp is the natural way to interpolate orientations.
+// Host/device quaternion math.
 #pragma once
 
 #include "mat4.h"
@@ -35,8 +34,7 @@ namespace happyray
 		}
 	};
 
-	// Hamilton product: composes rotations so that RotateVector(a * b, v) == RotateVector(a,
-	// RotateVector(b, v)) (i.e. `b` is applied first, then `a`).
+	// Hamilton product: `b` is applied first, then `a`.
 	HAPPYRAY_HD inline Quaternion operator*(const Quaternion &a, const Quaternion &b)
 	{
 		return Quaternion(a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
@@ -65,8 +63,7 @@ namespace happyray
 		return Quaternion(-q.x, -q.y, -q.z, q.w);
 	}
 
-	// Rotates `v` by unit quaternion `q` (v' = q * v * q^-1), using Fabian Giesen's optimized form
-	// that avoids constructing a pure-vector quaternion intermediate.
+	// v' = q * v * q^-1 in Fabian Giesen's optimized form.
 	HAPPYRAY_HD inline Vec3f RotateVector(const Quaternion &q, const Vec3f &v)
 	{
 		const Vec3f qv(q.x, q.y, q.z);
@@ -74,8 +71,6 @@ namespace happyray
 		return v + t * q.w + Cross(qv, t);
 	}
 
-	// Spherical linear interpolation between two orientations, t in [0, 1]. Used for camera/mesh
-	// keyframe animation.
 	HAPPYRAY_HD inline Quaternion Slerp(const Quaternion &a, const Quaternion &b, float t)
 	{
 		Quaternion end			  = b;

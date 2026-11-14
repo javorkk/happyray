@@ -1,16 +1,5 @@
-// Headless benchmark harness: loads one or more OBJ scenes and times Renderer::RenderFrame (see
-// src/render/renderer.h) across every acceleration structure it supports (brute force, uniform
-// grid, two-level grid, irregular grid), reporting mean/min/max frame time and an estimated
-// AO-ray throughput.
-// Whichever Thrust backend this binary was built with (CUDA or TBB -- see CMakeLists.txt's
-// HAPPYRAY_THRUST_BACKEND) is whatever gets measured; run the CUDA- and TBB-backend binaries
-// separately and compare their printed tables to compare the two.
-//
-// Usage: happyray_benchmark [scene.obj|attractor:<points|spheres|curves>[:count] ...] [--width W]
-//                       [--height H] [--frames N] [--warmup N] [--samples N]
-//                       [--overlap aabb|exact|hybrid] [--radius PIXELS] [--no-brute-force]
-// With no scene arguments, benchmarks a small built-in set of bundled assets (found relative to
-// --assets-dir, default "assets").
+// Headless benchmark: times Renderer::RenderFrame per acceleration structure for the backend this
+// binary was built with. Usage is printed on bad arguments.
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -134,10 +123,7 @@ namespace
 		return true;
 	}
 
-	// Measures `options.measured_frames` calls to RenderFrame (after `options.warmup_frames`
-	// untimed ones, so the first call's one-off costs -- e.g. the CUDA driver's lazy context/kernel
-	// setup -- don't skew the reported numbers), assuming each covers the whole framebuffer at
-	// `options.samples_per_pixel_per_frame` AO samples per pixel.
+	// Warm-up frames absorb one-off costs such as lazy CUDA context setup.
 	FrameStats MeasureRenderFrame(happyray::Renderer		   *renderer,
 								  const happyray::Camera	   &camera,
 								  const happyray::AOIntegrator &integrator,
@@ -211,9 +197,7 @@ int main(int argc, char **argv)
 	}
 	if (options.scene_paths.empty())
 	{
-		// A small, deliberately varied default set: a sparse scene with a floor (exercises the
-		// uniform/two-level grids' degenerate, few-triangles-per-cell case) and the densely
-		// tessellated cube added in Phase 5 (exercises real second-level refinement).
+		// A sparse scene with a floor and a densely tessellated cube.
 		for (const char *name : {"box_on_floor.obj", "dense_cube.obj"})
 		{
 			options.scene_paths.push_back(options.assets_dir + "/" + name);

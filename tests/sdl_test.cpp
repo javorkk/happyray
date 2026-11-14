@@ -1,8 +1,4 @@
-// SDL2 smoke test: proves that an SDL2 window/renderer/texture can be created and a pixel
-// buffer presented, all from a single CMake-built executable. The pixel buffer itself is
-// computed on the CPU (a plain RGBA gradient) -- this file has no CUDA/Thrust dependency at
-// all, so (unlike the project's actual renderer) it builds and runs identically regardless of
-// which Thrust backend (CUDA or TBB) the rest of the project is configured with.
+// SDL2 smoke test: creates a window/renderer/texture and presents a CPU gradient (no Thrust).
 #include <SDL.h>
 #include <cstdio>
 #include <cstdlib>
@@ -37,8 +33,7 @@ namespace
 			setenv("SDL_VIDEODRIVER", "dummy", /*overwrite=*/0);
 		}
 
-		// Prefer a real display; fall back to the headless "dummy" driver so the smoke test still
-		// exercises the SDL2 rendering path when no X server is reachable (e.g. in CI).
+		// Fall back to the headless "dummy" driver when no display is reachable (e.g. in CI).
 		if (SDL_Init(SDL_INIT_VIDEO) != 0)
 		{
 			std::fprintf(stderr, "SDL_Init with default driver failed (%s); retrying with dummy\n", SDL_GetError());

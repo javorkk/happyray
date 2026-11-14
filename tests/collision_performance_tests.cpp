@@ -1,16 +1,7 @@
-// Collision detection benchmark: frames 105 to 106 of the Fairy Forest animation, interpolated
-// from keyframes f100.obj and f110.obj (frame 105 = 0.5, frame 106 = 0.6 between them). Each
-// triangle is replaced by the box bounding its motion over the interval (MakeSweptTriangleBoxes),
-// every grid is built over these boxes as PrimitiveType::kBox primitives (with densities tuned
-// per backend for this benchmark, see kDensities), and the renderer's
-// collision detection (CollisionDetector::ComputeCollisions) tests boxes from different objects
-// sharing a leaf cell for overlap. Reports, per grid, build, collision, and total time, the pair
-// tests executed (candidate pairs), and how many of them overlapped (colliding pairs), next to
-// the runtime of a sweep-and-prune oracle (baseline) running on the same Thrust backend, with the
-// same persistent temporary storage as the detector. Per-box
-// collision results must match the oracle; timings are informational.
-// With --search-densities, also searches each grid's densities for the lowest total time.
-// Pure Thrust, so it compiles for the CUDA (nvcc) or TBB (g++) backend like the other tests.
+// Collision benchmark: Fairy Forest frames 105-106, interpolated from keyframes f100/f110. Each
+// triangle becomes the box bounding its motion (MakeSweptTriangleBoxes), and every grid detects
+// collisions over these boxes. Results must match a sweep-and-prune oracle on the same backend;
+// timings are informational. --search-densities searches each grid's densities.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
 #define THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_TBB
@@ -67,9 +58,8 @@ namespace
 	constexpr const char *kBackendName = "CUDA";
 #endif
 
-	// Grid densities minimizing this benchmark's total (build + collision) time per backend, found
-	// with --search-densities (half-octave lattice values, 2^(k/2)). The renderer keeps its own
-	// defaults, which are tuned for ray tracing.
+	// Densities minimizing build + collision time, found with --search-densities. The renderer's
+	// own defaults are tuned for ray tracing.
 	struct BenchmarkDensities
 	{
 		float uniform;
@@ -350,11 +340,9 @@ namespace
 		return FlattenScene(scene);
 	}
 
-	// Coarse-to-fine search for the densities minimizing total (build + collision) time. Densities
-	// lie on a half-octave lattice, 2^(k/2) for integer k: a 2x-spaced coarse sweep, a hill climb
-	// over the sqrt(2)-spaced neighbors of the best point until it stops moving, then the best few
-	// and the benchmark's current densities re-measured with more runs. `make_grid(top, leaf)` builds a grid;
-	// single-level grids ignore `top`. Every configuration must match the oracle.
+	// Densities lie on a half-octave lattice 2^(k/2): a 2x-spaced coarse sweep, a hill climb over
+	// sqrt(2) neighbors, then the best few (and the current densities) re-measured with more runs.
+	// Single-level grids ignore `top`.
 	template <typename MakeGrid>
 	void SearchDensities(const char					 *name,
 						 bool						  nested,
@@ -522,8 +510,7 @@ namespace
 			view,
 			object_count));
 
-		// Baseline: the oracle, timed like the grids (one untimed warmup that also allocates its
-		// storage, then the mean of runs).
+		// Oracle baseline, timed like the grids.
 		CollisionOracle oracle;
 		oracle.Run(view);
 		double							   baseline_ms = 0.0;

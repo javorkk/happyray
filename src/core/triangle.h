@@ -67,13 +67,9 @@ namespace happyray
 		}
 	};
 
-	// Traversal-only triangle record for Woop's unit-triangle test (legacy branch: WoopTriAccel):
-	// the first three rows of the inverse of the affine map [normal | edge2 | edge1 | v0], which
-	// takes a world point p to its coordinates (n, v, u) in p = v0 + n * normal + v * edge2 + u * edge1.
-	// The ray hits where n = 0, and u, v there are the same barycentrics IntersectRayTriangle returns.
-	// Fetching one is three 16-byte loads (see LoadRO), against the indexed layout's three index
-	// loads followed by nine 4-byte vertex loads that have to wait for them; the test itself needs
-	// no cross products.
+	// Woop's unit-triangle record (legacy WoopTriAccel): the first three rows of the inverse of
+	// [normal | edge2 | edge1 | v0], mapping p to (n, v, u). The ray hits at n = 0 with the same
+	// barycentrics as IntersectRayTriangle. Three 16-byte loads instead of 3 index + 9 vertex loads.
 	struct alignas(16) TriangleWoop
 	{
 		WoopRow normal_row, u_row, v_row;

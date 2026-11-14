@@ -1,29 +1,5 @@
-// Interactive SDL2 viewer: loads an OBJ scene (or a procedural attractor scene,
-// see attractor_scene.h), flies a pinhole camera around it
-// with the keyboard/mouse, and starts with a simple-shaded preview via Renderer
-// (src/render/renderer.h), fading into accumulated AO while the camera is
-// still. Renderer is parallelized entirely through Thrust; whether that means
-// "on the GPU via CUDA" or "in parallel on the CPU via TBB" was decided when
-// this binary was built (CMake's HAPPYRAY_THRUST_BACKEND option) -- there's no
-// runtime GPU/CPU toggle here, just whichever backend this executable was
-// compiled with (shown in the window title). Camera controls
-// (movement/look/reset/step-size) match javorkk/happyray's SDLGLApplication
-// exactly (see printHelp() below, bound to F1); 'T' saves a PNG screenshot and
-// '1'/'2'/'3' select the uniform / two-level (default) / irregular grid.
-// These additions aren't part of happyray's own control scheme,
-// since happyray doesn't support switching acceleration structures at runtime.
-// Brute force (no acceleration structure) is deliberately not offered here --
-// it's too slow to stay interactive on anything but the smallest scenes; it
-// remains available for correctness validation via tests/renderer_tests.cpp and
-// benchmarking via src/app/benchmark.cpp. The window is resizable at runtime
-// (dragging an edge reallocates the framebuffer/texture and resets accumulation
-// at the new size, see the SDL_WINDOWEVENT_SIZE_CHANGED handling below); it
-// starts at an explicit command-line [width] [height] if given, else at the
-// scene's camera.cfg's resX/resY if it has one, else at 512x512 (kDefaultWidth/
-// kDefaultHeight below). 'c' (PrintCameraConfig below) dumps the current
-// resolution alongside the camera's position/orientation/FOV, so a captured
-// viewpoint can be pasted back into a camera.cfg and reproduce the exact
-// framing it was captured at.
+// Interactive SDL2 viewer. Camera controls follow javorkk/happyray's SDLGLApplication (F1 prints
+// them). Brute force is not offered since it is too slow to be interactive.
 #include <SDL.h>
 
 #include <algorithm>
@@ -51,13 +27,9 @@
 namespace
 {
 
-	// Fallback resolution when neither the command line nor the scene's camera.cfg
-	// (see LoadCameraConfig's resX/resY handling) specifies one.
 	constexpr int kDefaultWidth	 = 512;
 	constexpr int kDefaultHeight = 512;
 
-	// Picks the right one of SahCalibration's three measured cost-constant pairs (see
-	// src/accel/sah_cost.h) for the grid density search -- brute force has no SAH cost model.
 	const happyray::SahCostConstants &SahCostConstantsFor(happyray::AccelType			  type,
 														  const happyray::SahCalibration &calibration)
 	{
@@ -87,10 +59,7 @@ namespace
 		return (255u << 24) | (static_cast<uint32_t>(b) << 16) | (static_cast<uint32_t>(g) << 8) | r;
 	}
 
-	// Debug/verification helper: dumps a resolved (post-accumulation-average) pixel
-	// buffer as a binary PPM. Enabled by setting HAPPYRAY_SCREENSHOT_PATH and
-	// HAPPYRAY_SCREENSHOT_FRAME in the environment, so the renderer can be checked
-	// visually (or diffed) without a human driving the interactive window.
+	// Headless verification: HAPPYRAY_SCREENSHOT_PATH/HAPPYRAY_SCREENSHOT_FRAME dump a PPM.
 	void
 	WritePpmScreenshot(const std::string &path, int width, int height, const std::vector<happyray::Vec3f> &resolved)
 	{
@@ -116,8 +85,6 @@ namespace
 		std::printf("Wrote screenshot to '%s'\n", path.c_str());
 	}
 
-	// Prints the current control scheme, matching javorkk/happyray's own
-	// SDLGLApplication:: printHelp() (bound to F1 there too).
 	void PrintControlsHelp()
 	{
 		std::fprintf(stderr,
@@ -140,12 +107,7 @@ namespace
 					 "Quit: Esc\n");
 	}
 
-	// Prints the current camera's parameters in the same happyray camera.cfg text
-	// format LoadCameraConfig (scene.h) reads, matching javorkk/happyray's
-	// own 'c' key (there it writes a file; here it's simpler to just print, since
-	// this project has no interactive save dialog). Includes the current window
-	// resolution (resX/resY) so a dumped config reproduces the exact viewpoint
-	// *and* framing it was captured at, not just the camera's orientation.
+	// Prints happyray's camera.cfg format (including resX/resY) for pasting back into a file.
 	void PrintCameraConfig(const happyray::Camera &camera, int width, int height)
 	{
 		const happyray::Vec3f forward = camera.Forward();
@@ -158,11 +120,7 @@ namespace
 		std::printf("FOV\t\t\t%g\n", camera.vertical_fov_deg);
 	}
 
-	// Horizontal FOV derived from a vertical FOV and an aspect ratio, the same
-	// formula GenerateRay (camera.h) itself uses -- kept in sync so yaw's
-	// degrees-per-pixel (see the mouse-look block in main()) always matches
-	// what's actually on screen, not an approximation. Recomputed whenever the
-	// window is resized, since it depends on width/height.
+	// Same formula as GenerateRay, so yaw's degrees-per-pixel matches the screen.
 	float ComputeHorizontalFovDeg(float vertical_fov_deg, int width, int height)
 	{
 		const float aspect = static_cast<float>(width) / static_cast<float>(height);
@@ -182,12 +140,7 @@ int main(int argc, char **argv)
 					 argv[0]);
 		return EXIT_FAILURE;
 	}
-	// Resolution precedence: an explicit command-line [width] [height] wins
-	// outright; otherwise the scene's camera.cfg (if any) can specify its own
-	// resX/resY (see LoadCameraConfig, scene.h); failing both, fall back
-	// to kDefaultWidth/kDefaultHeight. The window is resizable at runtime
-	// regardless (see the SDL_WINDOWEVENT_SIZE_CHANGED handling below) -- this
-	// only picks the resolution it *starts* at.
+	// Resolution: command line, else the scene's camera.cfg, else the default.
 	const bool width_from_args	= argc > 2;
 	const bool height_from_args = argc > 3;
 	int		   width			= width_from_args ? std::atoi(argv[2]) : kDefaultWidth;
@@ -280,17 +233,13 @@ int main(int argc, char **argv)
 		std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
 		return EXIT_FAILURE;
 	}
-	// Accelerated rendering sets thread affinites and locks the process to only use 8 threads.
-	// SDL_Renderer *sdl_renderer =
-	//     SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+	// SDL_RENDERER_ACCELERATED pins the process to 8 threads.
 	SDL_Renderer *sdl_renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
 	if (!sdl_renderer)
 	{
 		std::fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
 		return EXIT_FAILURE;
 	}
-	// Recreated (destroy + re-create at the new size) whenever the window is
-	// resized -- see the SDL_WINDOWEVENT_SIZE_CHANGED handling below.
 	SDL_Texture *texture =
 		SDL_CreateTexture(sdl_renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, width, height);
 	if (!texture)
@@ -320,12 +269,7 @@ int main(int argc, char **argv)
 	}
 	std::printf("Grid cell overlap: %s\n", happyray::CellOverlapModeName(renderer.GetCellOverlapMode()));
 
-	// Acceleration structures (see src/accel); '1'/'2'/'3' select the uniform
-	// grid, the two-level grid (the default), and the irregular grid at
-	// runtime -- brute force is excluded from this viewer entirely (see this
-	// file's header comment). HAPPYRAY_ACCEL_TYPE=uniform_grid, two_level_grid, or
-	// irregular_grid selects a different one from startup, for headless
-	// verification.
+	// HAPPYRAY_ACCEL_TYPE=uniform_grid, two_level_grid, or irregular_grid overrides the default.
 	happyray::AccelType accel_type		   = happyray::AccelType::kTwoLevelGrid;
 	const char		   *initial_accel_type = std::getenv("HAPPYRAY_ACCEL_TYPE");
 	if (initial_accel_type && std::string(initial_accel_type) == "uniform_grid")
@@ -340,8 +284,7 @@ int main(int argc, char **argv)
 	{
 		accel_type = happyray::AccelType::kIrregularGrid;
 	}
-	// 'o' toggles collision detection; while an animation is paused its geometry
-	// doesn't change, so per-build detection is skipped and the results stay valid.
+	// A paused animation's geometry doesn't change, so per-build detection is skipped.
 	bool collisions_enabled			= false;
 	auto update_collision_detection = [&]()
 	{ renderer.SetCollisionDetectionEnabled(collisions_enabled && (!animation_loaded || !animation.IsPaused())); };
@@ -365,8 +308,6 @@ int main(int argc, char **argv)
 	happyray::SahCalibration	sah_calibration;
 	if (density_search_enabled)
 	{
-		// Runs a handful of timed micro-benchmarks (see src/accel/sah_cost.h) once, up front, so
-		// every later candidate rebuild can be evaluated instantly from its own cell layout alone.
 		sah_calibration = happyray::MeasureSahCalibration();
 		happyray::PrintSahCalibration(sah_calibration);
 		density_search.Reset(
@@ -382,63 +323,37 @@ int main(int argc, char **argv)
 
 	std::vector<uint32_t> pixel_buffer(static_cast<size_t>(width) * height);
 
-	const happyray::Camera initial_camera	= camera; // For the "reset camera" (Space) control.
+	const happyray::Camera initial_camera	= camera;
 	bool				   looking			= false;
 	int					   pre_look_mouse_x = width / 2;
 	int					   pre_look_mouse_y = height / 2;
 	bool				   running			= true;
 	uint32_t			   last_ticks		= SDL_GetTicks();
 
-	// Matches javorkk/happyray's SDLGLApplication exactly: initial step is 5% of
-	// the scene's bounding-box diagonal, halved/doubled by '['/']', clamped to
-	// its same [0.01, 200] bounds.
+	// As in happyray: 5% of the scene diagonal, halved/doubled by '['/']', clamped to [0.01, 200].
 	float			move_step	 = happyray::Length(scene.WorldBounds().Extent()) * 0.05f;
 	constexpr float kMinStepSize = 0.01f;
 	constexpr float kMaxStepSize = 200.0f;
 
-	// Mouse-look sensitivity, expressed as a unitless multiplier rather than a
-	// fixed degrees-per-pixel constant: each axis's degrees-per-pixel is
-	// derived from that axis's own FOV divided by its own pixel count (yaw from
-	// the horizontal FOV over the window's width, pitch from the vertical FOV
-	// over its height -- matching GenerateRay's own aspect-ratio handling
-	// exactly, see below), so a full window-spanning mouse swipe always rotates
-	// by the same fraction of the visible FOV on that axis, regardless of
-	// window size or display DPI (a fixed raw-pixel coefficient instead gets
-	// more or less sensitive as the window/display's pixels-per-physical-inch
-	// changes, which previously made "just lower the constant" an unreliable
-	// fix). Adjustable live with the mouse wheel (scroll up/down to
-	// increase/decrease) so it doesn't need a recompile to tune, and seeded
-	// from HAPPYRAY_LOOK_SENSITIVITY so a comfortable value can be kept across
-	// runs.
+	// Degrees per pixel = that axis's FOV / pixel count * sensitivity, so a full-window swipe turns
+	// by the same fraction of the view at any window size or DPI. Mouse wheel adjusts it.
 	const char	   *initial_look_sensitivity_str = std::getenv("HAPPYRAY_LOOK_SENSITIVITY");
 	float			look_sensitivity	= initial_look_sensitivity_str ? std::atof(initial_look_sensitivity_str) : 0.1f;
 	constexpr float kMinLookSensitivity = 0.001f;
 	constexpr float kMaxLookSensitivity = 5.0f;
 
-	// Separate multiplier applied only to the pitch (vertical-look) axis, on
-	// top of look_sensitivity above -- fixed below 1 so yaw (side-to-side) is
-	// the dominant/faster rotation, matching how most FPS-style cameras feel
-	// (pitch only ever sweeps a bounded +-89 degree range, while yaw sweeps
-	// the full, unbounded 360 degrees, so it doesn't need as much per-pixel
-	// precision). Not user-adjustable (unlike look_sensitivity above) to keep
-	// the control scheme simple; 0.256 was picked by hand as a good default.
+	// Pitch is slower than yaw; hand-tuned.
 	constexpr float kPitchScale = 0.256f;
 
-	// Recomputed on every resize (see SDL_WINDOWEVENT_SIZE_CHANGED below) since
-	// it depends on width/height.
 	float horizontal_fov_deg = ComputeHorizontalFovDeg(camera.vertical_fov_deg, width, height);
 
-	// Optional headless verification hook (see WritePpmScreenshot above): if set,
-	// dump a screenshot after the requested number of accumulated frames and exit
-	// automatically.
 	const char *screenshot_path		 = std::getenv("HAPPYRAY_SCREENSHOT_PATH");
 	const char *screenshot_frame_str = std::getenv("HAPPYRAY_SCREENSHOT_FRAME");
 	const int	screenshot_at_frame	 = screenshot_frame_str ? std::atoi(screenshot_frame_str) : -1;
 	int			rendered_frame_count = 0;
 	bool		screenshot_failed	 = false;
 
-	// Grid build time since `start`, excluding the collision detection that ran
-	// with the build (reported separately in the window title).
+	// Excludes the collision detection that ran with the build.
 	auto grid_build_ms_since = [&](std::chrono::steady_clock::time_point start)
 	{
 		const double elapsed_ms =
@@ -469,9 +384,6 @@ int main(int argc, char **argv)
 			}
 			else if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
 			{
-				// Fires for both user-driven resizes (dragging an edge/corner, since
-				// the window was created with SDL_WINDOW_RESIZABLE) and programmatic
-				// ones; data1/data2 are the new size in pixels.
 				const int new_width	 = event.window.data1;
 				const int new_height = event.window.data2;
 				if (new_width > 0 && new_height > 0 && (new_width != width || new_height != height))
@@ -492,7 +404,7 @@ int main(int argc, char **argv)
 					else
 					{
 						pixel_buffer.assign(static_cast<size_t>(width) * height, 0u);
-						renderer.ResizeFramebuffer(width, height); // Also resets accumulation to 0 samples.
+						renderer.ResizeFramebuffer(width, height);
 						camera_dirty	   = true;
 						horizontal_fov_deg = ComputeHorizontalFovDeg(camera.vertical_fov_deg, width, height);
 					}
@@ -521,14 +433,13 @@ int main(int argc, char **argv)
 			}
 			else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE && event.key.repeat == 0)
 			{
-				camera		 = initial_camera; // happyray's "reset camera" control.
+				camera		 = initial_camera;
 				camera_dirty = true;
 			}
 			else if (event.type == SDL_KEYDOWN &&
 					 (event.key.keysym.sym == SDLK_LEFTBRACKET || event.key.keysym.sym == SDLK_RIGHTBRACKET) &&
 					 event.key.repeat == 0)
 			{
-				// happyray's movement-step-size adjustment ('[' halves, ']' doubles).
 				move_step = event.key.keysym.sym == SDLK_LEFTBRACKET ? move_step * 0.5f : move_step * 2.0f;
 				move_step = move_step < kMinStepSize   ? kMinStepSize
 							: move_step > kMaxStepSize ? kMaxStepSize
@@ -537,7 +448,7 @@ int main(int argc, char **argv)
 			else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_c && event.key.repeat == 0)
 			{
 				PrintCameraConfig(camera, width,
-								  height); // happyray's "output camera parameters" control.
+								  height);
 			}
 			else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F1 && event.key.repeat == 0)
 			{
@@ -562,25 +473,14 @@ int main(int argc, char **argv)
 					renderer.ClearCollisions();
 				}
 				renderer.ResetAccumulation();
-				// std::printf("Animation %s\n", animation.IsPaused() ? "paused" : "playing");
 			}
 			else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT)
 			{
-				// happyray toggles the mouse grab with a click (not a held button).
+				// happyray toggles the mouse grab with a click.
 				looking = !looking;
-				// Deliberately NOT using SDL_SetRelativeMouseMode: its cursor
-				// confinement/re-centering is implemented via actual OS-level cursor
-				// warps on some backends, and under this environment (a
-				// remote/forwarded X11 session) that warp was observed to
-				// re-center on the wrong point, injecting a constant, consistently
-				// -signed "phantom" delta into every real mouse movement no matter
-				// which underlying SDL API was used to read it (both
-				// SDL_MOUSEMOTION events and SDL_GetRelativeMouseState sit
-				// downstream of the same warp machinery). Implementing our own
-				// "virtual" relative mouse instead -- hide the cursor, warp it to
-				// the window's exact center every frame ourselves, and diff the
-				// next absolute position against that known-good center (see the
-				// per-frame block below) -- fully bypasses that subsystem.
+				// Not SDL_SetRelativeMouseMode: on forwarded X11 its cursor warps re-center on the
+				// wrong point and inject a constant phantom delta. We warp to the window center
+				// ourselves and diff against it each frame.
 				SDL_ShowCursor(looking ? SDL_DISABLE : SDL_ENABLE);
 				if (looking)
 				{
@@ -594,9 +494,6 @@ int main(int argc, char **argv)
 			}
 			else if (event.type == SDL_MOUSEWHEEL)
 			{
-				// Live-adjustable mouse-look sensitivity (not part of happyray's own
-				// control scheme -- its mouse-look has no adjustable sensitivity at
-				// all). Scroll up to increase, down to decrease.
 				look_sensitivity *= event.wheel.y > 0 ? 1.25f : 0.8f;
 				look_sensitivity = look_sensitivity < kMinLookSensitivity	? kMinLookSensitivity
 								   : look_sensitivity > kMaxLookSensitivity ? kMaxLookSensitivity
@@ -614,21 +511,13 @@ int main(int argc, char **argv)
 
 		if (looking)
 		{
-			// Manual "virtual relative mouse": diff the current absolute cursor
-			// position against the window's exact center (where we last warped it
-			// to -- see the toggle handler and the re-center below), then warp it
-			// back to center again so every frame starts from the same known-good
-			// reference point. This deliberately bypasses SDL_SetRelativeMouseMode
-			// entirely -- see the toggle handler above for why.
+			// Virtual relative mouse (see the toggle handler): diff against the center, re-center.
 			int dx, dy;
 			SDL_GetMouseState(&dx, &dy);
 			dx -= width / 2;
 			dy -= height / 2;
 			if (dx != 0 || dy != 0)
 			{
-				// Yaw from the horizontal FOV over width, pitch from the vertical
-				// FOV over height -- see kPitchScale/horizontal_fov_deg's
-				// declarations above for why these are no longer the same rate.
 				const float yaw_degrees_per_pixel = (horizontal_fov_deg / width) * look_sensitivity;
 				const float pitch_degrees_per_pixel =
 					(camera.vertical_fov_deg / height) * look_sensitivity * kPitchScale;
@@ -638,12 +527,7 @@ int main(int argc, char **argv)
 			SDL_WarpMouseInWindow(window, width / 2, height / 2);
 		}
 
-		// Frame-rate-independent (move_step is a "units/second" rate here, scaled
-		// by dt) -- happyray instead moves by move_step every held-key *frame* (so
-		// its speed is tied to its own render framerate); HappyRay already had the
-		// better-behaved dt-scaled continuous movement, so that part is kept, just
-		// re-based on happyray's move_step/['/']' scheme instead of HappyRay's previous
-		// ad hoc Shift-to-move-faster speed.
+		// Unlike happyray, movement is scaled by dt so speed is frame-rate independent.
 		const Uint8 *keys  = SDL_GetKeyboardState(nullptr);
 		const float	 speed = move_step * dt;
 		if (keys[SDL_SCANCODE_W])
@@ -720,8 +604,6 @@ int main(int argc, char **argv)
 			};
 			const happyray::GridDensities candidate = density_search.Candidate();
 			rebuild_grid(candidate);
-			// No rays cast, no frame rendered, no waiting for interactive timing to accumulate --
-			// the candidate's SAH cost (src/accel/sah_cost.h) is available the instant it's built.
 			const float candidate_sah_cost =
 				renderer.ComputeCurrentGridSahCost(scene.WorldBounds(),
 												   SahCostConstantsFor(accel_type, sah_calibration));
@@ -816,8 +698,6 @@ int main(int argc, char **argv)
 		}
 
 		char title[256];
-		// Brute force is excluded from this viewer (see this file's header
-		// comment), so accel_type is always one of these three.
 		const char	*accel_name = accel_type == happyray::AccelType::kUniformGrid	 ? "ugrid"
 								  : accel_type == happyray::AccelType::kTwoLevelGrid ? "2grid"
 																					 : "igrid";
@@ -832,8 +712,6 @@ int main(int argc, char **argv)
 												  renderer.SampleCount(),
 												  fps,
 												  animation_loaded && animation.IsPaused() ? " - paused" : "");
-		// Collision detection runs with every grid build of a multi-object scene,
-		// except while an animation is paused; its time is reported separately.
 		const happyray::CollisionStats &collision_stats = renderer.LastCollisionStats();
 		const bool show_collision_ms = collision_stats.object_count >= 2 && renderer.CollisionDetectionEnabled();
 		int		   title_used		 = title_length;

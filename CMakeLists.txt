@@ -13,11 +13,7 @@ endif()
 add_compile_options($<$<AND:$<CONFIG:Release>,$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>>:-O3>)
 add_compile_options($<$<AND:$<CONFIG:Release>,$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>>:-march=native>)
 
-# Selects which Thrust backend parallelizes the renderer/uniform grid (src/render/renderer.cpp,
-# src/accel/uniform_grid/uniform_grid.cpp): CUDA runs them on the GPU (needs nvcc); TBB runs the
-# exact same Thrust functors/algorithms in parallel on the CPU instead (plain g++, no CUDA
-# compiler needed at all). Each build only supports the backend it was configured with -- one
-# binary per backend, not a runtime toggle.
+# CUDA runs the Thrust code on the GPU; TBB runs the same code on the CPU without nvcc.
 set(HAPPYRAY_THRUST_BACKEND "CUDA" CACHE STRING "Thrust backend: CUDA or TBB")
 set_property(CACHE HAPPYRAY_THRUST_BACKEND PROPERTY STRINGS CUDA TBB)
 
@@ -28,7 +24,7 @@ if(HAPPYRAY_THRUST_BACKEND STREQUAL "CUDA")
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    # Needed for uniform_grid_view.h's grid-traversal lambdas to compile as device code.
+    # Device lambdas in the traversal code.
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--Wno-deprecated-gpu-targets>)
@@ -36,23 +32,19 @@ elseif(NOT HAPPYRAY_THRUST_BACKEND STREQUAL "TBB")
     message(FATAL_ERROR "HAPPYRAY_THRUST_BACKEND must be CUDA or TBB (got '${HAPPYRAY_THRUST_BACKEND}')")
 endif()
 
-# Thrust ships as headers inside the CUDA toolkit's include tree, so this is needed even for a
-# TBB-backend build (which otherwise never invokes nvcc or links the CUDA runtime).
+# Thrust headers come from the CUDA toolkit, even for TBB builds.
 find_package(CUDAToolkit REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
 
-# Carries whichever compile definitions/include dirs/link libraries the active Thrust backend
-# needs. src/accel and src/render link this into their backend-switched source files
-# (uniform_grid.cpp, renderer.cpp) instead of duplicating this logic in each CMakeLists.txt.
+# Compile definitions, include dirs, and libraries for the active Thrust backend.
 add_library(happyray_thrust_backend INTERFACE)
 target_link_libraries(happyray_thrust_backend INTERFACE CUDA::toolkit)
 if(HAPPYRAY_THRUST_BACKEND STREQUAL "CUDA")
     target_link_libraries(happyray_thrust_backend INTERFACE CUDA::cudart)
 else()
-    # Prefer system TBB (e.g. Ubuntu's libtbb-dev); older Rez TBB packages may not
-    # provide a CMake config package, so retain their REZ_TBB_ROOT fallback.
+    # Older Rez TBB packages lack a CMake config; fall back to REZ_TBB_ROOT.
     find_package(TBB CONFIG QUIET)
     if(TARGET TBB::tbb)
         target_link_libraries(happyray_thrust_backend INTERFACE TBB::tbb)

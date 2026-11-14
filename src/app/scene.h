@@ -20,23 +20,19 @@
 namespace happyray
 {
 
-	// Per-primitive collision id meaning "this primitive does not collide with any other object".
 	constexpr uint32_t kNoCollision = 0xffffffffu;
 
-	// Non-owning view over either host or device memory. Holds one primitive type: an indexed
-	// triangle soup, or one of the point/sphere/curve/box arrays.
+	// Non-owning view over host or device memory holding one primitive type.
 	struct SceneView
 	{
 		const Vec3f	   *positions	 = nullptr;
 		const Vec3f	   *normals		 = nullptr;
 		const uint32_t *indices		 = nullptr; // 3 per triangle, indexing positions/normals.
 		const uint32_t *material_ids = nullptr; // 1 per primitive.
-		// FlattenScene supplies a default-white entry for scenes with no materials.
 		const Vec3f	   *material_diffuse_colors = nullptr;
 		uint32_t		primitive_count			= 0;
 		const uint32_t *object_ids				= nullptr; // 1 per primitive; may be null.
-		// 1 per primitive (the smallest id of another object it intersects, or kNoCollision); may be
-		// null. Colliding primitives are shaded with `collided_material_id` instead of their own.
+		// Smallest id of another object each primitive intersects, or kNoCollision; may be null.
 		const uint32_t	  *collision_ids		= nullptr;
 		uint32_t		   collided_material_id = 0;
 		PrimitiveType	   primitive_type		= PrimitiveType::kTriangle;
@@ -44,9 +40,7 @@ namespace happyray
 		const Sphere	  *spheres				= nullptr;
 		const BezierCurve *curves				= nullptr;
 		const BBox		  *boxes				= nullptr; // Solid boxes (PrimitiveType::kBox).
-		// Optional, triangle scenes only: one TriangleWoop per triangle, the same triangles as
-		// positions/indices in the traversal-friendly layout. Ray tracing with
-		// PrimitiveTraits<TriangleWoop> reads it; everything else uses positions/indices.
+		// Optional, triangles only: the same triangles in Woop's traversal-friendly layout.
 		const TriangleWoop *triangle_woop = nullptr;
 	};
 
@@ -59,8 +53,6 @@ namespace happyray
 		return t;
 	}
 
-	// The material a hit on `prim` is shaded with: swapped for the collided material if collision
-	// detection found the primitive intersecting another object.
 	HAPPYRAY_HD inline uint32_t FetchMaterialId(const SceneView &scene, uint32_t prim)
 	{
 		if (scene.collision_ids && scene.collision_ids[prim] != kNoCollision)
@@ -70,7 +62,6 @@ namespace happyray
 		return scene.material_ids[prim];
 	}
 
-	// Host-owned geometry shared by CPU rendering and GPU upload.
 	struct FlatScene
 	{
 		PrimitiveType			 primitive_type = PrimitiveType::kTriangle;
@@ -122,9 +113,7 @@ namespace happyray
 		}
 	};
 
-	// Concatenates meshes, offsetting indices by the running vertex count and object ids by the
-	// running object count (a mesh without object ids counts as one object). Non-triangle
-	// primitives form a single object.
+	// Offsets indices by the running vertex count and object ids by the running object count.
 	inline FlatScene FlattenScene(const Scene &scene)
 	{
 		FlatScene flat;
@@ -181,10 +170,8 @@ namespace happyray
 		return flat;
 	}
 
-	// Box scene bounding each triangle of `a` over its linear motion to `b` between times `start`
-	// and `end` (0 and 1 are the keyframes): the union of the triangle's bounds at both times.
-	// Keyframes must be triangle scenes with identical topology (indices); each box takes the
-	// material and object id of its triangle in `a`.
+	// One box per triangle bounding its linear motion from `a` to `b` over [start, end]. Keyframes
+	// must share topology.
 	inline FlatScene MakeSweptTriangleBoxes(const FlatScene &a, const FlatScene &b, float start, float end)
 	{
 		if (a.primitive_type != PrimitiveType::kTriangle || b.primitive_type != PrimitiveType::kTriangle)
@@ -298,8 +285,6 @@ namespace happyray
 		}
 	}
 
-	// Frames the camera on the scene's bounding box so freshly-loaded OBJ files are visible
-	// without manual positioning.
 	inline Camera MakeDefaultCamera(const Scene &scene)
 	{
 		Camera	   camera;
@@ -317,9 +302,7 @@ namespace happyray
 		return camera;
 	}
 
-	// The default ambient-occlusion occlusion-ray reach for a scene of a given size: 0.1x the
-	// longest side of its world-space bounding box. See AOIntegrator::max_distance
-	// (src/render/ao_integrator.h) for where this gets applied.
+	// 0.1x the longest side of the scene bounds.
 	inline float DefaultMaxDistance(const Scene &scene)
 	{
 		const BBox bounds = scene.WorldBounds();
@@ -332,8 +315,7 @@ namespace happyray
 		return longest_side * 0.1f;
 	}
 
-	// A scene.obj's optional sibling camera config, e.g. "assets/ogre.obj" ->
-	// "assets/ogre.camera.cfg". Doesn't check the file exists -- LoadCameraConfig does that.
+	// "assets/ogre.obj" -> "assets/ogre.camera.cfg".
 	inline std::string CameraConfigPathFor(const std::string &scene_path)
 	{
 		const std::string suffix = ".obj";
@@ -345,21 +327,9 @@ namespace happyray
 		return scene_path + ".camera.cfg";
 	}
 
-	// Loads a happyray-style camera.cfg ("position x y z", "orientation x y z" (the forward/view
-	// direction, not necessarily normalized), "up x y z", "FOV deg", "resX"/"resY" -- "rotation" is
-	// accepted but ignored, since HappyRay has no initial-rotation-then-reset step). Returns false
-	// (leaving `camera` untouched) if the file doesn't exist.
-	//
-	// HappyRay's Camera only supports yaw/pitch (no roll -- its "up" is always derived from yaw/pitch
-	// applied to world-+Y, see camera.h), so only the forward direction's yaw/pitch is reproduced
-	// exactly; an "up" vector that isn't already close to world +Y (i.e. a camera.cfg with
-	// intentional roll/bank) can't be represented and is otherwise ignored.
-	//
-	// If `out_width`/`out_height` are non-null and the file has a "resX"/"resY" line, they're set to
-	// those values (left untouched otherwise); the caller decides how to combine that with any other
-	// resolution source (e.g. a command-line override should still win). Pass nullptr (the default)
-	// to ignore resX/resY entirely, as benchmark.cpp does (its resolution comes from --width/--height
-	// instead).
+	// Loads a happyray camera.cfg. "orientation" is the view direction; "up" and "rotation" are
+	// ignored since Camera has no roll. resX/resY are written to `out_width`/`out_height` if given.
+	// Returns false if the file doesn't exist.
 	inline bool
 	LoadCameraConfig(const std::string &path, Camera *camera, int *out_width = nullptr, int *out_height = nullptr)
 	{
@@ -398,8 +368,6 @@ namespace happyray
 			{
 				line >> *out_height;
 			}
-			// "up"/"rotation" (and anything else) are intentionally ignored -- see this function's
-			// header comment.
 		}
 		std::fclose(file);
 

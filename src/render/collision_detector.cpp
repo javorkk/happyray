@@ -1,9 +1,5 @@
-// Thrust implementation of CollisionDetector (see collision_detector.h), following
-// string2shape's CollisionDetector::computeCollisionGraph: trim single-object cells, compact
-// the remaining ones, sort their references by (cell, object), then run (and count) primitive
-// bounding-box overlap tests per cell reference against the cell's later objects. The grids are
-// not modified. Compiles under either the CUDA or the TBB Thrust backend, the same as the grid
-// builders.
+// CollisionDetector implementation (string2shape's computeCollisionGraph); the grids are not
+// modified.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
 #define THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_TBB
@@ -71,8 +67,6 @@ namespace happyray
 			}
 		};
 
-		// Replaces cells that cannot contain a collision (fewer than two primitives, or
-		// all primitives from the same object) with an empty range.
 		struct CellTrimmer
 		{
 			const uint32_t *object_ids;
@@ -128,9 +122,8 @@ namespace happyray
 			}
 		};
 
-		// Copies every reference of the candidate cells into one array (work item w is reference
-		// w - cell_ref_offsets[cell] of candidate cell `cell`), keyed by (candidate cell, object id)
-		// so a sort groups each cell's references by object.
+		// Work item w is reference w - cell_ref_offsets[cell] of candidate cell `cell`; keys sort
+		// each cell's references by object.
 		struct GatherCandidateRefs
 		{
 			const CellRange *cells;
@@ -159,13 +152,9 @@ namespace happyray
 			}
 		};
 
-		// Tests all primitive pairs from different objects inside the candidate cells for
-		// bounding-box overlap. Unlike string2shape (one thread per cell), each work item is one
-		// reference of a candidate cell, tested against the cell's later references: the same
-		// pairs, but a cell with thousands of primitives (e.g. a uniform grid cell over dense
-		// geometry) no longer serializes O(k^2) tests on a single thread. References are sorted
-		// by (cell, object), so the loop starts past the reference's own object run and never
-		// visits same-object pairs, and reads contiguous memory.
+		// One work item per cell reference, tested against the cell's later references, so huge
+		// cells don't serialize O(k^2) tests on one thread. Starting past the reference's own
+		// object run skips same-object pairs.
 		struct CollisionOperator
 		{
 			const BBox	   *boxes;
@@ -177,7 +166,6 @@ namespace happyray
 			uint32_t		ref_count;
 			uint32_t	   *collision_ids;
 
-			// Returns the number of tests this work item executed and how many found an overlap.
 			HAPPYRAY_HD PairTestCounts operator()(uint32_t ref) const
 			{
 				const uint64_t key		= ref_keys[ref];
@@ -192,8 +180,8 @@ namespace happyray
 				{
 					const uint32_t other_obj  = static_cast<uint32_t>(ref_keys[other_ref]);
 					const uint32_t other_prim = ref_prims[other_ref];
-					// Per-primitive analog of string2shape's lastRecordedPair: skip the
-					// test if its outcome could not lower either recorded id.
+					// Skip tests that couldn't lower either recorded id (cf. string2shape's
+					// lastRecordedPair).
 					if (LoadCollisionId(collision_ids + my_prim) <= other_obj &&
 						LoadCollisionId(collision_ids + other_prim) <= my_obj)
 						continue;
@@ -269,7 +257,6 @@ namespace happyray
 
 		if (object_count >= 2u && scene.object_ids && cell_count > 0)
 		{
-			// Delete all grid cells that contain primitives from a single object.
 			const auto trimmed_cells = thrust::device_pointer_cast(Reserve(&scratch.trimmed_cells, cell_count));
 			thrust::transform(
 				policy, cells, cells + cell_count, trimmed_cells, CellTrimmer{scene.object_ids, prim_indices});
@@ -294,7 +281,6 @@ namespace happyray
 					cell_ref_offsets[stats.candidate_cell_count - 1] + (last_cell.end - last_cell.start);
 				const auto first = thrust::counting_iterator<uint32_t>(0);
 
-				// Group each candidate cell's references by object.
 				const auto ref_keys	 = thrust::device_pointer_cast(Reserve(&scratch.ref_keys, ref_count));
 				const auto ref_prims = thrust::device_pointer_cast(Reserve(&scratch.ref_prims, ref_count));
 				thrust::for_each(policy,
@@ -323,8 +309,7 @@ namespace happyray
 														boxes,
 														PrimitiveBoundsFunctor<typename decltype(tag)::type>{scene});
 								  });
-				// The reduction evaluates the operator exactly once per work item, so its side effects
-				// (recording collision ids) happen exactly as with for_each.
+				// The reduction evaluates each work item exactly once, so its side effects are safe.
 				const PairTestCounts counts =
 					thrust::transform_reduce(policy,
 											 first,

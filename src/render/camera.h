@@ -1,12 +1,5 @@
-// Pinhole camera with FPS-style fly controls (position + yaw/pitch), used by the interactive
-// viewer. Shared by the CPU and (later) GPU render paths since `GenerateRay` is a plain,
-// host/device-compatible function of camera state.
-//
-// Orientation is stored as yaw/pitch degrees (simple to clamp pitch with and free of any
-// accumulation drift), but the actual rotation math -- turning those angles into the camera's
-// forward/right/up basis -- goes through a quaternion (see Orientation()). This keeps the
-// camera itself gimbal-safe/composable and reuses the same Quaternion type that will later
-// drive keyframed camera/mesh animation and GPU-side basis computation.
+// Pinhole camera with fly controls. Orientation is stored as yaw/pitch (easy to clamp, no drift)
+// and converted to a basis through a quaternion.
 #pragma once
 
 #include "../core/mat4.h"
@@ -24,11 +17,7 @@ namespace happyray
 		float pitch_deg		   = 0.0f;
 		float vertical_fov_deg = 60.0f;
 
-		// World-space orientation: local-space pitch around Z (tilting the initial +X "forward"
-		// into the XY-plane), then yaw around world -Y. This specific axis/sign/order combination
-		// was chosen (and verified numerically) to reproduce the exact same forward/right/up basis
-		// as a direct spherical-coordinates formula, so swapping the implementation to go through
-		// quaternions didn't change the camera's behavior.
+		// Pitch around local Z, then yaw around world -Y; matches the spherical-coordinates basis.
 		HAPPYRAY_HD Quaternion Orientation() const
 		{
 			constexpr float	 kDegToRad		= 3.14159265358979323846f / 180.0f;

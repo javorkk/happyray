@@ -1,15 +1,6 @@
-// Automated regression test for Renderer (src/render/renderer.h): validates whichever Thrust
-// backend this binary was built with (CUDA or TBB -- see CMakeLists.txt's HAPPYRAY_THRUST_BACKEND)
-// against a dead-simple, single-threaded, Thrust-free host reference loop that calls
-// AOIntegrator::Integrate (src/render/ao_integrator.h) directly. Also validates the uniform grid
-// (src/accel/uniform_grid.h), the two-level grid (src/accel/two_level_grid.h), and the
-// irregular grid (src/accel/irregular_grid.h) by checking Renderer-with-the-grid-enabled against
-// the same brute-force reference: since both trace identical deterministic Halton samples, any
-// discrepancy points at the grid's construction/traversal rather than at noise. Each grid is
-// checked against two scenes: box_on_floor.obj (forced sparse threshold so
-// each grid's degenerate path is exercised) and dense_cube.obj (dense enough that some
-// top-level cells get real, non-degenerate refinement -- for the irregular grid, this also
-// exercises real merge and expand, not just the flat initial build).
+// Renderer regression test: the active backend and every grid must match a single-threaded host
+// brute-force reference tracing the same deterministic Halton samples, on a sparse scene (forced
+// degenerate path) and a dense one (real refinement, merge, and expand).
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -46,8 +37,7 @@ namespace
 		}                                                                                                              \
 	} while (0)
 
-	// Reproduces Renderer::ResizeFramebuffer's per-pixel jitter table exactly (same Rng/HashSeed
-	// calls), so this reference loop draws the identical Halton samples Renderer does.
+	// Same jitter table as Renderer::ResizeFramebuffer, so the samples match.
 	std::vector<happyray::Vec2f> MakePixelJitter(int width, int height)
 	{
 		std::vector<happyray::Vec2f> jitter(static_cast<size_t>(width) * height);
@@ -63,9 +53,6 @@ namespace
 		return jitter;
 	}
 
-	// Renders `num_frames` accumulated AO samples single-threaded on the host, using brute force
-	// only -- this is the project's simplest possible ground truth, with no Thrust/parallelism
-	// involved at all.
 	template <typename Integrator>
 	std::vector<happyray::Vec3f> RenderBruteForceReference(const happyray::SceneView		  &scene,
 														   const happyray::Camera			  &camera,
@@ -101,9 +88,7 @@ namespace
 		return resolved;
 	}
 
-	// Renders `num_frames` accumulated AO samples via `renderer` and checks the result agrees closely
-	// with `reference` (the brute-force host loop above), except for up to `max_outlier_fraction` of
-	// the pixels.
+	// Allows up to `max_outlier_fraction` mismatching pixels.
 	template <typename Integrator>
 	void CompareRendererToReference(const char						   *label,
 									happyray::Renderer				   *renderer,
@@ -143,9 +128,7 @@ namespace
 					mean_abs_diff,
 					pixel_count);
 
-		// Both traces draw identical Halton samples against identical geometry, so they should agree
-		// almost exactly; allow a small tolerance for host/device transcendental function rounding
-		// differences (CUDA backend) or summation-order differences (TBB backend).
+		// Tolerance covers host/device math rounding (CUDA) and summation order (TBB).
 		HAPPYRAY_CHECK(outliers <= static_cast<size_t>(max_outlier_fraction * pixel_count));
 		HAPPYRAY_CHECK(mean_abs_diff < 0.01f);
 	}
@@ -317,9 +300,7 @@ namespace
 		for (AccelType type : types)
 		{
 			search.Reset(type, 100.0f);
-			HAPPYRAY_CHECK(search.CanRebuild(32));	// No waiting for a prior measurement anymore --
-													// a SAH cost is available the instant a candidate
-													// finishes building.
+			HAPPYRAY_CHECK(search.CanRebuild(32));
 			HAPPYRAY_CHECK(!search.CanRebuild(31)); // Still needs the view to have settled.
 			const GridDensities minimum = search.Candidate();
 			float				cost	= 100.0f;
@@ -331,10 +312,9 @@ namespace
 				HAPPYRAY_CHECK(candidate.top_level <= minimum.top_level * 16);
 				HAPPYRAY_CHECK(candidate.second_level >= minimum.second_level);
 				HAPPYRAY_CHECK(candidate.second_level <= minimum.second_level * 16);
-				cost *= 0.9f; // Strictly decreasing (but always positive) -- every candidate
-							  // improves on the last.
+				cost *= 0.9f; // Every candidate improves on the last.
 				HAPPYRAY_CHECK(search.Evaluate(cost));
-				HAPPYRAY_CHECK(search.CanRebuild(32)); // Next candidate needs no waiting frames.
+				HAPPYRAY_CHECK(search.CanRebuild(32));
 			}
 		}
 
@@ -927,9 +907,7 @@ int main(int argc, char **argv)
 							   kNumFrames,
 							   dense_reference);
 
-	// Same scene, now checking the irregular grid: its per-top-level-cell local grids are dense
-	// enough here to exercise real merge (collapsing empty/uniform regions) and expand
-	// (growing cells into subset-compatible neighbors), not just the degenerate case above.
+	// The irregular grid is dense enough here to exercise real merge and expand.
 	dense_renderer.SetAccelType(happyray::AccelType::kIrregularGrid);
 	dense_renderer.BuildAccelerationStructure();
 	CompareRendererToReference("irregular grid (merge+expand)",

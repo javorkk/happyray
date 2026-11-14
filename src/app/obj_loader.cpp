@@ -11,8 +11,7 @@ namespace happyray
 	namespace
 	{
 
-		// Resolves an OBJ vertex-attribute index (1-based, or negative/relative to the current count)
-		// to a 0-based index. Returns -1 if the token was absent (empty string).
+		// 1-based or negative (relative) OBJ index -> 0-based; -1 if `token` is empty.
 		int ResolveIndex(const std::string &token, int count)
 		{
 			if (token.empty())
@@ -47,7 +46,6 @@ namespace happyray
 			}
 		};
 
-		// Splits a face vertex token like "3", "3/2", "3//1" or "3/2/1" into its v/vt/vn components.
 		FaceVertexKey ParseFaceVertexToken(const std::string &token, int position_count, int uv_count, int normal_count)
 		{
 			std::string parts[3];
@@ -70,9 +68,7 @@ namespace happyray
 			return key;
 		}
 
-		// Resolves `relative_path` (as referenced by a "mtllib"/"map_Kd" line) against the directory
-		// containing `base_path`: OBJ/MTL files reference sibling files relative to their own location,
-		// not the process's current working directory.
+		// OBJ/MTL references are relative to the referencing file, not the working directory.
 		std::string ResolveSiblingPath(const std::string &base_path, const std::string &relative_path)
 		{
 			const size_t slash = base_path.find_last_of("/\\");
@@ -83,9 +79,7 @@ namespace happyray
 			return base_path.substr(0, slash + 1) + relative_path;
 		}
 
-		// Parses a minimal subset of the Wavefront MTL format: "newmtl <name>" starts a material block,
-		// and "Kd r g b" sets its flat Lambertian diffuse color. Everything else (Ka, Ks, Ns, map_Kd,
-		// illum, ...) is intentionally ignored -- this project only needs flat diffuse colors for now.
+		// Reads only "newmtl" and "Kd".
 		std::unordered_map<std::string, Vec3f> ParseMtlFile(const std::string &path)
 		{
 			std::unordered_map<std::string, Vec3f> diffuse_colors;
@@ -114,7 +108,6 @@ namespace happyray
 					line >> kd.x >> kd.y >> kd.z;
 					diffuse_colors[current_material_name] = kd;
 				}
-				// Unrecognized/unsupported keywords are silently skipped, same as in LoadObj.
 			}
 			std::fclose(file);
 			return diffuse_colors;
@@ -142,9 +135,7 @@ namespace happyray
 		std::unordered_map<std::string, Vec3f>						   mtllib_diffuse_colors;
 		uint32_t													   current_material_id = 0;
 		bool														   have_material	   = false;
-		// Objects are the distinct (`o` name, `g` name) pairs; a new `o` resets the group. Repeated
-		// names (e.g. interleaved `g` groups) map back to the same object. Ids are assigned on an
-		// object's first face, so they stay consecutive like string2shape's WFObject reader's.
+		// Ids are assigned on an object's first face, so they stay consecutive (like string2shape).
 		std::string								  current_object_name;
 		std::string								  current_group_name;
 		std::unordered_map<std::string, uint32_t> object_ids_by_name;
@@ -277,7 +268,6 @@ namespace happyray
 					face_vertex_indices.push_back(new_index);
 				}
 
-				// Fan-triangulate polygons with more than 3 vertices.
 				for (size_t i = 1; i + 1 < face_vertex_indices.size(); ++i)
 				{
 					mesh.indices.push_back(face_vertex_indices[0]);
@@ -287,15 +277,11 @@ namespace happyray
 					mesh.object_ids.push_back(current_object_id);
 				}
 			}
-			// Unrecognized/unsupported keywords (s, #comments, blank lines, ...) are silently
-			// skipped.
 		}
 		std::fclose(file);
 
 		if (normals.empty() && !mesh.positions.empty())
 		{
-			// The file supplied no normals at all: derive smooth, area-weighted vertex normals
-			// from the (already deduplicated) triangle list.
 			std::vector<Vec3f> accumulated(mesh.positions.size(), Vec3f(0.0f, 0.0f, 0.0f));
 			for (size_t tri = 0; tri < mesh.indices.size(); tri += 3)
 			{
@@ -305,8 +291,7 @@ namespace happyray
 				const Vec3f	  &p0 = mesh.positions[i0];
 				const Vec3f	  &p1 = mesh.positions[i1];
 				const Vec3f	  &p2 = mesh.positions[i2];
-				// Unnormalized cross product: its magnitude is proportional to triangle area, which
-				// naturally area-weights the contribution to each shared vertex.
+				// Unnormalized, so contributions are area-weighted.
 				const Vec3f face_normal = Cross(p1 - p0, p2 - p0);
 				accumulated[i0] += face_normal;
 				accumulated[i1] += face_normal;

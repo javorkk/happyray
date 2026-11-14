@@ -10,13 +10,12 @@ namespace happyray
 	struct AOIntegrator
 	{
 		int samples_per_pixel_per_frame = 1;
-		// Callers with a scene should use DefaultMaxDistance(scene) from scene.h,
-		// which scales the occlusion reach to 0.1 times the longest scene bounding-box side.
+		// Scenes should use DefaultMaxDistance(scene) (scene.h).
 		float max_distance	   = 2.0f;
 		Vec3f background_color = Vec3f(0.05f, 0.05f, 0.08f);
 
-		// Averages cosine-weighted visibility and tints it by the surface's diffuse color.
-		// sample_offset and stable per-pixel jitter preserve progressive Halton sampling.
+		// Cosine-weighted visibility tinted by the diffuse color; `sample_offset` plus per-pixel
+		// jitter keep progressive Halton sampling stable.
 		template <typename P = DynamicPrimitive, typename A = DynamicAccel>
 		HAPPYRAY_HD Vec3f Integrate(const SceneView		  &scene,
 									const AccelStructures &accel,

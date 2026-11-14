@@ -1,9 +1,5 @@
-// One warmup construction, one timed construction, and one random-ray batch per grid. Ordering is diagnostic;
-// only correctness and allocation-tracking errors fail the test.
-// Pure Thrust (no raw CUDA runtime API, no CUDA-specific launch syntax), so this file compiles
-// either under Thrust's CUDA backend (nvcc, runs on the GPU) or its TBB backend (plain g++, runs
-// in parallel on the CPU) -- see CMakeLists.txt's HAPPYRAY_THRUST_BACKEND option, and
-// src/render/renderer.cpp's own header comment for the same pattern.
+// Builds and traces every grid once after a warm-up; timings are informational, only correctness
+// and allocation errors fail. Pure Thrust, so it builds for both backends.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
 #define THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_TBB
@@ -78,11 +74,7 @@ namespace
 		}
 	};
 
-	// Forces whichever backend's pending device work (if any -- none at all on the TBB backend,
-	// where device_vector already lives in ordinary host memory) to finish before timing continues:
-	// dereferencing a thrust::device_ptr requires the CUDA backend to synchronize and copy that one
-	// element back to host first, the same effect cudaDeviceSynchronize() would have, without any
-	// raw CUDA API call. Used (instead of CUDA events) to bound build/trace timing below.
+	// Reading one element back forces the CUDA backend to finish pending work.
 	template <typename T> void Synchronize(const T *device_data)
 	{
 		static_cast<void>(static_cast<T>(*thrust::device_pointer_cast(device_data)));
@@ -101,14 +93,8 @@ namespace
 		Synchronize(view.top_level.cell_ranges);
 	}
 
-	// Analytic per-grid-type memory-footprint estimate: count * sizeof(element), summed over every
-	// device buffer that grid type actually holds, using only its own plain public element-count
-	// accessors (PrimIndexCount(), LeafCellCount(), etc. -- see uniform_grid.h/two_level_grid.h/
-	// irregular_grid.h) and View()'s own resolution fields -- no CUDA-specific allocation
-	// introspection (this file used to track real cudaMalloc/cudaFree calls via CUPTI) needed, at
-	// the cost of only reporting each structure's final, persistent footprint, not the transient
-	// peak during construction (its own internal scratch buffers aren't visible from outside the
-	// class).
+	// Analytic footprint (count * sizeof(element)) of each grid's persistent buffers; excludes
+	// transient build scratch.
 	size_t GridMemoryBytes(const UniformGrid &grid)
 	{
 		const auto num_cells = static_cast<size_t>(grid.LeafCellCount());

@@ -1,6 +1,4 @@
-// In-memory scene representation produced by the OBJ loader (and, later, other importers like
-// USD). Positions and vertex attributes live in separate, equally sized buffers sharing
-// the same triangle indices.
+// In-memory scene produced by the OBJ and USD loaders.
 #pragma once
 
 #include <cstdint>
@@ -26,9 +24,7 @@ namespace happyray
 	struct Material
 	{
 		std::string name;
-		// Flat Lambertian diffuse color, parsed from the OBJ's mtllib ("Kd r g b"). Defaults to
-		// white (full albedo) when no material/Kd is available, so AO shading multiplied by this
-		// color is a no-op for un-textured/material-less geometry.
+		// OBJ "Kd"; white when absent, so it doesn't tint AO.
 		Vec3f diffuse_color = Vec3f(1.0f, 1.0f, 1.0f);
 	};
 
@@ -39,8 +35,7 @@ namespace happyray
 		std::vector<VertexAttributes> attributes;	// One entry per position, including at seams.
 		std::vector<uint32_t>		  indices;		// 3 per triangle, indexing positions and attributes.
 		std::vector<uint32_t>		  material_ids; // One entry per triangle, indexing into Scene::materials.
-		// One entry per triangle: the OBJ object (`o` statement) it belongs to, counted from 0 within
-		// this mesh. Empty means the whole mesh is a single object.
+		// Per-triangle object id, from 0 within this mesh; empty means a single object.
 		std::vector<uint32_t> object_ids;
 
 		uint32_t TriangleCount() const

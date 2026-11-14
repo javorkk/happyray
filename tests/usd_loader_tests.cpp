@@ -1,6 +1,4 @@
-// Unit tests for the OpenUSD loader (src/app/usd_loader.cpp). Authors tiny .usda files in a
-// temporary directory, so no external scene data is needed. Only built with
-// -DHAPPYRAY_ENABLE_USD=ON.
+// OpenUSD loader tests on tiny generated .usda files. Built only with -DHAPPYRAY_ENABLE_USD=ON.
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -44,9 +42,8 @@ namespace
 		return path.string();
 	}
 
-	// A quad (two triangles after fan triangulation) in the XY plane, translated by (10, 0, 0),
-	// whose first point moves along X over time codes 1-3. `up_axis` is "Y" or "Z". With
-	// `extra_point_at_time_3`, the last time sample has an additional point (an invalid change).
+	// A translated quad whose first point moves over time codes 1-3; `extra_point_at_time_3` adds
+	// an invalid extra point at the last sample.
 	std::string QuadStage(const std::string &up_axis, bool extra_point_at_time_3)
 	{
 		std::string points_at_3 = "(1, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)";

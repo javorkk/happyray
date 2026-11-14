@@ -1,10 +1,6 @@
-// Stationary-view search scheduling: tries densities in [0.25x, 4x] the active grid type's
-// original defaults, preferring whichever rebuilt candidate has the lower structural SAH cost
-// (see src/accel/sah_cost.h) -- computed directly from its own just-built cell layout, with no
-// rays cast and no camera/accumulation state involved at all. Unlike measuring real interactive
-// frame-render time (this class's own previous design), a SAH cost is available the instant a
-// candidate finishes building, so no multi-frame waiting/averaging is needed to evaluate one:
-// each eligible frame rebuilds and evaluates exactly one new candidate.
+// Stationary-view density search: tries densities in [0.25x, 4x] the defaults and keeps the
+// candidate with the lowest SAH cost (see sah_cost.h), which needs no rays, so one candidate is
+// evaluated per frame.
 #pragma once
 
 #include <array>
@@ -20,11 +16,7 @@ namespace happyray
 	class GridDensitySearch
 	{
 	  public:
-		// `current_sah_cost` is the SAH cost of whichever grid is already active for `type` at this
-		// moment (the compiled-in defaults the first time, or the previous search's own best
-		// afterward) -- seeded as the baseline every candidate must beat, exactly like this class's
-		// own previous design seeded its initial timing baseline from a real measured frame before
-		// evaluating any candidate.
+		// `current_sah_cost` is the active grid's cost, the baseline candidates must beat.
 		void Reset(AccelType type, float current_sah_cost)
 		{
 			switch (type)
@@ -50,9 +42,7 @@ namespace happyray
 			best_sah_cost_ = current_sah_cost;
 		}
 
-		// True once the view has settled (`still_frames` still-camera frames) and the search for
-		// this accel type hasn't already stopped -- a candidate can then be rebuilt and evaluated
-		// immediately, in the very same frame (see Evaluate below).
+		// True once the camera has been still for `still_frames` and the search isn't done.
 		bool CanRebuild(uint32_t still_frames) const
 		{
 			return still_frames >= 32 && !Stopped();
@@ -73,9 +63,7 @@ namespace happyray
 			return {original_.top_level * top, original_.second_level * leaf};
 		}
 
-		// Accepts or rejects the just-rebuilt candidate whose structural SAH cost is
-		// `candidate_sah_cost`, by comparing it to the lowest cost seen so far in this search.
-		// Returns true (and retains `candidate_sah_cost` as the new best) if it improved.
+		// Returns true (and keeps the candidate) if its cost beats the best so far.
 		bool Evaluate(float candidate_sah_cost)
 		{
 			if (!std::isfinite(candidate_sah_cost) || candidate_sah_cost <= 0)

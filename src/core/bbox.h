@@ -1,7 +1,4 @@
-// Axis-aligned bounding box, used both as a general geometric utility and as the building
-// block for every acceleration structure (uniform grid, two-level grid, irregular grid), and as
-// a solid box primitive (PrimitiveType::kBox).
-// BBoxExtractor computes bounds for any Primitive<N> (see primitive.h).
+// Axis-aligned bounding box: grid building block and the solid box primitive (PrimitiveType::kBox).
 #pragma once
 
 #include <cmath>
@@ -72,8 +69,7 @@ namespace happyray
 		}
 	};
 
-	// Slab-method ray/box intersection. On a hit, writes the entry/exit distances along the ray
-	// (clipped to the ray's own [t_min, t_max]) to `out_t_near` / `out_t_far`.
+	// Slab test; entry/exit distances are clipped to the ray's [t_min, t_max].
 	HAPPYRAY_HD inline bool IntersectRayBBox(const Ray &ray, const BBox &box, float *out_t_near, float *out_t_far)
 	{
 		float t_near = ray.t_min;
@@ -189,9 +185,7 @@ namespace happyray
 
 	namespace detail
 	{
-		// Reciprocal of a ray direction component, +/-infinity for zero (HAGrid's
-		// safe_rcp) -- lets the grid traversal routines replace per-step divisions
-		// with multiplications.
+		// +/-infinity for zero (HAGrid's safe_rcp), so traversal multiplies instead of divides.
 		HAPPYRAY_HD inline float SafeRcp(float x)
 		{
 			return x != 0.0f ? 1.0f / x : std::copysign(INFINITY, x);
@@ -202,9 +196,7 @@ namespace happyray
 			return Vec3f(SafeRcp(d.x), SafeRcp(d.y), SafeRcp(d.z));
 		}
 
-		// Slab test against [box_min, box_max] using a precomputed reciprocal
-		// direction, clipped to [t_min, t_max]. Zero direction components are handled
-		// explicitly (no 0 * inf NaNs).
+		// Zero direction components are handled explicitly (no 0 * inf NaNs).
 		HAPPYRAY_HD inline bool IntersectRayBoxRcp(const Vec3f &origin,
 												   const Vec3f &dir,
 												   const Vec3f &inv_dir,

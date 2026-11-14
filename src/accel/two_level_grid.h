@@ -1,11 +1,5 @@
-// `View().top_level.resolution`'s product, already public; these fill
-// The two-level grid stores sorted primitive ranges per top-level and nested
-// cell. Sparse top-level cells use a 1x1x1 nested grid.
-//
-// TwoLevelGrid is exposed through a plain-C++ interface so it can be referenced
-// from ordinary .cpp translation units without that caller needing to know
-// which Thrust backend is active, the same as UniformGrid (uniform_grid.h) and
-// Renderer (src/render/renderer.h).
+// Two-level grid: sorted primitive ranges per top-level cell and per nested cell. Sparse
+// top-level cells use a 1x1x1 nested grid.
 #pragma once
 
 #include <cstdint>
@@ -58,12 +52,11 @@ namespace happyray
 	struct TwoLevelGridView
 	{
 		GridBoundsView		top_level;
-		const TopLevelCell *top_level_cells			  = nullptr; // One entry per top-level cell.
+		const TopLevelCell *top_level_cells			  = nullptr;
 		const CellRange	   *second_level_cell_ranges  = nullptr;
 		const uint32_t	   *second_level_prim_indices = nullptr; // Sorted by second-level cell.
 	};
 
-	// Builds the range view for top-level cell `cell_index`'s second-level grid.
 	HAPPYRAY_HD inline GridRangeView SecondLevelView(const TwoLevelGridView &grid, uint32_t cell_index)
 	{
 		const GridBoundsView &top		 = grid.top_level;
@@ -99,13 +92,9 @@ namespace happyray
 			}
 		};
 
-		// Two-level traversal, ported from happyray's TLGridTraverser: the outer DDA
-		// directly initializes an inner DDA for each non-empty top-level cell, with no
-		// recursive traversal calls or second-level box test. Top-level cells with no
-		// primitives are skipped using their resolution sign bit.
-		// `visit_top(top_index)` is called for every top-level cell visited (a no-op
-		// for queries; the SAH calibration counts steps with it);
-		// `visit_leaf(range, &ray_t_max)` for every second-level cell.
+		// Two-level traversal (happyray's TLGridTraverser): the outer DDA initializes an inner DDA
+		// per non-empty top-level cell; empty cells are flagged by their resolution's sign bit.
+		// `visit_top` is called per top-level cell (the SAH calibration counts steps with it).
 		template <typename VisitLeafFn, typename VisitTopFn = IgnoreTopCell>
 		HAPPYRAY_HD inline bool
 		TraverseGrid(const TwoLevelGridView &grid, const Ray &ray, VisitLeafFn &&visit_leaf, VisitTopFn visit_top = {})
@@ -267,11 +256,8 @@ namespace happyray
 		// Densities are target cells per primitive (see ComputeGridResolution).
 		static constexpr float kDefaultTopLevelDensity	  = 0.12f;
 		static constexpr float kDefaultSecondLevelDensity = 1.2f;
-		// `scene` must point at memory reachable by the selected Thrust backend.
-		// `top_level_density` sizes the top level from all primitives; `second_level_density`
-		// sizes each top-level cell's grid from the primitives overlapping that cell. Both are
-		// target cells per primitive. Cells at or below `dense_cell_threshold` use a 1x1x1
-		// second-level grid.
+		// `second_level_density` applies to the primitives overlapping each top-level cell. Cells
+		// with at most `dense_cell_threshold` primitives get a 1x1x1 nested grid.
 		explicit TwoLevelGrid(const SceneView &scene,
 							  float			   top_level_density	= kDefaultTopLevelDensity,
 							  float			   second_level_density = kDefaultSecondLevelDensity,
@@ -283,22 +269,11 @@ namespace happyray
 
 		TwoLevelGridView View() const;
 
-		// Per-array element counts of every device buffer this grid actually holds,
-		// used by
-		// tests/accel_performance_tests.cpp to compute an analytic memory-footprint
-		// estimate (count * sizeof(element)) without needing any CUDA-specific
-		// allocation introspection. `top_level`'s own cell count is
-		// `View().top_level.resolution`'s product, already public; these fill
-		// in the remaining counts that aren't otherwise derivable from the view.
+		// Element counts for memory-footprint estimates.
 		uint32_t LeafCellCount() const;
 		uint32_t SecondLevelPrimIndexCount() const;
 
-		// Structural SAH cost estimate for this grid as currently built (see
-		// sah_cost.h), normalized by `scene_bounds`'s own half surface area -- not
-		// from casting rays, but the same surface-area-weighted "expected cost"
-		// heuristic the grid density search (see src/app/grid_density_search.h) uses
-		// to prefer one candidate density over another. Each nested grid's reference
-		// count is aggregated while the sorted ranges are built.
+		// SAH cost (see sah_cost.h), normalized by the scene's half surface area.
 		float ComputeSahCost(const BBox &scene_bounds, const SahCostConstants &costs) const;
 
 	  private:

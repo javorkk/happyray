@@ -1,22 +1,6 @@
-// Minimal custom Wavefront OBJ parser (no third-party dependency, by design).
-//
-// Supported: v / vn / vt, triangle and polygon (fan-triangulated) `f` lines with v, v/vt,
-// v//vn and v/vt/vn vertex references (including negative/relative indices), `usemtl` to tag
-// triangles with a material name, and `mtllib`-referenced .mtl files for flat Lambertian
-// diffuse colors (`Kd r g b`, resolved relative to the .obj file's own directory). All faces
-// are merged into a single Mesh; `o` and `g` lines tag the following triangles with per-triangle
-// object ids (Mesh::object_ids), used by collision detection: each distinct (`o` name, `g` name)
-// pair with faces is one object (a new `o` resets the group, and a repeated name continues its
-// earlier object), numbered consecutively in order of first appearance.
-//
-// Known limitations (left for later phases, as more material/multi-object support becomes
-// needed):
-//   - Only `Kd` (diffuse color) is read from .mtl files; everything else (Ka, Ks, Ns, map_Kd,
-//     illum, ...) is ignored.
-//   - `o` / `g` lines do not split the result into separate Mesh objects.
-//   - Vertex normals are computed (smooth, area-weighted) only if the file supplies none at
-//     all; a file that supplies normals for some vertices but not others is not specially
-//     handled beyond what the `vn` indices request.
+// Minimal Wavefront OBJ parser. Reads v/vn/vt, polygon faces (fan-triangulated, negative indices
+// allowed), usemtl, and the Kd color from mtllib files. All faces go into one Mesh; each distinct
+// (`o`, `g`) name pair becomes an object id for collision detection.
 #pragma once
 
 #include <string>
@@ -26,11 +10,8 @@
 namespace happyray
 {
 
-	// Parses the OBJ file at `path` and appends a single Mesh (plus any `usemtl`/`mtllib`-derived
-	// materials) to `scene`. Returns false (and logs to stderr) on failure to open/read the file.
-	// After normal generation, bisects longest triangle edges until none exceeds 0.1 times
-	// the scene bounding-box diagonal, interpolating vertex attributes and preserving materials.
-	// Subdivision failures throw rather than returning partially processed geometry as success.
+	// Generates smooth normals if the file has none, then bisects edges longer than 0.1x the scene
+	// diagonal. Returns false on I/O failure.
 	bool LoadObj(const std::string &path, Scene *scene);
 
 } // namespace happyray

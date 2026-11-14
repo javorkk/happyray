@@ -1,18 +1,5 @@
-// The uniform grid: a flat, non-owning view with one explicit start/end range
-// for traversal (UniformGridView, FlattenCellIndex, detail::TraverseGrid --
-// all HAPPYRAY_HD, so this exact traversal
-// code runs on whichever hardware the active Renderer, src/render/renderer.h,
-// does), plus the owning builder (UniformGrid) that constructs one and exposes
-// it as a UniformGridView.
-//
-// UniformGrid is exposed through a plain-C++ interface so it can be referenced
-// from ordinary .cpp translation units without that caller needing to know
-// which Thrust backend is active. There is exactly one implementation
-// (uniform_grid.cpp), parallelized via Thrust functors/algorithms
-// (thrust::transform/for_each/exclusive_scan/sort_by_key/inclusive_scan) -- the
-// sort-based (happyray/HAGrid-style) construction algorithm doesn't change
-// between backends, only which hardware it runs on, which is a build-time
-// choice (see CMakeLists.txt's HAPPYRAY_THRUST_BACKEND option), same as Renderer.
+// Uniform grid: a non-owning view with one start/end range per cell, host/device traversal, and
+// the Thrust-based builder.
 #pragma once
 
 #include <cmath>
@@ -51,9 +38,7 @@ namespace happyray
 	};
 	static_assert(sizeof(CellRange) == 2 * sizeof(uint32_t));
 
-	// Sizes a grid from the expanded geometry bounds and `density`, the target number of cells per
-	// primitive: the grid gets about density * primitive_count cubic-ish cells, so a higher
-	// density means more, smaller cells.
+	// Target is about density * primitive_count roughly cubic cells.
 	HAPPYRAY_HD inline Vec3i ComputeGridResolution(const BBox &bounds, uint32_t primitive_count, float density)
 	{
 		if (primitive_count == 0)
@@ -62,8 +47,7 @@ namespace happyray
 		}
 
 		const Vec3f raw_extent = bounds.Extent();
-		// Floor degenerate axes so the volume and resolution formula remain
-		// well-defined.
+		// Floor degenerate axes so the volume stays nonzero.
 		const float diagonal   = Length(raw_extent);
 		const float min_extent = diagonal > 0.0f ? diagonal * 1e-3f : 1.0f;
 		const Vec3f extent(raw_extent.x > min_extent ? raw_extent.x : min_extent,
@@ -113,7 +97,6 @@ namespace happyray
 		Vec3f cell_size;
 		Vec3f inv_cell_size;
 		Vec3i resolution = Vec3i(1, 1, 1);
-		// One begin/end pair per cell; empty cells have equal indices.
 		const CellRange *cell_ranges  = nullptr;
 		const uint32_t	*prim_indices = nullptr; // Sorted by cell; indexes into SceneView.
 	};
@@ -133,7 +116,6 @@ namespace happyray
 	namespace detail
 	{
 
-		// Number of grid cells overlapped by the primitive AABB's clamped cell range.
 		HAPPYRAY_HD inline uint32_t CountCandidateCells(const BBox	&box,
 														const Vec3f &bounds_min,
 														const Vec3f &inv_cell_size,
@@ -197,10 +179,8 @@ namespace happyray
 			}
 		};
 
-		// Shared by every grid builder: walks the primitive's AABB cell range and calls `emit(cell)` for
-		// every cell in it (kAabb) or only for cells the primitive's actual shape overlaps (otherwise).
-		// Exact overlap matters for long, thin, diagonal primitives, whose AABB range can be orders of
-		// magnitude larger than the cells they touch.
+		// Calls `emit(cell)` for cells in the primitive's AABB range (kAabb) or only those its shape
+		// overlaps; exact overlap matters for long, thin, diagonal primitives.
 		template <typename P, CellOverlapMode Mode, typename EmitFn>
 		HAPPYRAY_HD inline uint32_t ForEachOverlappedCell(const P	  &primitive,
 														  const BBox  &box,
@@ -350,10 +330,7 @@ namespace happyray
 	  public:
 		// Densities are target cells per primitive (see ComputeGridResolution).
 		static constexpr float kDefaultDensity = 3.0f;
-		// `scene` must point at memory reachable by whichever Thrust backend this
-		// binary was built with (device memory for the CUDA backend, ordinary host
-		// memory for the TBB backend). `density` is the target number of cells per
-		// primitive.
+		// `scene` must be reachable by the active Thrust backend (device memory for CUDA).
 		explicit UniformGrid(const SceneView &scene,
 							 float			  density = kDefaultDensity,
 							 CellOverlapMode  mode	  = DefaultCellOverlapMode());
@@ -363,19 +340,12 @@ namespace happyray
 
 		UniformGridView View() const;
 
-		// Total number of leaf cells, including empty cells.
 		uint32_t LeafCellCount() const;
 
-		// Total number of (cell, primitive) references stored by this grid.
 		uint32_t PrimIndexCount() const;
 
-		// Structural SAH cost estimate for this grid as currently built (see
-		// sah_cost.h), normalized by `scene_bounds`'s own half surface area -- not
-		// from casting rays, but the same surface-area-weighted "expected cost"
-		// heuristic the grid density search (see src/app/grid_density_search.h) uses
-		// to prefer one candidate density over another. Every cell is the same size
-		// here, so the whole sum collapses to one closed-form expression: no per-cell
-		// reduction needed at all.
+		// SAH cost (see sah_cost.h), normalized by the scene's half surface area; closed-form since
+		// all cells are the same size.
 		float ComputeSahCost(const BBox &scene_bounds, const SahCostConstants &costs) const;
 
 	  private:

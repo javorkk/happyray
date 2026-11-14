@@ -1,7 +1,5 @@
-// Shared host/device scene intersection and occlusion queries, independent of the integrator:
-// leaf-cell primitive tests and traversal visitors used by every grid, the per-grid and
-// brute-force queries, and the AccelStructures dispatch. Brute force is the correctness oracle
-// for every acceleration structure.
+// Host/device intersection and occlusion queries shared by all grids, plus brute force (the
+// correctness oracle) and the AccelStructures dispatch.
 #pragma once
 
 #include <type_traits>
@@ -19,8 +17,6 @@
 namespace happyray
 {
 
-	// Tests primitive `prim` against `*probe`; on a hit, shrinks probe->t_max to it and records it in
-	// `*hit`. Returns true on a hit.
 	template <typename P>
 	HAPPYRAY_HD inline bool
 	IntersectPrimitiveClosest(const SceneView &scene, uint32_t prim, Ray *probe, ClosestHit *hit)
@@ -36,7 +32,6 @@ namespace happyray
 		return true;
 	}
 
-	// Returns true if primitive `prim` occludes `ray`.
 	template <typename P>
 	HAPPYRAY_HD inline bool IsPrimitiveOccluded(const SceneView &scene, uint32_t prim, const Ray &ray)
 	{
@@ -44,9 +39,7 @@ namespace happyray
 		return PrimitiveTraits<P>::Intersect(ray, PrimitiveTraits<P>::Fetch(scene, prim), &t, &u, &v);
 	}
 
-	// Tests every primitive in the contiguous range [begin, end) of `prim_indices` against `ray`,
-	// clipped to `*ray_t_max`, which shrinks (and `*hit` updates) on every closer hit. Returns true if
-	// any primitive in the range was hit. Shared by all three grids' closest-hit queries.
+	// Closest hit within [begin, end) of `prim_indices`, shrinking `*ray_t_max` on every hit.
 	template <typename P>
 	HAPPYRAY_HD inline bool IntersectPrimitivesClosest(const SceneView &scene,
 													   const uint32_t  *prim_indices,
@@ -69,8 +62,6 @@ namespace happyray
 		return hit_anything;
 	}
 
-	// Fills `out_hit` (position, shading normal, material) from the closest hit found during
-	// traversal. Returns false if nothing was hit.
 	template <typename P>
 	HAPPYRAY_HD inline bool
 	ResolveClosestHit(const SceneView &scene, const Ray &ray, const ClosestHit &hit, HitRecord *out_hit)
@@ -86,7 +77,6 @@ namespace happyray
 		return true;
 	}
 
-	// Returns true as soon as any primitive in the contiguous range [begin, end) occludes `ray`.
 	template <typename P>
 	HAPPYRAY_HD inline bool TestPrimitivesInRangeOccluded(const SceneView &scene,
 														  const uint32_t  *prim_indices,
@@ -185,8 +175,6 @@ namespace happyray
 		}
 	}
 
-	// Finds the closest hit across every primitive in `scene`. Returns false if the ray hits
-	// nothing.
 	template <typename P = DynamicPrimitive>
 	HAPPYRAY_HD inline bool IntersectSceneBruteForce(const SceneView &scene, const Ray &ray, HitRecord *out_hit)
 	{
@@ -209,8 +197,6 @@ namespace happyray
 		}
 	}
 
-	// Returns true if any primitive occludes `ray` (no need for the closest hit -- used for AO
-	// occlusion tests, where only a boolean "something is in the way" result is needed).
 	template <typename P = DynamicPrimitive>
 	HAPPYRAY_HD inline bool IsOccludedBruteForce(const SceneView &scene, const Ray &ray)
 	{
@@ -234,7 +220,6 @@ namespace happyray
 		}
 	}
 
-	// Selects which acceleration structure (if any) IntersectScene/IsOccluded trace against.
 	enum class AccelType
 	{
 		kBruteForce,
@@ -246,15 +231,13 @@ namespace happyray
 	struct AccelStructures
 	{
 		AccelType		  type = AccelType::kBruteForce;
-		UniformGridView	  uniform_grid;	  // Valid/meaningful only when type == kUniformGrid.
-		TwoLevelGridView  two_level_grid; // Valid/meaningful only when type == kTwoLevelGrid.
-		IrregularGridView irregular_grid; // Valid/meaningful only when type == kIrregularGrid.
+		UniformGridView	  uniform_grid;
+		TwoLevelGridView  two_level_grid;
+		IrregularGridView irregular_grid;
 	};
 
-	// Compile-time acceleration structure selector; DynamicAccel switches on AccelStructures::type
-	// at runtime instead. Fixing it at compile time matters on the GPU: a kernel that contains
-	// every traversal pays the register footprint of the largest one plus spills, which limits
-	// occupancy and with it how much memory latency the SM can hide.
+	// Compile-time structure selector. A kernel containing every traversal pays the largest one's
+	// register footprint, hurting occupancy and latency hiding.
 	template <AccelType A> struct AccelTag
 	{
 		static constexpr AccelType value = A;

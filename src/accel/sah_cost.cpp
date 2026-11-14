@@ -1,14 +1,5 @@
-// mock bounds/lattice. `min` is in the grid-wide shared lattice (see
-// Implements MeasureSahCalibration() (see sah_cost.h): the "heuristic test"
-// that estimates each acceleration structure's own traversal-step cost and one
-// shared ray/triangle intersection-test cost, in nanoseconds, by timing the
-// real routines against small synthetic test cases -- mirrors (and is shared
-// by) tests/accel_performance_tests.cpp's own calibration. Pure Thrust (no raw
-// CUDA runtime API, no CUDA-specific launch syntax), so this file compiles
-// either under Thrust's CUDA backend (nvcc, runs on the GPU) or its TBB backend
-// (plain g++, runs in parallel on the CPU) -- see CMakeLists.txt's
-// HAPPYRAY_THRUST_BACKEND option, and src/render/renderer.cpp's own header comment
-// for the same pattern.
+// MeasureSahCalibration(): times the real traversal and intersection routines on synthetic
+// scenes. Pure Thrust, so it builds for both the CUDA and TBB backends.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
 #define THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_TBB
@@ -42,41 +33,19 @@ namespace happyray
 	namespace
 	{
 
-		// 4x4x4 top-level cells, each holding a 16x16x16 second-level/local grid (so
-		// the two-level and irregular mock grids' own top-level 3D-DDA genuinely steps
-		// across multiple top-level cells, not just a single trivial one) -- their
-		// product is the uniform grid mock's own flat resolution too, so every mock
-		// grid spans the same overall bounds at the same overall finest granularity.
+		// 4^3 top-level cells x 16^3 local cells, so nested traversal crosses top-level cells; the
+		// uniform mock uses the product as its flat resolution.
 		constexpr int kMockTopLevelResolution	 = 4;  // Top-level cells per axis (two-level/irregular).
 		constexpr int kMockSecondLevelResolution = 16; // Second-level/local cells per axis, per top cell.
 		constexpr int kMockResolution			 = kMockTopLevelResolution * kMockSecondLevelResolution;
-		// The irregular mock grid keeps the same 4^3 x 16^3 layout, but pretends it is
-		// the result of merging/expanding a 2x denser (per axis) initial grid: each
-		// leaf cell replaces 2x2x2 = 8 of those initial cells, but a single ray is
-		// unlikely to cross all 8 of them, so each visited leaf cell is counted as 4
-		// traversal steps.
+		// The irregular mock models leaves that each replace 2x2x2 cells of a denser initial grid;
+		// a ray crosses about 4 of those, so each visited leaf counts as 4 steps.
 		constexpr uint32_t kMockIrregularCellsPerLeaf = 4;
-		// One ray batch, generated once and shared by every traversal and intersection
-		// measurement below (see GenerateUnitCubeRays) -- not regenerated inside each
-		// timed functor's operator(), so neither benchmark pays for ray construction,
-		// and both read the exact same, already-resident rays from device memory the
-		// way real traversal code reads its own ray batch, hopefully reflecting
-		// realistic memory access patterns.
+		// Rays are generated once and read from memory, so timings exclude ray construction.
 		constexpr uint32_t kCalibrationRayCount = 1u << 17;
-		// Triangle count for the intersection benchmark's own mesh (see
-		// BuildIntersectionMesh below).
 		constexpr int kIntersectionTriangleCount = 100;
 
-		// Generates `count` rays, each spanning the unit box [0,1]^3 from a random
-		// point on one face straight through to a random point on the *opposite* face
-		// (a uniformly random choice of which axis is the "entry/exit" one) -- so every
-		// ray genuinely crosses the whole box on at least one axis (and, depending on
-		// the other two randomly chosen endpoints, anywhere from a nearly axis-aligned
-		// sweep to a long corner-to-corner diagonal), rather than only skimming a small
-		// corner of it. Built once, on the host (not HAPPYRAY_HD/device code -- this runs
-		// long before any timed region, so there's no need to run it in parallel on the
-		// GPU), then uploaded by the caller; see kCalibrationRayCount's own comment
-		// above for why.
+		// Rays from a random point on one face of [0,1]^3 to a random point on the opposite face.
 		std::vector<Ray> GenerateUnitCubeRays(uint64_t seed, uint32_t count)
 		{
 			std::vector<Ray> rays(count);
@@ -91,19 +60,14 @@ namespace happyray
 				const Vec3f near_point(near_t[0], near_t[1], near_t[2]);
 				const Vec3f far_point(far_t[0], far_t[1], far_t[2]);
 				Ray			ray(near_point, far_point - near_point);
-				ray.t_min = -1.0e-3f;		// The origin sits exactly on the entry face; a hair
-											// of negative t_min keeps it unambiguously "inside"
-											// despite float rounding.
-				ray.t_max = 1.0f + 1.0e-3f; // direction already spans exactly the entry->exit segment.
+				ray.t_min = -1.0e-3f; // Origin lies exactly on the entry face.
+				ray.t_max = 1.0f + 1.0e-3f;
 				rays[i]	  = ray;
 			}
 			return rays;
 		}
 
-		// Builds a UniformGridView over `bounds` with exactly `resolution` cells per
-		// axis and zero triangles anywhere -- deliberately *not* built via
-		// UniformGrid's own density-based constructor, since that always collapses an
-		// empty scene straight to a trivial 1x1x1 grid.
+		// Built by hand because UniformGrid collapses an empty scene to 1x1x1.
 		struct MockUniformGrid
 		{
 			thrust::device_vector<CellRange> cell_ranges;
@@ -124,11 +88,6 @@ namespace happyray
 			}
 		};
 
-		// Builds a TopLevelCell for top-level cell `t` of a top_resolution^3
-		// top-level grid, each with its own second_resolution^3 second-level grid --
-		// the per-top-level-cell bounds/CSR- offset variant of a single whole-bounds
-		// top-level cell, used by MockTwoLevelGrid below so its top-level 3D-DDA
-		// genuinely steps across multiple top-level cells.
 		struct MakeMockSecondLevelInfoFunctor
 		{
 			int second_resolution;
@@ -143,10 +102,6 @@ namespace happyray
 			}
 		};
 
-		// Same idea as MockUniformGrid, but with a `top_resolution`-cubed top-level
-		// grid, each cell recursing into its own `second_resolution`-cubed second-level
-		// grid -- exactly TwoLevelGrid's own shape, just with manually-populated
-		// TopLevelCell entries instead of ones chosen by density.
 		struct MockTwoLevelGrid
 		{
 			thrust::device_vector<TopLevelCell> top_level_cells;
@@ -184,13 +139,7 @@ namespace happyray
 			}
 		};
 
-		// Builds the pre-merge (dense, identity-entries, zero-reference) IrregularCell
-		// for finest voxel `v` of top-level cell `t`'s own local grid -- same shape
-		// MakeInitialCellFunctor (irregular_grid.cpp) produces, just in this file's own
-		// mock bounds/lattice. `min` is in the grid-wide shared lattice (see
-		// irregular_grid.h's file header comment), i.e. offset by `t`'s own position in
-		// the top-level grid -- not just its local voxel coordinates -- exactly like
-		// the real per-top-level-cell IrregularCellInfo::global_offset this mirrors.
+		// Pre-merge cell for local voxel `v` of top-level cell `t`, in shared-lattice coordinates.
 		struct MakeMockIrregularCellFunctor
 		{
 			int top_resolution_x, top_resolution_y;
@@ -222,12 +171,7 @@ namespace happyray
 			}
 		};
 
-		// Builds an IrregularCellInfo for top-level cell `t` of a top_resolution^3
-		// top-level grid, each with its own local_resolution^3 local grid
-		// (global_resolution == local_resolution and shift_*==0 for all of them, since
-		// every top-level cell here has the same local resolution -- no
-		// coarsest-common-refinement rounding needed, unlike the real density-driven
-		// construction).
+		// All top-level cells share one local resolution, so shift == 0.
 		struct MakeMockIrregularCellInfoFunctor
 		{
 			Vec3f top_bounds_min;
@@ -261,12 +205,6 @@ namespace happyray
 			}
 		};
 
-		// Same idea again, but shaped like IrregularGrid's own (top_resolution-cubed
-		// top-level grid, each with its own dense local grid). The mock cells
-		// themselves are not merged; instead IrregularStepFunctor counts each visited
-		// cell as kMockIrregularCellsPerLeaf steps, modelling leaf cells that each
-		// replace 2x2x2 cells of a denser initial grid (of which a ray crosses about
-		// 4).
 		struct MakeMockTopCellFunctor
 		{
 			HAPPYRAY_HD IrregularTopCell operator()(const IrregularCellInfo &info) const
@@ -342,14 +280,7 @@ namespace happyray
 			}
 		};
 
-		// Counts traversal steps only (every visited cell, top- and/or second-level,
-		// increments the count -- by kMockIrregularCellsPerLeaf for the irregular grid
-		// -- and the walk never stops early) -- one functor per structure, each calling
-		// that structure's own real traversal code exactly as
-		// IntersectSceneGrid
-		// do, just swapping the triangle-testing callback for a counter. `rays` is the
-		// one pregenerated, shared ray batch (see GenerateUnitCubeRays/
-		// kCalibrationRayCount above) -- read by index, not recomputed here.
+		// Run each structure's real traversal with a step-counting visitor that never stops early.
 		struct UniformStepFunctor
 		{
 			UniformGridView grid;
@@ -409,29 +340,9 @@ namespace happyray
 			}
 		};
 
-		// Runs `functor` over `count` indices (one per calibration ray) via a sum
-		// reduction -- so the whole measurement needs only O(1) device memory
-		// regardless of `count` -- timed with std::chrono wall-clock timing.
-		// thrust::transform_reduce's own return value (the reduction's sum) must be
-		// copied back to host before it can return at all, so -- unlike
-		// thrust::transform/thrust::for_each, which can launch and return immediately
-		// on the CUDA backend -- it's already an implicit synchronization point, with
-		// no separate sync call needed. By default, divides by the *sum* the reduction
-		// returns (total steps or total tests actually performed across every ray), not
-		// by `count` itself, since individual rays cross a different number of cells
-		// depending on their random direction -- what's wanted is the average
-		// per-step/per-test cost, not the average per-ray one. `known_unit_count`, if
-		// positive, overrides that divisor with an explicit, already-known unit count
-		// instead (used by MeasureIntersectionCostNs below, whose functor returns each
-		// test's own computed `t` -- precisely so the real IntersectRayTriangle result
-		// can't be optimized away as dead code -- rather than a per-test constant
-		// suitable for summing into a unit count itself); the reduction still runs and
-		// is still checked for validity either way, so the real computation it forces
-		// is never skipped. Runs a throwaway warm-up trial first (the very first launch
-		// of any given kernel can be dominated by one-time JIT/module-load cost) plus a
-		// few more timed trials, keeping the minimum -- standard microbenchmark
-		// practice, since scheduling noise can only inflate a trial's time, never
-		// deflate it below the routine's true cost. Returns nanoseconds per unit.
+		// Returns ns per unit (min over a few trials after a warm-up). Divides by the reduction's sum
+		// (total steps) unless `known_unit_count` is given; the reduction also keeps the work from
+		// being optimized away.
 		template <typename Functor> float TimePerUnitNs(Functor functor, uint32_t count, float known_unit_count = 0.0f)
 		{
 			constexpr int kWarmupTrials = 1;
@@ -457,22 +368,12 @@ namespace happyray
 			return best_ms * 1.0e6f / total_units;
 		}
 
-		// One triangle of the diagonal-blocking mesh (see BuildIntersectionMesh below),
-		// used only while building it on the host.
 		struct HostTriangle
 		{
 			Vec3f a, b, c;
 		};
 
-		// Appends the 6 "diagonal" quads connecting opposite edges of `bounds`, each
-		// split into 2 triangles (12 total) -- one quad per pair of opposite parallel
-		// edges, in each of the 3 axis directions, both diagonal orientations --
-		// forming a symmetric cage of cutting planes through the box's interior (planes
-		// x=y, x+y=1, y=z, y+z=1, x=z, x+z=1 for a unit box). A single such plane only
-		// blocks rays that happen to cross *that* one; six of them, in every
-		// orientation, means a large fraction of rays genuinely crossing the box -- not
-		// just ones aimed at one specific plane -- hit at least one, without needing to
-		// bias ray generation toward them at all.
+		// Six diagonal planes through the box (x=y, x+y=1, y=z, ...), so most rays hit something.
 		void AppendDiagonalQuads(const BBox &bounds, std::vector<HostTriangle> *out)
 		{
 			const Vec3f &lo		= bounds.min_bound;
@@ -484,21 +385,15 @@ namespace happyray
 				out->push_back({p0, p1, p2});
 				out->push_back({p0, p2, p3});
 			};
-			// z-parallel edges: main diagonal (plane x=y), anti-diagonal (plane x+y=1).
 			add_quad(corner(0, 0, 0), corner(1, 1, 0), corner(1, 1, 1), corner(0, 0, 1));
 			add_quad(corner(1, 0, 0), corner(0, 1, 0), corner(0, 1, 1), corner(1, 0, 1));
-			// x-parallel edges: main diagonal (plane y=z), anti-diagonal (plane y+z=1).
 			add_quad(corner(0, 0, 0), corner(1, 0, 0), corner(1, 1, 1), corner(0, 1, 1));
 			add_quad(corner(0, 1, 0), corner(1, 1, 0), corner(1, 0, 1), corner(0, 0, 1));
-			// y-parallel edges: main diagonal (plane x=z), anti-diagonal (plane x+z=1).
 			add_quad(corner(0, 0, 0), corner(0, 1, 0), corner(1, 1, 1), corner(1, 0, 1));
 			add_quad(corner(1, 0, 0), corner(1, 1, 0), corner(0, 1, 1), corner(0, 0, 1));
 		}
 
-		// Recursively subdivides (longest-edge bisection of the largest-area triangle,
-		// repeated) until `triangles` holds exactly `target_count` entries -- a simple
-		// way to grow a coarse mesh to an arbitrary finer triangle count while keeping
-		// it reasonably uniform.
+		// Repeatedly bisects the longest edge of the largest triangle until `target_count` is reached.
 		void SubdivideTriangles(std::vector<HostTriangle> *triangles, int target_count)
 		{
 			while (static_cast<int>(triangles->size()) < target_count)
@@ -543,18 +438,12 @@ namespace happyray
 			}
 		}
 
-		// Flat positions/indices arrays (3 unique vertices per triangle, no sharing
-		// needed for a benchmark mesh this small), matching the same layout real scene
-		// triangle data uses (SceneView::positions/indices).
 		struct HostMesh
 		{
 			std::vector<Vec3f>	  positions;
 			std::vector<uint32_t> indices;
 		};
 
-		// Builds a kIntersectionTriangleCount-triangle mesh blocking `bounds`'s own
-		// diagonal cross-sections (see AppendDiagonalQuads above), refined to that
-		// exact count via SubdivideTriangles.
 		HostMesh BuildIntersectionMesh(const BBox &bounds)
 		{
 			std::vector<HostTriangle> triangles;
@@ -577,24 +466,8 @@ namespace happyray
 			return mesh;
 		}
 
-		// Performs kIntersectionTriangleCount real IntersectRayTriangle calls per ray
-		// -- one per triangle in the diagonal-blocking mesh (see BuildIntersectionMesh
-		// above) -- the exact same routine every structure's own
-		// IntersectTrianglesClosest ends up calling per reference, so (unlike
-		// traversal-step cost, which does genuinely differ per structure) this one
-		// calibration applies equally to all three. Every triangle is tested against
-		// the ray's own original [t_min, t_max] range (not narrowed as closer hits are
-		// found, unlike IntersectTrianglesClosest's own progressive-narrowing
-		// optimization), so every one of the kIntersectionTriangleCount tests pays the
-		// same, representative cost regardless of where in the loop a hit happens to be
-		// found. `rays`/`positions`/`indices` are the shared, pregenerated ray batch
-		// and mesh (see GenerateUnitCubeRays/BuildIntersectionMesh above), read by
-		// index, not recomputed here. Returns the closest hit's `t` (or the ray's own
-		// `t_max` if none hit) rather than a constant, so the real IntersectRayTriangle
-		// results can't be proven unused and optimized away; TimePerUnitNs is still
-		// told the true, already-known unit count explicitly (ray count times triangle
-		// count) rather than normalizing by summing these `t` values, which aren't a
-		// meaningful substitute for a test count.
+		// Tests every triangle against the ray's full [t_min, t_max] so each test costs the same.
+		// Returns the closest t so the work isn't optimized away.
 		struct IntersectionTestFunctor
 		{
 			const Ray	   *rays;
@@ -618,12 +491,7 @@ namespace happyray
 			}
 		};
 
-		// Measures the one, shared, structure-independent intersection-test cost
-		// directly (see IntersectionTestFunctor above), rather than inferring it as the
-		// marginal difference between two separately-measured, similarly-scaled grid
-		// traversals -- the latter approach turned out to be noise-prone whenever a
-		// structure's true marginal intersection cost was itself small relative to its
-		// own (possibly much larger) traversal cost.
+		// Measured directly; deriving it from the difference of two traversals proved too noisy.
 		float MeasureIntersectionCostNs(const thrust::device_vector<Ray> &rays)
 		{
 			const BBox							  bounds(Vec3f(0, 0, 0), Vec3f(1, 1, 1));
@@ -642,12 +510,7 @@ namespace happyray
 			return intersection_ns;
 		}
 
-		// Measures each structure's own traversal-step cost against a mock,
-		// empty-space, fixed-resolution grid (see MockUniformGrid et al. above) over
-		// the same unit box the shared ray batch spans -- deliberately *not* shared
-		// across the three functions below, so a structure's own extra indirection (or
-		// lack of it) shows up as a genuinely different cost rather than being averaged
-		// away.
+		// Each structure gets its own mock grid so its extra indirection shows up in the cost.
 		float MeasureUniformTraversalNs(const thrust::device_vector<Ray> &rays)
 		{
 			const BBox			  bounds(Vec3f(0, 0, 0), Vec3f(1, 1, 1));

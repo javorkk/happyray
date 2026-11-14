@@ -119,8 +119,6 @@ namespace happyray
 			return scale;
 		}
 
-		// Appends a mesh's world-space triangles and smooth vertex normals at `time` to `scene`.
-		// Only `scene->materials`' index `material_id` is referenced.
 		void AppendMesh(const MeshSource  &source,
 						UsdGeomXformCache &cache,
 						UsdTimeCode		   time,
@@ -185,8 +183,7 @@ namespace happyray
 				}
 			}
 
-			// Unnormalized face normals are proportional to triangle area, which area-weights
-			// each triangle's contribution to its vertices.
+			// Unnormalized face normals area-weight each triangle's contribution.
 			std::vector<Vec3f> accumulated(out.positions.size(), Vec3f(0.0f, 0.0f, 0.0f));
 			for (size_t i = 0; i < out.indices.size(); i += 3)
 			{
@@ -209,8 +206,7 @@ namespace happyray
 			scene->meshes.push_back(std::move(out));
 		}
 
-		// Builds the whole scene at `time`. When `expected_point_counts` is non-null, each mesh's
-		// point count must match it.
+		// Each mesh's point count must match `expected_point_counts` if given.
 		void BuildScene(const std::vector<MeshSource> &sources,
 						const std::vector<Material>	  &materials,
 						UsdGeomXformCache			  &cache,

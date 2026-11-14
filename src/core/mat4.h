@@ -1,6 +1,4 @@
-// A 4x4 affine-capable matrix (row-major storage) used for camera transforms and, later, mesh
-// instance transforms. Inverse() assumes the common affine case (bottom row [0,0,0,1]), which
-// covers every matrix this project constructs (translation/rotation/scale/look-at).
+// Row-major 4x4 matrix. Inverse() assumes an affine matrix (bottom row [0,0,0,1]).
 #pragma once
 
 #include "vec.h"
@@ -43,8 +41,7 @@ namespace happyray
 			return result;
 		}
 
-		// Right-handed look-at: builds the world-to-camera (view) matrix for a camera at `eye`
-		// looking towards `target` with the given `up` hint.
+		// Right-handed world-to-camera matrix.
 		HAPPYRAY_HD static Mat4 LookAt(const Vec3f &eye, const Vec3f &target, const Vec3f &up)
 		{
 			const Vec3f forward	  = Normalize(target - eye);
@@ -109,8 +106,7 @@ namespace happyray
 					 m.m[2][0] * v.x + m.m[2][1] * v.y + m.m[2][2] * v.z);
 	}
 
-	// Inverse of an affine matrix (bottom row assumed to be [0,0,0,1]): inverts the 3x3 linear part
-	// and recomputes the translation as -R^-1 * t.
+	// Inverts the 3x3 linear part; translation becomes -R^-1 * t.
 	HAPPYRAY_HD inline Mat4 Inverse(const Mat4 &a)
 	{
 		const float a00 = a.m[0][0], a01 = a.m[0][1], a02 = a.m[0][2];

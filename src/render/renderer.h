@@ -1,11 +1,5 @@
-// Thrust-backed render engine, exposed through a plain-C++ interface
-// so it can be used from ordinary .cpp translation units (like
-// src/app/main.cpp) without that caller needing to know or care which Thrust
-// backend is active. There is exactly one implementation (renderer.cpp),
-// parallelized entirely via Thrust algorithms/functors (no hand-written CUDA
-// kernels) -- which hardware it actually runs on (GPU via CUDA, or CPU via TBB)
-// is a build-time choice (CMake's HAPPYRAY_THRUST_BACKEND option), not a runtime
-// one, so a given binary only ever has one backend compiled in.
+// Render engine behind a plain-C++ interface; the Thrust backend (CUDA or TBB) is chosen at
+// build time.
 #pragma once
 
 #include <memory>
@@ -43,94 +37,62 @@ namespace happyray
 	class Renderer
 	{
 	  public:
-		// Uploads `scene`'s geometry once; the Renderer keeps its own copy, so
-		// `scene` doesn't need to outlive this call. ("Uploads" means an actual
-		// host->device copy for the CUDA backend, or just an ordinary host-side copy
-		// for the TBB backend.)
+		// Copies `scene` to backend memory.
 		explicit Renderer(const FlatScene &scene);
 		~Renderer();
 		Renderer(const Renderer &)			  = delete;
 		Renderer &operator=(const Renderer &) = delete;
 
-		// (Re)allocates the accumulation buffer and generates a fresh per-pixel
-		// Cranley-Patterson jitter table (see random.h) for the new resolution.
+		// Also regenerates the per-pixel jitter table (see random.h).
 		void ResizeFramebuffer(int width, int height);
 
-		// Replaces uploaded geometry, invalidates stale grids, and rebuilds the active grid.
+		// Invalidates stale grids and rebuilds the active one.
 		void UpdateScene(const FlatScene &scene);
 
-		// Restarts progressive accumulation (e.g. after the camera moves) without
-		// regenerating the pixel jitter table.
+		// Keeps the pixel jitter table.
 		void ResetAccumulation();
 
 		uint32_t SampleCount() const;
 
-		// (Re)builds the selected grid over uploaded geometry. A no-op for brute force.
-		// Settings are retained per grid for scene updates and density tuning.
-		// Nested grids default to densities {0.12, 2.4}; uniform defaults to {3, 0}.
+		// No-op for brute force. Settings are kept per grid for scene updates and density tuning.
 		void BuildAccelerationStructure(GridBuildSettings settings = {});
-		// Whether the selected structure is ready; brute force is always ready.
 		bool HasAccelerationStructure() const;
 
-		// Selects the structure to trace against and refreshes collisions if it is built.
-		// Does not build missing grids or reset accumulation. Build explicitly before rendering.
+		// Refreshes collisions if the grid is built; does not build it or reset accumulation.
 		void	  SetAccelType(AccelType type);
 		AccelType GetAccelType() const;
 
 		GridDensities CurrentGridDensities() const;
-		// Releases and rebuilds the active grid without rendering or resetting
-		// accumulation.
 		void RebuildGridDensities(GridDensities densities);
 
-		// Computes the currently active grid's structural SAH cost (see
-		// src/accel/sah_cost.h) from its own already-built cell layout and the
-		// supplied scene bounds/cost constants -- requires an active, already-built
-		// uniform/two-level/irregular grid (not brute force). Used by the grid
-		// density search (src/app/grid_density_search.h) to prefer one candidate
-		// density over another without casting any rays.
+		// SAH cost of the active, built grid (see sah_cost.h).
 		float ComputeCurrentGridSahCost(const BBox &scene_bounds, const SahCostConstants &costs) const;
 
-		// Generates camera rays and evaluates the supplied integrator for each pixel,
-		// accumulates one frame, resolves the frame average, and copies it to
-		// ResolvedPixels(). Reset accumulation after changing the camera or
-		// integrator configuration.
+		// Reset accumulation after changing the camera or integrator configuration.
 		void RenderFrame(const Camera &camera, const AOIntegrator &integrator);
 		void RenderFrame(const Camera &camera, const SimpleIntegrator &integrator);
 
-		// First frame after reset/resize is simple-only; later frames average AO and
-		// blend it over that preview with weight n/(n+32), where n is the number of
-		// AO frames. Reset before switching between progressive and single-integrator
-		// rendering.
+		// The first frame after reset uses the simple integrator; later frames blend the AO average
+		// over it with weight n/(n+32), n = AO frame count.
 		void RenderProgressiveFrame(const Camera &camera, const AOIntegrator &ao, const SimpleIntegrator &simple);
 
 		const std::vector<Vec3f> &ResolvedPixels() const;
 
-		// Every BuildAccelerationStructure call (including rebuilds from
-		// UpdateScene and RebuildGridDensities) runs collision detection between
-		// the scene's objects (FlatScene::object_ids) over the new grid's leaf
-		// cells (see src/render/collision_detector.h): primitives sharing a cell
-		// collide when their bounding boxes overlap. Colliding primitives are
-		// then rendered with a red "collided" material instead of their own.
-		// CollisionIds() downloads the per-primitive result: the smallest id of
-		// another object each primitive collides with, or kNoCollision.
+		// Each grid build detects collisions between objects over its leaf cells; colliding
+		// primitives render red. Returns the smallest other object id per primitive, or kNoCollision.
 		std::vector<uint32_t> CollisionIds() const;
 		const CollisionStats &LastCollisionStats() const;
 
-		// While disabled (e.g. during a paused animation, whose geometry doesn't
-		// change), grid builds skip collision detection and keep rendering the last
-		// results along with LastCollisionStats(). UpdateScene still clears the
-		// results, since they don't describe new geometry. Enabled by default.
+		// While disabled (e.g. paused animation), builds keep the last results. UpdateScene still
+		// clears them. Enabled by default.
 		void SetCollisionDetectionEnabled(bool enabled);
 		bool CollisionDetectionEnabled() const;
 
-		// Runs collision detection on the active grid now, regardless of
-		// CollisionDetectionEnabled() (a no-op for brute force or an unbuilt grid).
+		// Ignores CollisionDetectionEnabled(); no-op for brute force or an unbuilt grid.
 		void DetectCollisions();
-		// Marks every primitive as non-colliding (normal materials) and resets
-		// LastCollisionStats().
 		void ClearCollisions();
 
-		// Cell assignment of grid builds; changing it rebuilds the active grid.
+		// Changing it rebuilds the active grid.
 		void			SetCellOverlapMode(CellOverlapMode mode);
 		CellOverlapMode GetCellOverlapMode() const;
 
@@ -150,9 +112,7 @@ namespace happyray
 		std::unique_ptr<Impl> impl_;
 	};
 
-	// A short, human-readable label for whichever Thrust backend this binary was
-	// built with (e.g. "CUDA" or "TBB"), for display purposes (the interactive
-	// viewer's window title).
+	// "CUDA" or "TBB".
 	const char *RendererBackendName();
 
 } // namespace happyray

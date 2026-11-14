@@ -1,6 +1,4 @@
-// Host/device vector math shared by the CPU and CUDA rendering back ends. Every function is
-// a small inline so the same header works whether it's pulled into a plain .cpp translation
-// unit (host-only) or a .cu translation unit compiled by nvcc (host + device).
+// Host/device vector math.
 #pragma once
 
 #include <cmath>
@@ -90,7 +88,6 @@ namespace happyray
 	using Vec3i = Vec3<int>;
 	using Vec4f = Vec4<float>;
 
-	// --- Vec3f arithmetic ---
 
 	template <typename T> HAPPYRAY_HD inline Vec3<T> operator+(const Vec3<T> &a, const Vec3<T> &b)
 	{
@@ -174,11 +171,8 @@ namespace happyray
 		return incident - normal * (2.0f * Dot(incident, normal));
 	}
 
-	// Loads `*p` through the GPU's read-only (non-coherent) data path (`ld.global.nc`, i.e. __ldg)
-	// as 4-, 8- or 16-byte loads for trivially copyable types of that size (or a multiple of 16
-	// bytes) and alignment;
-	// a plain load otherwise, and always on the host. Only for memory no thread writes during the
-	// kernel -- the acceleration structures and scene geometry while tracing rays.
+	// Loads via the read-only data path (__ldg) for 4/8/16-byte (or 16-byte multiple) types; a plain
+	// load otherwise and on the host. Only for memory no thread writes during the kernel.
 	template <typename T> HAPPYRAY_HD inline T LoadRO(const T *p)
 	{
 #if defined(__CUDA_ARCH__)

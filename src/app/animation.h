@@ -67,10 +67,8 @@ namespace happyray
 			return LoadFrames(paths, config.frame_step, config.camera_path, first_scene);
 		}
 
-		// Loads the frames of a USD file (see usd_loader.h) as an animation. A file with a single
-		// frame loads successfully but is not an animation (IsLoaded() stays false); its geometry
-		// is returned in `first_scene`. `camera_path` defaults to `<usd stem>.camera.cfg` next to
-		// the USD file.
+		// A single-frame file is not an animation (IsLoaded() stays false); its geometry goes to
+		// `first_scene`. `camera_path` defaults to `<usd stem>.camera.cfg`.
 		bool LoadUsd(const std::string	  &usd_path,
 					 const UsdLoadOptions &options,
 					 float				   frame_step,

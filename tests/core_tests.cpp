@@ -1,6 +1,4 @@
-// Lightweight, dependency-free unit tests for src/core (no third-party test framework, matching
-// the project's "no non-essential dependencies" preference). Each check prints a message and
-// the test binary returns non-zero on first failure; registered with CTest.
+// Dependency-free unit tests for src/core; returns non-zero on the first failure.
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -175,8 +173,7 @@ namespace
 		HAPPYRAY_CHECK(NearlyEqual(TransformPoint(inv_t, Vec3f(1.0f, 2.0f, 3.0f)), Vec3f(0.0f, 0.0f, 0.0f)));
 
 		const Mat4 view = Mat4::LookAt(Vec3f(0.0f, 0.0f, 5.0f), Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 1.0f, 0.0f));
-		// The camera looks down -Z in its own space, so the world origin (5 units in front of the
-		// eye along +Z) should map to camera-space (0, 0, -5).
+		// The camera looks down -Z, so the origin 5 units ahead maps to (0, 0, -5).
 		HAPPYRAY_CHECK(NearlyEqual(TransformPoint(view, Vec3f(0.0f, 0.0f, 0.0f)), Vec3f(0.0f, 0.0f, -5.0f)));
 	}
 
@@ -353,7 +350,6 @@ namespace
 		using namespace happyray;
 		constexpr float kPi = 3.14159265358979323846f;
 
-		// Identity leaves every vector untouched.
 		HAPPYRAY_CHECK(
 			NearlyEqual(RotateVector(Quaternion::Identity(), Vec3f(1.0f, 2.0f, 3.0f)), Vec3f(1.0f, 2.0f, 3.0f)));
 
@@ -445,8 +441,7 @@ namespace
 		HAPPYRAY_CHECK(mesh.positions.size() > 3);
 		HAPPYRAY_CHECK(mesh.TriangleCount() > 1);
 		CheckSubdivisionLimit(scene);
-		// No vn lines were present, so LoadObj must have derived a flat normal of +Z for every
-		// vertex of this single, counter-clockwise-when-viewed-from+Z triangle.
+		// No vn lines, so LoadObj derives +Z normals for this counter-clockwise triangle.
 		for (const VertexAttributes &attributes : mesh.attributes)
 		{
 			HAPPYRAY_CHECK(NearlyEqual(attributes.normal, Vec3f(0.0f, 0.0f, 1.0f)));
@@ -454,9 +449,7 @@ namespace
 			HAPPYRAY_CHECK(NearlyEqual(attributes.uv.y, 0.0f));
 		}
 
-		// No usemtl/mtllib at all: Scene::materials stays empty, but FlattenScene must still supply
-		// a valid (white, default) diffuse color at index 0 for the unassigned material id every
-		// triangle implicitly uses.
+		// Without materials, FlattenScene still supplies a white default for material id 0.
 		HAPPYRAY_CHECK(scene.materials.empty());
 		const FlatScene flat = FlattenScene(scene);
 		HAPPYRAY_CHECK(!flat.material_diffuse_colors.empty());

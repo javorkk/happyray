@@ -1,23 +1,7 @@
-// Thrust implementation of IrregularGrid (see irregular_grid.h). Builds a flat, dense,
-// power-of-2-resolution local grid per top-level cell (the same sort-based CSR technique as
-// uniform_grid.cpp/two_level_grid.cpp), then refines it with two passes ported directly from
-// HAGrid (cg-saarland/hagrid), both allowed to cross top-level cell boundaries via the
-// grid-wide shared integer lattice described in irregular_grid.h's file header comment:
-//
-//  - Merge (HAGrid's merge.cu): repeatedly, per axis, pairs up adjacent local cells and
-//    combines them (extending the bbox, taking the sorted union of their triangle references)
-//    whenever doing so doesn't increase the grid's split-SAH cost. Only the shared
-//    `local_entries` voxel-map array's *values* are remapped when cells merge away -- its shape
-//    (one slot per finest voxel, forever) never changes, which is what lets this run as a tight
-//    count -> scan -> compact loop instead of a full rebuild every round.
-//  - Expand (HAGrid's expand.cu): grows a cell's bbox into a neighbor whose triangle references
-//    are already a subset of its own, without touching `local_entries` at all -- safe because
-//    any triangle findable through the (untouched) neighbor's own entry is already in the
-//    growing cell's (larger, unmodified) reference list.
-//
-// Like uniform_grid.cpp/two_level_grid.cpp, this file compiles under either Thrust's CUDA
-// backend (nvcc) or its TBB backend (plain g++); see CMakeLists.txt's HAPPYRAY_THRUST_BACKEND
-// option.
+// IrregularGrid build: a dense power-of-2 local grid per top-level cell (sort-based, like the
+// other grids), then HAGrid's merge and expand passes. Merge only remaps `local_entries` values
+// (its shape never changes), so each round is a count -> scan -> compact loop. Expand only grows
+// bounds, which is safe because the absorbed neighbor's references are a subset of the cell's own.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
 #define THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_TBB
@@ -133,9 +117,7 @@ namespace happyray
 			return count;
 		}
 
-		// ---------------------------------------------------------------------------------------------
-		// Small, axis-generic helpers shared by the functors below.
-		// ---------------------------------------------------------------------------------------------
+		// Axis-generic helpers.
 
 		HAPPYRAY_HD inline IrregularCell
 		MakeCell(const int min_arr[3], const int max_arr[3], uint32_t ref_start, uint32_t ref_end)
@@ -161,14 +143,9 @@ namespace happyray
 			out[2] = cell.max.z;
 		}
 
-		// ---------------------------------------------------------------------------------------------
-		// Phase A: flat, dense, power-of-2-resolution local grid per top-level cell.
-		// ---------------------------------------------------------------------------------------------
+		// Phase A: dense power-of-2 local grid per top-level cell.
 
-		// Computes top-level cell `c`'s local grid metadata (world bounds decoded from its (cx,cy,cz)
-		// coordinates, finest resolution sized from its own triangle count and rounded up to a power of
-		// 2) -- everything except `entries_offset`, filled in afterwards once every cell's voxel count
-		// is known.
+		// Everything except `entries_offset`, which needs every cell's voxel count first.
 		struct ComputeCellInfoFunctor
 		{
 			Vec3f			 top_bounds_min;
@@ -210,13 +187,7 @@ namespace happyray
 			}
 		};
 
-		// Fills in `shift_*`/`global_offset_*` (irregular_grid.h's file header comment) once the
-		// grid-wide shared `global_resolution` is known -- the smallest per-axis lattice every
-		// top-level cell's own (independently chosen) power-of-2 resolution evenly divides into,
-		// i.e. the coarsest common refinement, computed by the caller as the per-axis maximum over
-		// every top-level cell's own resolution (itself always a power of 2, so their maximum is
-		// too, and every smaller power of 2 divides it exactly) -- `shift` is that ratio's log2, so
-		// the (hot-path) local<->shared lattice conversion is a bit shift, not a divide.
+		// `shift` = log2(global_resolution / resolution), so lattice conversion is a bit shift.
 		struct SetGlobalScaleFunctor
 		{
 			Vec2i top_resolution;
@@ -254,9 +225,7 @@ namespace happyray
 			}
 		};
 
-		// Writes top-level cell id `c` into every position `owner` that `c`'s own range covers -- used
-		// both for top-level (cell, triangle) pairs and for finest voxels
-		// (range = entries_offset bounds), just with a different `range_start` array.
+		// Writes top-level cell id `c` into every slot of its range (used for pairs and voxels).
 		struct ScatterOwnerFunctor
 		{
 			const uint32_t *range_start;
@@ -390,11 +359,7 @@ namespace happyray
 													  thrust::raw_pointer_cast(pair_prim_indices->data())});
 		}
 
-		// Builds the initial (pre-merge) IrregularCell for finest voxel `v`: a 1x1x1-voxel cell whose
-		// bounds are `v`'s own decoded (cx,cy,cz) within its owning top-level cell, converted into the
-		// grid-wide shared lattice (irregular_grid.h's file header comment) via that top-level cell's
-		// own `shift`/`global_offset` -- every IrregularCell from here on, merged or not, lives in that
-		// one shared coordinate space.
+		// 1x1x1-voxel pre-merge cell for finest voxel `v`, in shared-lattice coordinates.
 		struct MakeInitialCellFunctor
 		{
 			const IrregularCellInfo *infos;
@@ -421,23 +386,11 @@ namespace happyray
 			}
 		};
 
-		// ---------------------------------------------------------------------------------------------
-		// Phase B: SAH-gated per-axis merge rounds (HAGrid's merge.cu), allowed to cross top-level cell
-		// boundaries (see irregular_grid.h's file header comment for the shared-lattice coordinate
-		// space this relies on).
-		// ---------------------------------------------------------------------------------------------
+		// Phase B: SAH-gated per-axis merge rounds (HAGrid's merge.cu).
 
-		// Resolves shared-lattice position `pos` (irregular_grid.h's file header comment) to the index
-		// (into `cells`/`local_cells`) of whichever IrregularCell currently claims it. Returns false if
-		// `pos` lies outside the scene's own top-level grid, or doesn't land on an exact voxel boundary
-		// of whichever top-level cell it decodes into (only possible when `pos` was produced by a
-		// *different*, differently-scaled top-level cell than the one it decodes to -- i.e. not a valid
-		// merge/expand neighbor position at all; HAGrid's own single, flat grid can't have this problem
-		// since every cell lives in the one octree, but HappyRay's independently-sized per-top-level-cell
-		// local grids can -- see irregular_grid.h's file header comment for how `shift`/`global_offset`
-		// reconcile that). A position that's actually a genuine, currently-valid neighbor always
-		// resolves cleanly, so callers simply decline the merge/expand candidate on a `false` return,
-		// same as HAGrid's own `aligned`/`overlap_possible` checks declining an incompatible neighbor.
+		// Shared-lattice position -> index of the cell that claims it. Returns false outside the grid
+		// or if `pos` isn't on a voxel boundary of the top-level cell it falls in (possible when it
+		// came from a differently-scaled neighbor); callers then decline the merge/expand.
 		HAPPYRAY_HD inline bool LookupGlobalCell(const IrregularCellInfo *cell_infos,
 												 const uint32_t			 *entries,
 												 const int				  pos[3],
@@ -500,10 +453,8 @@ namespace happyray
 			thrust::device_vector<uint32_t>		  new_triangle_indices;
 		};
 
-		// For current cell `i`, looks at its immediate `+axis` neighbor (via LookupGlobalCell above,
-		// which transparently handles a same-top-level-cell neighbor and a cross-top-level-cell one the
-		// same way) and decides whether merging is geometrically possible (aligned) and SAH-beneficial
-		// (merge.cu's cost test, with the same early-exit before computing the full reference union).
+		// Decides whether cell `i` and its +axis neighbor are aligned and merging doesn't raise SAH
+		// cost (merge.cu's test, with its early exit before computing the reference union).
 		struct MergeCandidateFunctor
 		{
 			const IrregularCell		*cells;
@@ -539,10 +490,7 @@ namespace happyray
 				CellMinArr(next_cell, next_min);
 				CellMaxArr(next_cell, next_max);
 
-				// HAGrid's own `aligned<axis>` (merge.cu): exact equality on every axis the merge
-				// doesn't grow along -- plain integer comparison, safe for *any* pair of cells now that
-				// both are expressed in the same shared lattice regardless of which top-level cell(s)
-				// they belong to.
+				// HAGrid's `aligned<axis>`: exact equality on the axes the merge doesn't grow along.
 				const int  axis1   = (axis + 1) % 3;
 				const int  axis2   = (axis + 2) % 3;
 				const bool aligned = next_min[axis] == cell_max[axis] && next_min[axis1] == cell_min[axis1] &&
@@ -612,10 +560,8 @@ namespace happyray
 			}
 		};
 
-		// Walks each merge chain from its head (a cell with no `prev`) and flags cells at even chain
-		// positions (0, 2, 4, ...) as "kept"; odd positions get absorbed into the preceding kept cell.
-		// Chains are disjoint (each cell has at most one `prev`), so different chains -- including
-		// chains belonging to different top-level cells -- never conflict and parallelize freely.
+		// Flags even chain positions as kept; odd ones are absorbed into their predecessor. Chains are
+		// disjoint, so they parallelize freely.
 		struct ChainFlagFunctor
 		{
 			const MergeCandidate *candidates;
@@ -655,7 +601,6 @@ namespace happyray
 			}
 		};
 
-		// Writes every kept cell's merged-or-copied result into the new, compacted arrays.
 		struct WriteMergedFunctor
 		{
 			const IrregularCell	 *cells;
@@ -737,10 +682,7 @@ namespace happyray
 			}
 		};
 
-		// Runs one merge round along `axis` over every current local cell (across every top-level cell
-		// at once, and now possibly combining cells from *different* top-level cells -- see this file's
-		// top comment). Mutates `cells`/`prim_indices` (via swap) and `entries` (in place, remapped)
-		// to reflect the result. No-op if there are currently no cells at all.
+		// One merge round along `axis`; updates `cells`/`prim_indices` (swapped) and `entries`.
 		template <typename Policy>
 		void MergeRound(const Policy								   &policy,
 						MergeScratch								   &scratch,
@@ -842,12 +784,7 @@ namespace happyray
 			cells->swap(scratch.new_cells);
 			prim_indices->swap(scratch.new_triangle_indices);
 		}
-		// ---------------------------------------------------------------------------------------------
-		// Phase C: subset-safe bidirectional expand passes (HAGrid's expand.cu), allowed to cross
-		// top-level cell boundaries the same way merge is (see this file's top comment). Unlike merge,
-		// this never changes the number of cells or `entries` -- only bounding boxes -- so it's one
-		// in-place-equivalent transform (via a swap buffer) per axis.
-		// ---------------------------------------------------------------------------------------------
+		// Phase C: subset-safe expand passes (HAGrid's expand.cu). Only bounds change.
 
 		struct ExpandFunctor
 		{
@@ -920,9 +857,7 @@ namespace happyray
 			}
 		};
 
-		// Unlike the two-level grid, IrregularGrid's local cells are individually sized (merge/expand
-		// grows some, leaves others at the finest voxel size), so IrregularGrid::ComputeSahCost
-		// genuinely needs one term per distinct surviving cell -- reduced via thrust::transform_reduce.
+		// One SAH term per distinct cell, since merge/expand makes cell sizes differ.
 		struct IrregularGridSahFunctor
 		{
 			IrregularGridView grid;
@@ -1001,7 +936,7 @@ namespace happyray
 			static_cast<uint32_t>(top_view.resolution.x) * top_view.resolution.y * top_view.resolution.z;
 		const uint32_t total_top_level_pairs = impl_->top_level.PrimIndexCount();
 
-		// --- Phase A: per-top-level-cell power-of-2 local grid metadata. ---
+		// Phase A.
 		thrust::device_vector<IrregularCellInfo> infos(num_top_cells);
 		thrust::transform(policy,
 						  thrust::counting_iterator<uint32_t>(0),
@@ -1014,11 +949,8 @@ namespace happyray
 												 second_level_density,
 												 dense_cell_threshold});
 
-		// Every top-level cell is the same world-space size, so the per-axis maximum over every
-		// top-level cell's own (independently chosen) power-of-2 resolution is itself a power of 2
-		// that every one of them evenly divides into -- the coarsest common refinement, and the
-		// grid-wide shared lattice IrregularCell bounds live in from here on (irregular_grid.h's
-		// file header comment).
+		// All top-level cells are the same size, so the per-axis maximum power-of-2 resolution is
+		// divisible by every cell's resolution.
 		Vec3i global_resolution(1, 1, 1);
 		if (num_top_cells > 0)
 		{
@@ -1071,8 +1003,7 @@ namespace happyray
 						  infos.begin(),
 						  SetEntriesOffsetFunctor());
 
-		// --- Which top-level cell does each top-level (cell, triangle) pair / finest voxel belong
-		//     to? (Two different ScatterOwnerFunctor calls, over two different range arrays.) ---
+		// Owning top-level cell of each (cell, triangle) pair and of each finest voxel.
 		thrust::device_vector<uint32_t> owning_top_cell(total_top_level_pairs);
 		thrust::for_each(
 			policy,
@@ -1088,7 +1019,6 @@ namespace happyray
 											 thrust::raw_pointer_cast(entries_offset_bounds.data()) + 1,
 											 thrust::raw_pointer_cast(voxel_owner.data())});
 
-		// --- Per-pair overlapped finest voxels. ---
 		thrust::device_vector<uint32_t> pair_voxel_indices;
 		thrust::device_vector<uint32_t> pair_prim_indices;
 		detail::DispatchBuild(scene.primitive_type,
@@ -1142,7 +1072,7 @@ namespace happyray
 
 		thrust::device_vector<uint32_t> prim_indices = std::move(pair_prim_indices);
 
-		// --- Phase B: iterative per-axis SAH-gated merge rounds. ---
+		// Phase B.
 		if (merge_alpha > 0.0f && num_top_cells > 0)
 		{
 			const int max_global_resolution = std::max({global_resolution.x, global_resolution.y, global_resolution.z});
@@ -1190,7 +1120,7 @@ namespace happyray
 			}
 		}
 
-		// --- Phase C: subset-safe directional expand passes. ---
+		// Phase C.
 		for (int iter = 0; iter < expand_iterations; ++iter)
 		{
 			for (int axis = 0; axis < 3; ++axis)
@@ -1250,8 +1180,7 @@ namespace happyray
 	float IrregularGrid::ComputeSahCost(const BBox &scene_bounds, const SahCostConstants &costs) const
 	{
 		const IrregularGridView view = impl_->View();
-		// detail::TraverseGrid walks the shared lattice directly (HAGrid-style), so
-		// top-level cells cost no traversal steps of their own -- only the irregular cells do.
+		// Traversal walks the shared lattice directly, so top-level cells cost no steps.
 		float		   total		   = 0.0f;
 		const uint32_t num_local_cells = LeafCellCount();
 		if (num_local_cells > 0)
