@@ -1,6 +1,7 @@
 /build/
 /build-*/
 /cmake-build-*/
+
 CMakeUserPresets.json
 
 # Legacy HappyRay and IDE build output
@@ -16,7 +17,7 @@ CMakeUserPresets.json
 *.opendb
 /ipch/
 /.vs/
-/.vscode/settings.json
+.vscode/*
 /ccbin/g++
 /ccbin/gcc
 /happyray

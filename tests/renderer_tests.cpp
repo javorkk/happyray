@@ -22,7 +22,7 @@
 #include <thread>
 #include <vector>
 
-#include "../src/accel/scene_intersect.h"
+#include "../src/accel/intersect_common.h"
 #include "../src/app/attractor_scene.h"
 #include "../src/app/grid_density_search.h"
 #include "../src/app/obj_loader.h"

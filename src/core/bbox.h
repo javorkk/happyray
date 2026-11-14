@@ -187,4 +187,55 @@ namespace happyray
 		return IntersectRayBBox(Ray(a, b - a, 0.0f, 1.0f), box, &t_near, &t_far);
 	}
 
+	namespace detail
+	{
+		// Reciprocal of a ray direction component, +/-infinity for zero (HAGrid's
+		// safe_rcp) -- lets the grid traversal routines replace per-step divisions
+		// with multiplications.
+		HAPPYRAY_HD inline float SafeRcp(float x)
+		{
+			return x != 0.0f ? 1.0f / x : std::copysign(INFINITY, x);
+		}
+
+		HAPPYRAY_HD inline Vec3f SafeRcp(const Vec3f &d)
+		{
+			return Vec3f(SafeRcp(d.x), SafeRcp(d.y), SafeRcp(d.z));
+		}
+
+		// Slab test against [box_min, box_max] using a precomputed reciprocal
+		// direction, clipped to [t_min, t_max]. Zero direction components are handled
+		// explicitly (no 0 * inf NaNs).
+		HAPPYRAY_HD inline bool IntersectRayBoxRcp(const Vec3f &origin,
+												   const Vec3f &dir,
+												   const Vec3f &inv_dir,
+												   const Vec3f &box_min,
+												   const Vec3f &box_max,
+												   float		t_min,
+												   float		t_max,
+												   float	   *out_t_near,
+												   float	   *out_t_far)
+		{
+			float t_near = t_min, t_far = t_max;
+#define HAPPYRAY_SLAB(a)                                                                                               \
+	if (dir.a != 0.0f)                                                                                                 \
+	{                                                                                                                  \
+		const float t0 = (box_min.a - origin.a) * inv_dir.a;                                                           \
+		const float t1 = (box_max.a - origin.a) * inv_dir.a;                                                           \
+		t_near		   = std::fmax(t_near, std::fmin(t0, t1));                                                         \
+		t_far		   = std::fmin(t_far, std::fmax(t0, t1));                                                          \
+	}                                                                                                                  \
+	else if (origin.a < box_min.a || origin.a > box_max.a)                                                             \
+	{                                                                                                                  \
+		return false;                                                                                                  \
+	}
+			HAPPYRAY_SLAB(x)
+			HAPPYRAY_SLAB(y)
+			HAPPYRAY_SLAB(z)
+#undef HAPPYRAY_SLAB
+			*out_t_near = t_near;
+			*out_t_far	= t_far;
+			return t_near <= t_far;
+		}
+	} // namespace detail
+
 } // namespace happyray

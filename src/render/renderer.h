@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "../accel/sah_cost.h"
-#include "../accel/scene_intersect.h"
+#include "../accel/intersect_common.h"
 #include "../app/scene.h"
 #include "../core/vec.h"
 #include "ao_integrator.h"

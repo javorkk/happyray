@@ -340,7 +340,7 @@ re-measured with 15 runs.
   Each acceleration structure has one header and one implementation file.
   Grid views are primitive-agnostic; builders and leaf intersection are templated on the
   primitive type and dispatched once per build or kernel launch from `SceneView::primitive_type`.
-  Shared `IntersectSceneGrid<P>` and `IsOccludedGrid<P>` templates in `scene_intersect.h`
+  Shared `IntersectSceneGrid<P>` and `IsOccludedGrid<P>` templates in `intersect_common.h`
   accept any grid view. They default to `DynamicPrimitive`, which dispatches at runtime.
   `CellOverlapMode` selects how builders assign primitives to cells: `kAabb` (every cell of the
   primitive's AABB), `kExact` (exact, conservative primitive/cell tests for counting and writing;
@@ -383,7 +383,7 @@ re-measured with 15 runs.
   `AOIntegrator`: AO configuration and host/device `Integrate()` evaluation of a camera ray.
   It owns the AO visibility estimator, material tinting, and Halton hemisphere sampling, but
   no framebuffer or scene allocations. Shared intersection/occlusion queries and
-  `AccelStructures`/`AccelType` dispatch live in `src/accel/scene_intersect.h`, independent of
+  `AccelStructures`/`AccelType` dispatch live in `src/accel/intersect_common.h`, independent of
   the integrator. `renderer.h`/`.cpp` is the `Renderer` engine: uploads scene geometry once,
   owns a `UniformGrid`, a `TwoLevelGrid`, and an `IrregularGrid`, and renders each frame via a
   single `thrust::for_each` over a `RenderPixelFunctor` (no `<<<...>>>` kernel launch anywhere).
@@ -428,7 +428,7 @@ re-measured with 15 runs.
   The header-only `happyray_scene` CMake target exposes `scene.h` to the loader, renderer,
   acceleration structures, and tests without linking them to an application executable.
 
-Validation strategy: `scene_intersect.h`'s brute-force path (plain, single-threaded, no Thrust at all) is
+Validation strategy: `intersect_common.h`'s brute-force path (plain, single-threaded, no Thrust at all) is
 the project's correctness oracle. `tests/renderer_tests.cpp` renders the same scene through a
 dead-simple host reference loop and through `Renderer` (whichever backend the test binary was built
 with), checks they agree closely, then switches `Renderer` to the uniform grid, the two-level grid,

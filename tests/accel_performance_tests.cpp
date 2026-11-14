@@ -26,7 +26,7 @@
 #include <thrust/transform.h>
 
 #include "../src/accel/sah_cost.h"
-#include "../src/accel/scene_intersect.h"
+#include "../src/accel/intersect_common.h"
 #include "../src/app/obj_loader.h"
 #include "../src/app/scene.h"
 #include "../src/core/random.h"
