@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstring>
 
 #if defined(__CUDACC__)
 #define HAPPYRAY_HD __host__ __device__
@@ -172,5 +173,53 @@ namespace happyray
 	{
 		return incident - normal * (2.0f * Dot(incident, normal));
 	}
+
+	// Loads `*p` through the GPU's read-only (non-coherent) data path (`ld.global.nc`, i.e. __ldg)
+	// as 4-, 8- or 16-byte loads for trivially copyable types of that size (or a multiple of 16
+	// bytes) and alignment;
+	// a plain load otherwise, and always on the host. Only for memory no thread writes during the
+	// kernel -- the acceleration structures and scene geometry while tracing rays.
+	template <typename T> HAPPYRAY_HD inline T LoadRO(const T *p)
+	{
+#if defined(__CUDA_ARCH__)
+		if constexpr (sizeof(T) % 16 == 0 && alignof(T) >= 16)
+		{
+			T value;
+			for (size_t chunk = 0; chunk < sizeof(T) / 16; ++chunk)
+			{
+				const int4 raw = __ldg(reinterpret_cast<const int4 *>(p) + chunk);
+				memcpy(reinterpret_cast<char *>(&value) + chunk * 16, &raw, 16);
+			}
+			return value;
+		}
+		else if constexpr (sizeof(T) == 8 && alignof(T) >= 8)
+		{
+			const uint2 raw = __ldg(reinterpret_cast<const uint2 *>(p));
+			T			value;
+			memcpy(&value, &raw, sizeof(T));
+			return value;
+		}
+		else if constexpr (sizeof(T) == 4 && alignof(T) >= 4)
+		{
+			const unsigned raw = __ldg(reinterpret_cast<const unsigned *>(p));
+			T			   value;
+			memcpy(&value, &raw, sizeof(T));
+			return value;
+		}
+		else
+			return *p;
+#else
+		return *p;
+#endif
+	}
+
+	// Vec3f padded to 16 bytes so the GPU can fetch it with one 128-bit load instead of three
+	// 32-bit ones (see LoadRO).
+	struct alignas(16) Vec3fA
+	{
+		Vec3f v;
+		float pad = 0.0f;
+	};
+	static_assert(sizeof(Vec3fA) == 16);
 
 } // namespace happyray

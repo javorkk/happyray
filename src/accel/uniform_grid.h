@@ -307,7 +307,7 @@ namespace happyray
 			for (;;)
 			{
 				const uint32_t index = FlattenCellIndex(cell[0], cell[1], cell[2], resolution[0], resolution[1]);
-				if (visit_cell(grid.cell_ranges[index], &ray_t_max))
+				if (visit_cell(LoadRO(grid.cell_ranges + index), &ray_t_max))
 					return true;
 
 				// Legacy MIN_DIMENSION ordering: z wins ties, then y, then x.

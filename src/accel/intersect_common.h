@@ -19,6 +19,31 @@
 namespace happyray
 {
 
+	// Tests primitive `prim` against `*probe`; on a hit, shrinks probe->t_max to it and records it in
+	// `*hit`. Returns true on a hit.
+	template <typename P>
+	HAPPYRAY_HD inline bool
+	IntersectPrimitiveClosest(const SceneView &scene, uint32_t prim, Ray *probe, ClosestHit *hit)
+	{
+		float t, u = 0.0f, v = 0.0f;
+		if (!PrimitiveTraits<P>::Intersect(*probe, PrimitiveTraits<P>::Fetch(scene, prim), &t, &u, &v))
+			return false;
+		probe->t_max = t;
+		hit->prim	 = prim;
+		hit->t		 = t;
+		hit->u		 = u;
+		hit->v		 = v;
+		return true;
+	}
+
+	// Returns true if primitive `prim` occludes `ray`.
+	template <typename P>
+	HAPPYRAY_HD inline bool IsPrimitiveOccluded(const SceneView &scene, uint32_t prim, const Ray &ray)
+	{
+		float t, u, v;
+		return PrimitiveTraits<P>::Intersect(ray, PrimitiveTraits<P>::Fetch(scene, prim), &t, &u, &v);
+	}
+
 	// Tests every primitive in the contiguous range [begin, end) of `prim_indices` against `ray`,
 	// clipped to `*ray_t_max`, which shrinks (and `*hit` updates) on every closer hit. Returns true if
 	// any primitive in the range was hit. Shared by all three grids' closest-hit queries.
@@ -35,20 +60,9 @@ namespace happyray
 		Ray	 probe		  = ray;
 		probe.t_max		  = *ray_t_max;
 
+		// `prim_indices` is a grid's global-memory index array (LoadRO requires one).
 		for (uint32_t i = begin; i < end; ++i)
-		{
-			const uint32_t prim = prim_indices[i];
-			float		   t, u = 0.0f, v = 0.0f;
-			if (PrimitiveTraits<P>::Intersect(probe, PrimitiveTraits<P>::Fetch(scene, prim), &t, &u, &v))
-			{
-				probe.t_max	 = t;
-				hit->prim	 = prim;
-				hit->t		 = t;
-				hit->u		 = u;
-				hit->v		 = v;
-				hit_anything = true;
-			}
-		}
+			hit_anything |= IntersectPrimitiveClosest<P>(scene, LoadRO(prim_indices + i), &probe, hit);
 
 		*ray_t_max = probe.t_max;
 
@@ -82,11 +96,8 @@ namespace happyray
 	{
 		for (uint32_t i = begin; i < end; ++i)
 		{
-			float t, u, v;
-			if (PrimitiveTraits<P>::Intersect(ray, PrimitiveTraits<P>::Fetch(scene, prim_indices[i]), &t, &u, &v))
-			{
+			if (IsPrimitiveOccluded<P>(scene, LoadRO(prim_indices + i), ray))
 				return true;
-			}
 		}
 		return false;
 	}
@@ -191,9 +202,9 @@ namespace happyray
 		else
 		{
 			ClosestHit hit;
-			float	   t_max = ray.t_max;
+			Ray		   probe = ray;
 			for (uint32_t prim = 0; prim < scene.primitive_count; ++prim)
-				IntersectPrimitivesClosest<P>(scene, &prim, 0, 1, ray, &t_max, &hit);
+				IntersectPrimitiveClosest<P>(scene, prim, &probe, &hit);
 			return ResolveClosestHit<P>(scene, ray, hit, out_hit);
 		}
 	}
@@ -216,7 +227,7 @@ namespace happyray
 		{
 			for (uint32_t prim = 0; prim < scene.primitive_count; ++prim)
 			{
-				if (TestPrimitivesInRangeOccluded<P>(scene, &prim, 0, 1, ray))
+				if (IsPrimitiveOccluded<P>(scene, prim, ray))
 					return true;
 			}
 			return false;

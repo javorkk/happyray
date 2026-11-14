@@ -44,6 +44,10 @@ namespace happyray
 		const Sphere	  *spheres				= nullptr;
 		const BezierCurve *curves				= nullptr;
 		const BBox		  *boxes				= nullptr; // Solid boxes (PrimitiveType::kBox).
+		// Optional, triangle scenes only: one TriangleLeaf per triangle, the same triangles as
+		// positions/indices in the traversal-friendly layout. Ray tracing with
+		// PrimitiveTraits<TriangleLeaf> reads it; everything else uses positions/indices.
+		const TriangleLeaf *triangle_leaves = nullptr;
 	};
 
 	HAPPYRAY_HD inline Triangle FetchTriangle(const SceneView &scene, uint32_t tri)

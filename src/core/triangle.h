@@ -14,17 +14,15 @@ namespace happyray
 
 	using Triangle = Primitive<3>;
 
-	// Moller-Trumbore ray/triangle intersection.
-	HAPPYRAY_HD inline bool IntersectRayTriangle(const Ray	 &ray,
-												 const Vec3f &v0,
-												 const Vec3f &v1,
-												 const Vec3f &v2,
-												 float		 *out_t,
-												 float		 *out_u,
-												 float		 *out_v)
+	// Moller-Trumbore ray/triangle intersection, from the first vertex and the two edges leaving it.
+	HAPPYRAY_HD inline bool IntersectRayTriangleEdges(const Ray	  &ray,
+													  const Vec3f &v0,
+													  const Vec3f &edge1,
+													  const Vec3f &edge2,
+													  float		  *out_t,
+													  float		  *out_u,
+													  float		  *out_v)
 	{
-		const Vec3f edge1 = v1 - v0;
-		const Vec3f edge2 = v2 - v0;
 		const Vec3f pvec  = Cross(ray.direction, edge2);
 		const float det	  = Dot(edge1, pvec);
 		if (det > -1e-8f && det < 1e-8f)
@@ -54,6 +52,37 @@ namespace happyray
 		*out_v = v;
 		return true;
 	}
+
+	// Moller-Trumbore ray/triangle intersection.
+	HAPPYRAY_HD inline bool IntersectRayTriangle(const Ray	 &ray,
+												 const Vec3f &v0,
+												 const Vec3f &v1,
+												 const Vec3f &v2,
+												 float		 *out_t,
+												 float		 *out_u,
+												 float		 *out_v)
+	{
+		return IntersectRayTriangleEdges(ray, v0, v1 - v0, v2 - v0, out_t, out_u, out_v);
+	}
+
+	// Traversal-only triangle record: the first vertex and both edges, precomputed and stored
+	// directly per triangle. Fetching one is three 16-byte loads (see LoadRO), against the
+	// indexed layout's three index loads followed by nine 4-byte vertex loads that have to wait
+	// for them. The edges are the exact floats IntersectRayTriangle computes, so results match it.
+	struct alignas(16) TriangleLeaf
+	{
+		Vec3fA v0, edge1, edge2;
+
+		HAPPYRAY_HD static TriangleLeaf FromTriangle(const Triangle &triangle)
+		{
+			TriangleLeaf leaf;
+			leaf.v0.v	 = triangle.vtx[0];
+			leaf.edge1.v = triangle.vtx[1] - triangle.vtx[0];
+			leaf.edge2.v = triangle.vtx[2] - triangle.vtx[0];
+			return leaf;
+		}
+	};
+	static_assert(sizeof(TriangleLeaf) == 48);
 
 	struct TriangleBoxIntersection
 	{

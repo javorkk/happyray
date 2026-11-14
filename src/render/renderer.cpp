@@ -22,6 +22,8 @@
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
+#include <type_traits>
 
 #include "../accel/irregular_grid.h"
 #include "../accel/two_level_grid.h"
@@ -88,6 +90,19 @@ namespace happyray
 			}
 		};
 
+		struct MakeTriangleLeaf
+		{
+			SceneView				 scene;
+			HAPPYRAY_HD TriangleLeaf operator()(uint32_t tri) const
+			{
+				return TriangleLeaf::FromTriangle(FetchTriangle(scene, tri));
+			}
+		};
+
+		// The primitive layout render kernels trace: triangles through their TriangleLeaf records,
+		// every other type as stored.
+		template <typename P> using TracedPrimitive = std::conditional_t<std::is_same_v<P, Triangle>, TriangleLeaf, P>;
+
 		// Resolves the frame average, optionally fading it over a separate preview.
 		struct ResolveFunctor
 		{
@@ -127,6 +142,7 @@ namespace happyray
 		thrust::device_vector<Vec3f>	   positions;
 		thrust::device_vector<Vec3f>	   normals;
 		thrust::device_vector<uint32_t>	   indices;
+		thrust::device_vector<TriangleLeaf> triangle_leaves; // Triangle scenes only.
 		thrust::device_vector<Point>	   points;
 		thrust::device_vector<Sphere>	   spheres;
 		thrust::device_vector<BezierCurve> curves;
@@ -207,6 +223,7 @@ namespace happyray
 			view.spheres				 = thrust::raw_pointer_cast(spheres.data());
 			view.curves					 = thrust::raw_pointer_cast(curves.data());
 			view.boxes					 = thrust::raw_pointer_cast(boxes.data());
+			view.triangle_leaves		 = thrust::raw_pointer_cast(triangle_leaves.data());
 			return view;
 		}
 
@@ -251,6 +268,15 @@ namespace happyray
 		scene_points.assign(scene.points.begin(), scene.points.end());
 		scene_curves.assign(scene.curves.begin(), scene.curves.end());
 		ApplyViewDependentRadii();
+		triangle_leaves.clear();
+		if (primitive_type == PrimitiveType::kTriangle)
+		{
+			triangle_leaves.resize(primitive_count);
+			thrust::transform(thrust::counting_iterator<uint32_t>(0),
+							  thrust::counting_iterator<uint32_t>(static_cast<uint32_t>(primitive_count)),
+							  triangle_leaves.begin(),
+							  MakeTriangleLeaf{View()});
+		}
 		material_ids.assign(scene.material_ids.begin(), scene.material_ids.end());
 		std::vector<Vec3f> colors = scene.material_diffuse_colors;
 		colors.push_back(kCollidedDiffuseColor);
@@ -528,7 +554,7 @@ namespace happyray
 							  DispatchAccel(accel.type,
 											[&](auto accel_tag)
 											{
-												using P = typename decltype(prim_tag)::type;
+												using P = TracedPrimitive<typename decltype(prim_tag)::type>;
 												using A = decltype(accel_tag);
 												const RenderPixelFunctor<Integrator, P, A> render{
 													View(),

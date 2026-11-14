@@ -84,6 +84,29 @@ namespace happyray
 		}
 	};
 
+	// Traversal-only view of a triangle scene through SceneView::triangle_leaves (which must be
+	// set): same hits as PrimitiveTraits<Triangle>, fewer and wider loads. It has no CellOverlap, so
+	// grids are built with Triangle and traced with TriangleLeaf.
+	template <> struct PrimitiveTraits<TriangleLeaf>
+	{
+		static constexpr PrimitiveType kType = PrimitiveType::kTriangle;
+
+		HAPPYRAY_HD static TriangleLeaf Fetch(const SceneView &scene, uint32_t i)
+		{
+			return LoadRO(scene.triangle_leaves + i);
+		}
+
+		HAPPYRAY_HD static bool Intersect(const Ray &ray, const TriangleLeaf &p, float *t, float *u, float *v)
+		{
+			return IntersectRayTriangleEdges(ray, p.v0.v, p.edge1.v, p.edge2.v, t, u, v);
+		}
+
+		HAPPYRAY_HD static Vec3f Normal(const SceneView &scene, const Ray &ray, const ClosestHit &hit)
+		{
+			return PrimitiveTraits<Triangle>::Normal(scene, ray, hit);
+		}
+	};
+
 	template <> struct PrimitiveTraits<Point>
 	{
 		static constexpr PrimitiveType kType = PrimitiveType::kPoint;

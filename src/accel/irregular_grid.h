@@ -197,16 +197,16 @@ namespace happyray
 			const int			   ty = voxel.y >> grid.global_shift.y;
 			const int			   tz = voxel.z >> grid.global_shift.z;
 			const IrregularTopCell top =
-				grid.top_cells[FlattenCellIndex(tx, ty, tz, grid.top_level.resolution.x, grid.top_level.resolution.y)];
+				LoadRO(grid.top_cells +
+					   FlattenCellIndex(tx, ty, tz, grid.top_level.resolution.x, grid.top_level.resolution.y));
 			const uint32_t p	 = top.packed;
 			const int	   lx	 = (voxel.x & (grid.global_resolution.x - 1)) >> (p & 31u);
 			const int	   ly	 = (voxel.y & (grid.global_resolution.y - 1)) >> ((p >> 5) & 31u);
 			const int	   lz	 = (voxel.z & (grid.global_resolution.z - 1)) >> ((p >> 10) & 31u);
 			const int	   log_x = static_cast<int>((p >> 15) & 31u);
 			const int	   log_y = static_cast<int>((p >> 20) & 31u);
-			return grid
-				.local_entries[top.entries_offset + static_cast<uint32_t>(lx) + (static_cast<uint32_t>(ly) << log_x) +
-							   (static_cast<uint32_t>(lz) << (log_x + log_y))];
+			return LoadRO(grid.local_entries + top.entries_offset + static_cast<uint32_t>(lx) +
+						  (static_cast<uint32_t>(ly) << log_x) + (static_cast<uint32_t>(lz) << (log_x + log_y)));
 		}
 
 		// Next voxel along one axis after leaving `cell` at `t_exit` (HAGrid's traverse.cu): the axis
@@ -282,7 +282,7 @@ namespace happyray
 			float ray_t_max = ray.t_max;
 			for (;;)
 			{
-				const IrregularCell cell = grid.local_cells[LookupIrregularCell(grid, voxel)];
+				const IrregularCell cell = LoadRO(grid.local_cells + LookupIrregularCell(grid, voxel));
 
 				// Intersect the far-most planes of the cell's box (zero direction components never exit).
 				const float tcx	   = dir.x != 0.0f

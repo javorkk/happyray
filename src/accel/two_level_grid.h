@@ -151,7 +151,7 @@ namespace happyray
 					FlattenCellIndex(cell[0], cell[1], cell[2], top_resolution[0], top_resolution[1]);
 				visit_top(top_index);
 
-				const TopLevelCell &info = grid.top_level_cells[top_index];
+				const TopLevelCell info = LoadRO(grid.top_level_cells + top_index);
 				if (!info.IsEmpty())
 				{
 					const int	resolution = info.Resolution();
@@ -182,7 +182,7 @@ namespace happyray
 						const uint32_t leaf =
 							info.cell_range_offset +
 							FlattenCellIndex(leaf_cell[0], leaf_cell[1], leaf_cell[2], resolution, resolution);
-						if (visit_leaf(grid.second_level_cell_ranges[leaf], &ray_t_max))
+						if (visit_leaf(LoadRO(grid.second_level_cell_ranges + leaf), &ray_t_max))
 						{
 							return true;
 						}
