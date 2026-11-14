@@ -32,6 +32,30 @@ ctest --test-dir build --output-on-failure
 Switch between GPU and CPU backends using `HAPPYRAY_THRUST_BACKEND=CUDA|TBB` (default `CUDA`).
 Use `-DCMAKE_CUDA_ARCHITECTURES=<arch>` to specify GPU architectyre (default `89`). 
 
+### Docker
+
+The [Dockerfile](Dockerfile) provides a development image with the
+[VFX Reference Platform CY2026](https://vfxplatform.com/) toolchain: CUDA 12.9 on Ubuntu 24.04,
+gcc 14.2 (also the nvcc host compiler) and oneTBB 2022.3. It also builds the OpenUSD core
+libraries (26.08, no Python or imaging) into `/opt/openusd`, which CMake finds through
+`CMAKE_PREFIX_PATH`. OpenUSD has no CY2026 release yet, so 26.08 is built with this toolchain in
+its default C++17 mode.
+
+```sh
+docker build -t happyray-dev .
+docker run --rm -it --gpus all -v "$PWD":/app -w /app happyray-dev bash
+# inside the container:
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHAPPYRAY_ENABLE_USD=ON
+cmake --build build --parallel "$(nproc)"
+```
+
+Versions can be changed with `--build-arg ONETBB_VERSION=... --build-arg OPENUSD_VERSION=...`.
+Building OpenUSD needs roughly 2-3 GB of memory per compiler process, so the image builds with
+`BUILD_JOBS=4` by default (`--build-arg BUILD_JOBS=<n>` to change it). Each dependency build is
+retried up to 3 times to work around occasional gcc crashes under WSL2.
+
+For the viewer window, see [X forwarding](#x-forwarding-using-docker-on-wsl2) below.
+
 ### VS Code IntelliSense
 
 Local headers use paths relative to the including file. Same-directory includes use just the
