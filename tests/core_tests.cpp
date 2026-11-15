@@ -425,6 +425,49 @@ namespace
 		HAPPYRAY_CHECK(mismatches * 1000 <= rays);
 	}
 
+	// Far from the ray origin, hits are still precise enough that AO rays leaving a hit (offset
+	// 1e-3 along the normal, as AOIntegrator does) don't hit the same curve right away.
+	void TestBezierCurveHitsFarFromOrigin()
+	{
+		using namespace happyray;
+		Rng rng(11, 5);
+		int self_hits = 0, hits = 0;
+		for (int c = 0; c < 200; ++c)
+		{
+			const Vec3f center(20.0f * rng.NextFloat() - 10.0f, 20.0f * rng.NextFloat() - 10.0f, 40.0f);
+			const Vec3f axis = Normalize(Vec3f(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f));
+			const Vec3f bend = Vec3f(rng.NextFloat(), rng.NextFloat(), rng.NextFloat()) * 0.3f;
+			const BezierCurve curve(center - axis,
+									center - axis * 0.3f + bend,
+									center + axis * 0.3f - bend,
+									center + axis,
+									0.24f);
+			const Vec3f		  eye(0.0f, 0.0f, -35.0f);
+			for (int r = 0; r < 32; ++r)
+			{
+				const Vec3f target = EvaluateBezierCurve(curve, rng.NextFloat()) +
+									 Vec3f(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f, 0.0f) * 0.4f;
+				const Ray primary(eye, target - eye);
+				float	  t = 0.0f, u = 0.0f;
+				if (!IntersectRayBezierCurve(primary, curve, &t, &u))
+					continue;
+				++hits;
+				const Vec3f position = primary.At(t);
+				const Vec3f normal	 = Normalize(position - EvaluateBezierCurve(curve, u));
+				for (int i = 0; i < 8; ++i)
+				{
+					const Vec2f sample = Halton2D(static_cast<uint32_t>(i));
+					const Ray occlusion(position + normal * 1e-3f, SampleCosineHemisphere(normal, sample.x, sample.y));
+					float	  t_occlusion;
+					// Strongly bent curves can genuinely occlude themselves further away.
+					self_hits += IntersectRayBezierCurve(occlusion, curve, &t_occlusion) && t_occlusion < curve.radius;
+				}
+			}
+		}
+		HAPPYRAY_CHECK(hits > 1000);
+		HAPPYRAY_CHECK(self_hits == 0);
+	}
+
 	void TestQuaternion()
 	{
 		using namespace happyray;
@@ -781,6 +824,7 @@ int main(int argc, char **argv)
 	TestAdditionalPrimitiveBounds();
 	TestPrimitiveIntersections();
 	TestBezierCurveMatchesStackSubdivision();
+	TestBezierCurveHitsFarFromOrigin();
 	TestQuaternion();
 	TestHalton();
 	TestTriangleSubdivision();

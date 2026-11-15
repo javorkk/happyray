@@ -232,20 +232,28 @@ namespace happyray
 
 		// The capsules stay inside the control hull grown by radius + 2 * tolerance (unless the
 		// depth limit stops subdivision first), so rays missing that box miss the curve.
+		float t_near, t_far;
 		{
 			BBox hull;
 			for (int i = 0; i < BezierCurve::kNumVertices; ++i)
 				hull.Grow(curve.vtx[i]);
 			const Vec3f slack(curve.radius + 2.0f * tolerance);
-			float		t_near, t_far;
 			if (!IntersectRayBBox(ray, BBox(hull.min_bound - slack, hull.max_bound + slack), &t_near, &t_far))
 				return false;
 		}
+		// Capsules are intersected from where the ray enters that box: from a distant origin the
+		// capsule quadratic's terms cancel, and the hit error (~1e-3 at 75 units for a 0.24 radius)
+		// put AO rays' origins back inside the capsule they started from.
+		const float t_shift = t_near > ray.t_min ? t_near : 0.0f;
+		Ray			local	= ray;
+		local.origin		= ray.At(t_shift);
+		local.t_min			= ray.t_min - t_shift;
+		local.t_max			= ray.t_max - t_shift;
 
 		const float					   tolerance_squared = tolerance * tolerance;
 		const detail::BezierPolynomial polynomial(curve);
 		bool						   found	 = false;
-		float						   closest_t = ray.t_max;
+		float						   closest_t = local.t_max;
 		float						   closest_u = 0.0f;
 		int							   depth	 = 0;
 		uint32_t					   index	 = 0; // The node spans [index, index + 1] / 2^depth.
@@ -271,7 +279,7 @@ namespace happyray
 
 			const float proxy_radius = curve.radius + std::sqrt(flatness_squared) + tolerance;
 			float		t, s;
-			if (detail::IntersectRayCapsule(ray, q0, q3, proxy_radius, &t, &s) && (!found || t < closest_t))
+			if (detail::IntersectRayCapsule(local, q0, q3, proxy_radius, &t, &s) && (!found || t < closest_t))
 			{
 				closest_t = t;
 				closest_u = u0 + s * (u1 - u0);
@@ -293,7 +301,7 @@ namespace happyray
 
 		if (found)
 		{
-			*out_t = closest_t;
+			*out_t = closest_t + t_shift;
 			*out_u = closest_u;
 		}
 		return found;
