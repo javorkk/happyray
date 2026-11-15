@@ -10,6 +10,7 @@
 
 #include "../render/camera.h"
 #include "../render/renderer.h"
+#include "animation.h"
 #include "attractor_scene.h"
 #include "obj_loader.h"
 #include "scene.h"
@@ -189,7 +190,8 @@ int main(int argc, char **argv)
 	if (!ParseOptions(argc, argv, &options))
 	{
 		std::fprintf(stderr,
-					 "Usage: %s [scene.obj|attractor:<points|spheres|curves>[:count] ...] [--width W] "
+					 "Usage: %s [scene.obj|scene.usd[a|c|z]|animation.cfg|attractor:<points|spheres|curves>[:count] "
+					 "...] [--width W] "
 					 "[--height H] [--frames N] [--warmup N] [--samples N] [--assets-dir DIR] "
 					 "[--overlap aabb|exact|hybrid] [--radius PIXELS] [--no-brute-force]\n",
 					 argv[0]);
@@ -226,12 +228,23 @@ int main(int argc, char **argv)
 	bool any_failure = false;
 	for (const std::string &scene_path : options.scene_paths)
 	{
-		happyray::Scene			scene;
-		happyray::PrimitiveType attractor_type;
-		uint32_t				attractor_count = 0;
+		happyray::Scene				scene;
+		happyray::KeyframeAnimation animation; // .cfg/USD inputs: only the first frame is timed.
+		happyray::PrimitiveType		attractor_type;
+		uint32_t					attractor_count = 0;
+		const bool is_config = scene_path.size() > 4 && scene_path.compare(scene_path.size() - 4, 4, ".cfg") == 0;
 		if (happyray::ParseAttractorSpec(scene_path, &attractor_type, &attractor_count))
 		{
 			scene = happyray::MakeAttractorScene(attractor_type, attractor_count);
+		}
+		else if (is_config || happyray::IsUsdPath(scene_path))
+		{
+			if (!(is_config ? animation.LoadConfig(scene_path, &scene) : animation.LoadUsd(scene_path, &scene)))
+			{
+				std::fprintf(stderr, "Failed to load '%s', skipping.\n", scene_path.c_str());
+				any_failure = true;
+				continue;
+			}
 		}
 		else if (!happyray::LoadObj(scene_path, &scene))
 		{
@@ -242,7 +255,9 @@ int main(int argc, char **argv)
 		const happyray::FlatScene flat_scene = happyray::FlattenScene(scene);
 
 		happyray::Camera camera = happyray::MakeDefaultCamera(scene);
-		happyray::LoadCameraConfig(happyray::CameraConfigPathFor(scene_path), &camera);
+		happyray::LoadCameraConfig(animation.CameraConfigPath().empty() ? happyray::CameraConfigPathFor(scene_path)
+																		: animation.CameraConfigPath(),
+								   &camera);
 		happyray::AOIntegrator integrator;
 		integrator.samples_per_pixel_per_frame = options.samples_per_pixel_per_frame;
 		integrator.max_distance				   = happyray::DefaultMaxDistance(scene);

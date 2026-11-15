@@ -177,9 +177,50 @@ namespace happyray
 			 };
 		}
 
+		// Power basis B(u) = ((a u + b) u + c) u + p0, for extracting sub-curves without splitting.
+		struct BezierPolynomial
+		{
+			Vec3f a, b, c, p0, p3;
+
+			HAPPYRAY_HD explicit BezierPolynomial(const BezierCurve &curve)
+				: a(curve.vtx[3] - curve.vtx[0] + (curve.vtx[1] - curve.vtx[2]) * 3.0f),
+				  b((curve.vtx[2] - curve.vtx[1] * 2.0f + curve.vtx[0]) * 3.0f),
+				  c((curve.vtx[1] - curve.vtx[0]) * 3.0f), p0(curve.vtx[0]), p3(curve.vtx[3])
+			{
+			}
+
+			HAPPYRAY_HD Vec3f Position(float u) const
+			{
+				return u == 1.0f ? p3 : ((a * u + b) * u + c) * u + p0;
+			}
+
+			HAPPYRAY_HD Vec3f Derivative(float u) const
+			{
+				return (a * (3.0f * u) + b * 2.0f) * u + c;
+			}
+
+			// The sub-curve over [u0, u1] from its end points and derivatives: for dyadic intervals,
+			// the control points SplitBezierSegment reaches, up to rounding.
+			HAPPYRAY_HD static BezierSegment
+			Segment(float u0, float u1, int depth, const Vec3f &q0, const Vec3f &d0, const Vec3f &q3, const Vec3f &d1)
+			{
+				const float third = (u1 - u0) * (1.0f / 3.0f);
+				return {
+					{q0, q0 + d0 * third, q3 - d1 * third, q3},
+					u0,
+					u1,
+					depth
+				 };
+			}
+		};
+
 	} // namespace detail
 
-	// `out_u` receives the curve parameter of the hit.
+	// `out_u` receives the curve parameter of the hit. Subdivides the curve until each piece is
+	// within `tolerance` of its chord and intersects the chords' capsules, widened by each piece's
+	// deviation. The subdivision tree is walked depth-first without a stack (a node is its depth and
+	// index, its control points come from the curve's polynomial): on GPUs a stack of segments lives
+	// in local memory, and its traffic dominated the test.
 	HAPPYRAY_HD inline bool IntersectRayBezierCurve(const Ray		  &ray,
 													const BezierCurve &curve,
 													float			  *out_t,
@@ -188,36 +229,66 @@ namespace happyray
 	{
 		if (curve.radius < 0.0f || tolerance < 0.0f)
 			return false;
-		detail::BezierSegment stack[kBezierMaxSubdivisionDepth + 1];
-		stack[0]					  = detail::WholeBezierSegment(curve);
-		int			stack_size		  = 1;
-		bool		found			  = false;
-		float		closest_t		  = ray.t_max;
-		float		closest_u		  = 0.0f;
-		const float tolerance_squared = tolerance * tolerance;
 
-		while (stack_size > 0)
+		// The capsules stay inside the control hull grown by radius + 2 * tolerance (unless the
+		// depth limit stops subdivision first), so rays missing that box miss the curve.
 		{
-			const detail::BezierSegment segment			 = stack[--stack_size];
+			BBox hull;
+			for (int i = 0; i < BezierCurve::kNumVertices; ++i)
+				hull.Grow(curve.vtx[i]);
+			const Vec3f slack(curve.radius + 2.0f * tolerance);
+			float		t_near, t_far;
+			if (!IntersectRayBBox(ray, BBox(hull.min_bound - slack, hull.max_bound + slack), &t_near, &t_far))
+				return false;
+		}
+
+		const float					   tolerance_squared = tolerance * tolerance;
+		const detail::BezierPolynomial polynomial(curve);
+		bool						   found	 = false;
+		float						   closest_t = ray.t_max;
+		float						   closest_u = 0.0f;
+		int							   depth	 = 0;
+		uint32_t					   index	 = 0; // The node spans [index, index + 1] / 2^depth.
+		// A node's start point and derivative carry over: a left child starts where its parent
+		// does, the next node where the previous one ended.
+		Vec3f q0 = curve.vtx[0];
+		Vec3f d0 = polynomial.c;
+		for (;;)
+		{
+			const float					scale	= 1.0f / static_cast<float>(1u << depth);
+			const float					u0		= static_cast<float>(index) * scale;
+			const float					u1		= static_cast<float>(index + 1) * scale;
+			const Vec3f					q3		= polynomial.Position(u1);
+			const Vec3f					d1		= polynomial.Derivative(u1);
+			const detail::BezierSegment segment = detail::BezierPolynomial::Segment(u0, u1, depth, q0, d0, q3, d1);
 			const float					flatness_squared = detail::BezierFlatnessSquared(segment);
-			if (flatness_squared > tolerance_squared && segment.depth < kBezierMaxSubdivisionDepth)
+			if (flatness_squared > tolerance_squared && depth < kBezierMaxSubdivisionDepth)
 			{
-				detail::BezierSegment left, right;
-				detail::SplitBezierSegment(segment, &left, &right);
-				stack[stack_size++] = right;
-				stack[stack_size++] = left;
+				++depth; // Left child.
+				index *= 2;
 				continue;
 			}
 
 			const float proxy_radius = curve.radius + std::sqrt(flatness_squared) + tolerance;
 			float		t, s;
-			if (detail::IntersectRayCapsule(ray, segment.control[0], segment.control[3], proxy_radius, &t, &s) &&
-				(!found || t < closest_t))
+			if (detail::IntersectRayCapsule(ray, q0, q3, proxy_radius, &t, &s) && (!found || t < closest_t))
 			{
 				closest_t = t;
-				closest_u = segment.u0 + s * (segment.u1 - segment.u0);
+				closest_u = u0 + s * (u1 - u0);
 				found	  = true;
 			}
+
+			// Climb past right children, then step to the next sibling.
+			while (index & 1u)
+			{
+				index >>= 1;
+				--depth;
+			}
+			if (depth == 0)
+				break;
+			++index;
+			q0 = q3;
+			d0 = d1;
 		}
 
 		if (found)

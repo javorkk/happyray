@@ -165,7 +165,7 @@ primitives are drawn red, and the window title shows the detection time as `coll
 ## Running the benchmark
 
 ```sh
-./build/src/app/happyray_benchmark [scene.obj|attractor:<points|spheres|curves>[:count] ...]
+./build/src/app/happyray_benchmark [scene.obj|scene.usd[a|c|z]|animation.cfg|attractor:<points|spheres|curves>[:count] ...]
                                [--width W] [--height H] [--frames N] [--warmup N] [--samples N]
                                [--assets-dir DIR] [--overlap aabb|exact|hybrid]
                                [--radius PIXELS] [--no-brute-force]
@@ -173,7 +173,8 @@ primitives are drawn red, and the window title shows the detection time as `coll
 
 Times `Renderer::RenderFrame` for brute force and the three grids on each scene (default
 `assets/box_on_floor.obj` and `assets/dense_cube.obj`) and prints frame times, AO-ray throughput,
-and grid build time. It measures the backend it was built with.
+and grid build time. It measures the backend it was built with. USD files and animation `.cfg`s
+(USD builds only) are timed on their first frame.
 
 ### Acceleration performance tests
 

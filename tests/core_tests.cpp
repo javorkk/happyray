@@ -345,6 +345,86 @@ namespace
 		HAPPYRAY_CHECK(!IntersectTriangles(flat, degenerate_outside));
 	}
 
+	// The ray test's capsules, by splitting segments on an explicit stack (de Casteljau).
+	bool IntersectRayBezierCurveReference(const happyray::Ray &ray, const happyray::BezierCurve &curve, float *out_t)
+	{
+		using namespace happyray;
+		detail::BezierSegment stack[kBezierMaxSubdivisionDepth + 1];
+		stack[0]			  = detail::WholeBezierSegment(curve);
+		int			size	  = 1;
+		bool		found	  = false;
+		float		closest_t = ray.t_max;
+		const float tol2	  = kBezierRayTolerance * kBezierRayTolerance;
+		while (size > 0)
+		{
+			const detail::BezierSegment segment			 = stack[--size];
+			const float					flatness_squared = detail::BezierFlatnessSquared(segment);
+			if (flatness_squared > tol2 && segment.depth < kBezierMaxSubdivisionDepth)
+			{
+				detail::SplitBezierSegment(segment, &stack[size + 1], &stack[size]);
+				size += 2;
+				continue;
+			}
+			float t, s;
+			if (detail::IntersectRayCapsule(ray,
+											segment.control[0],
+											segment.control[3],
+											curve.radius + std::sqrt(flatness_squared) + kBezierRayTolerance,
+											&t,
+											&s) &&
+				(!found || t < closest_t))
+			{
+				closest_t = t;
+				found	  = true;
+			}
+		}
+		*out_t = closest_t;
+		return found;
+	}
+
+	// The stackless subdivision walk finds the same capsules as splitting on a stack.
+	void TestBezierCurveMatchesStackSubdivision()
+	{
+		using namespace happyray;
+		Rng	 rng(7, 3);
+		auto random_point = [&](float scale)
+		{ return Vec3f(rng.NextFloat(), rng.NextFloat(), rng.NextFloat()) * scale; };
+		int rays = 0, hits = 0, mismatches = 0;
+		for (int c = 0; c < 400; ++c)
+		{
+			// From nearly straight to strongly bent curves.
+			const float		  bend = c % 4 == 0 ? 0.002f : (c % 4 == 1 ? 0.05f : 1.0f);
+			const Vec3f		  p0 = random_point(1.0f), p3 = p0 + Vec3f(0.3f, 0.1f, -0.2f) + random_point(0.2f);
+			const BezierCurve curve(p0,
+									Lerp(p0, p3, 1.0f / 3.0f) + random_point(bend),
+									Lerp(p0, p3, 2.0f / 3.0f) + random_point(bend),
+									p3,
+									0.005f + 0.05f * rng.NextFloat());
+			for (int r = 0; r < 64; ++r, ++rays)
+			{
+				const Vec3f target = EvaluateBezierCurve(curve, rng.NextFloat()) + random_point(5.0f * curve.radius) -
+									 Vec3f(2.5f * curve.radius);
+				const Vec3f origin = target + (random_point(2.0f) - Vec3f(1.0f)) * 3.0f;
+				const Ray	ray(origin, target - origin);
+				float		t = 0.0f, t_reference = 0.0f, u = -1.0f;
+				const bool	hit			  = IntersectRayBezierCurve(ray, curve, &t, &u);
+				const bool	hit_reference = IntersectRayBezierCurveReference(ray, curve, &t_reference);
+				hits += hit;
+				// Rounding can flip which capsules grazing rays touch.
+				if (hit != hit_reference || (hit && std::fabs(t - t_reference) > 1e-3f * std::fmax(1.0f, t_reference)))
+				{
+					++mismatches;
+					continue;
+				}
+				if (!hit)
+					continue;
+				HAPPYRAY_CHECK(u >= 0.0f && u <= 1.0f);
+			}
+		}
+		HAPPYRAY_CHECK(hits > rays / 4 && hits < rays * 3 / 4);
+		HAPPYRAY_CHECK(mismatches * 1000 <= rays);
+	}
+
 	void TestQuaternion()
 	{
 		using namespace happyray;
@@ -700,6 +780,7 @@ int main(int argc, char **argv)
 	TestBBoxExtractor();
 	TestAdditionalPrimitiveBounds();
 	TestPrimitiveIntersections();
+	TestBezierCurveMatchesStackSubdivision();
 	TestQuaternion();
 	TestHalton();
 	TestTriangleSubdivision();

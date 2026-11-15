@@ -34,4 +34,5 @@ target_link_libraries(happyray PRIVATE happyray_core happyray_render happyray_ob
     happyray_usd_loader happyray_screenshot PkgConfig::SDL2)
 
 add_executable(happyray_benchmark benchmark.cpp)
-target_link_libraries(happyray_benchmark PRIVATE happyray_core happyray_render happyray_obj_loader)
+target_link_libraries(happyray_benchmark PRIVATE happyray_core happyray_render happyray_obj_loader
+    happyray_usd_loader)
