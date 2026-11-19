@@ -37,7 +37,7 @@ namespace
 		}                                                                                                              \
 	} while (0)
 
-	// Same jitter table as Renderer::ResizeFramebuffer, so the samples match.
+	// Same jitter table as Framebuffer::Resize, so the samples match.
 	std::vector<happyray::Vec2f> MakePixelJitter(int width, int height)
 	{
 		std::vector<happyray::Vec2f> jitter(static_cast<size_t>(width) * height);
@@ -788,6 +788,132 @@ namespace
 		HAPPYRAY_CHECK(coverage[1] > coverage[0]);
 	}
 
+	// Host reference for Framebuffer::AveragePixelError over per-frame samples[frame][pixel]: even
+	// frames form half estimate A, odd ones B.
+	float ReferencePixelError(const std::vector<std::vector<happyray::Vec3f>> &samples)
+	{
+		const size_t frames	   = samples.size();
+		const size_t pixels	   = samples[0].size();
+		double		 error_sum = 0.0;
+		for (size_t p = 0; p < pixels; ++p)
+		{
+			double half_sums[2] = {0.0, 0.0};
+			for (size_t f = 0; f < frames; ++f)
+				half_sums[f % 2] += (double(samples[f][p].x) + samples[f][p].y + samples[f][p].z) / 3.0;
+			error_sum += std::fabs(half_sums[0] - half_sums[1]) / static_cast<double>(frames);
+		}
+		return static_cast<float>(error_sum / static_cast<double>(pixels));
+	}
+
+	void TestErrorTermination(const happyray::FlatScene &scene, const happyray::Camera &camera)
+	{
+		using namespace happyray;
+		constexpr uint32_t kMinSamples = Framebuffer::kMinErrorSamples;
+		{
+			// Background only: A equals B, so tracking converges exactly at kMinSamples.
+			Renderer	 renderer(FlatScene{});
+			Framebuffer &framebuffer = renderer.GetFramebuffer();
+			HAPPYRAY_CHECK(!framebuffer.ErrorTrackingEnabled());
+			HAPPYRAY_CHECK(framebuffer.TargetPixelError() == 0.01f);
+			renderer.ResizeFramebuffer(4, 3);
+			const AOIntegrator ao;
+			for (uint32_t frame = 0; frame < 2 * kMinSamples; ++frame)
+				renderer.RenderFrame(camera, ao);
+			HAPPYRAY_CHECK(framebuffer.ErrorSampleCount() == 0);
+			HAPPYRAY_CHECK(std::isinf(framebuffer.AveragePixelError()));
+			HAPPYRAY_CHECK(!framebuffer.Converged());
+
+			framebuffer.SetErrorTrackingEnabled(true);
+			for (uint32_t frame = 1; frame <= kMinSamples; ++frame)
+			{
+				renderer.RenderFrame(camera, ao);
+				HAPPYRAY_CHECK(framebuffer.ErrorSampleCount() == frame);
+				HAPPYRAY_CHECK(framebuffer.Converged() == (frame == kMinSamples));
+			}
+			HAPPYRAY_CHECK(framebuffer.AveragePixelError() == 0.0f);
+			framebuffer.SetTargetPixelError(0.0f);
+			HAPPYRAY_CHECK(!framebuffer.Converged());
+			framebuffer.SetTargetPixelError(Framebuffer::kDefaultTargetPixelError);
+			HAPPYRAY_CHECK(framebuffer.Converged());
+
+			renderer.ResetAccumulation();
+			HAPPYRAY_CHECK(framebuffer.ErrorSampleCount() == 0);
+			HAPPYRAY_CHECK(!framebuffer.Converged());
+			for (uint32_t frame = 0; frame < kMinSamples; ++frame)
+				renderer.RenderFrame(camera, ao);
+			HAPPYRAY_CHECK(framebuffer.Converged());
+			framebuffer.SetErrorTrackingEnabled(false); // Pausing ends: the estimate restarts.
+			HAPPYRAY_CHECK(framebuffer.ErrorSampleCount() == 0);
+			HAPPYRAY_CHECK(!framebuffer.Converged());
+
+			bool threw = false;
+			try
+			{
+				framebuffer.SetTargetPixelError(-1.0f);
+			}
+			catch (const std::invalid_argument &)
+			{
+				threw = true;
+			}
+			HAPPYRAY_CHECK(threw);
+		}
+
+		// Noisy AO: the progressive renderer's error must match a host reference over the AO frames
+		// recovered from a lockstep accumulation (the preview frame is not an error sample).
+		Renderer	 progressive(scene), ao_renderer(scene);
+		Framebuffer &framebuffer = progressive.GetFramebuffer();
+		AOIntegrator ao;
+		ao.max_distance = 1.5f;
+		SimpleIntegrator simple;
+		simple.light_direction = camera.Forward() * -1.0f;
+		progressive.ResizeFramebuffer(24, 16);
+		ao_renderer.ResizeFramebuffer(24, 16);
+		framebuffer.SetErrorTrackingEnabled(true);
+		framebuffer.SetTargetPixelError(0.0f);
+		progressive.RenderProgressiveFrame(camera, ao, simple);
+		HAPPYRAY_CHECK(framebuffer.ErrorSampleCount() == 0);
+
+		std::vector<std::vector<Vec3f>> samples;
+		std::vector<Vec3f>				previous_sum(framebuffer.PixelCount(), Vec3f(0.0f, 0.0f, 0.0f));
+		float							error_at_min_samples = 0.0f;
+		float							previous_error		 = 0.0f;
+		for (uint32_t frame = 1; frame <= 4 * kMinSamples; ++frame)
+		{
+			progressive.RenderProgressiveFrame(camera, ao, simple);
+			ao_renderer.RenderFrame(camera, ao);
+			HAPPYRAY_CHECK(framebuffer.ErrorSampleCount() == frame);
+			std::vector<Vec3f> sample(previous_sum.size());
+			for (size_t p = 0; p < sample.size(); ++p)
+			{
+				const Vec3f sum = ao_renderer.ResolvedPixels()[p] * static_cast<float>(frame);
+				sample[p]		= sum - previous_sum[p];
+				previous_sum[p] = sum;
+			}
+			samples.push_back(std::move(sample));
+			if (frame < kMinSamples)
+			{
+				HAPPYRAY_CHECK(std::isinf(framebuffer.AveragePixelError()));
+				continue;
+			}
+			const float actual = framebuffer.AveragePixelError();
+			if (frame % 2 != 0) // Unequal halves: keeps the last estimate.
+			{
+				HAPPYRAY_CHECK(actual == previous_error);
+				continue;
+			}
+			const float expected = ReferencePixelError(samples);
+			previous_error		 = actual;
+			HAPPYRAY_CHECK(expected > 0.0f);
+			HAPPYRAY_CHECK(std::fabs(actual - expected) <= 1e-3f * expected + 1e-5f);
+			if (frame == kMinSamples)
+				error_at_min_samples = actual;
+		}
+		HAPPYRAY_CHECK(framebuffer.AveragePixelError() < error_at_min_samples);
+		HAPPYRAY_CHECK(!framebuffer.Converged());
+		framebuffer.SetTargetPixelError(framebuffer.AveragePixelError() * 1.01f);
+		HAPPYRAY_CHECK(framebuffer.Converged());
+	}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -812,6 +938,7 @@ int main(int argc, char **argv)
 	camera.pitch_deg = -25.0f;
 
 	TestProgressiveBlend(flat_scene, camera);
+	TestErrorTermination(flat_scene, camera);
 	TestAccelerationStructureBuilds(flat_scene, camera);
 	TestDensityGridRebuilds(flat_scene, camera);
 	TestAnimatedSceneUpdate(flat_scene, camera);

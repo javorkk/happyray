@@ -269,6 +269,21 @@ int main(int argc, char **argv)
 	}
 	std::printf("Grid cell overlap: %s\n", happyray::CellOverlapModeName(renderer.GetCellOverlapMode()));
 
+	// HAPPYRAY_TARGET_PIXEL_ERROR overrides the mean per-pixel standard error at which a still image
+	// stops rendering (default 0.01); 0 renders forever.
+	happyray::Framebuffer &framebuffer = renderer.GetFramebuffer();
+	if (const char *target_pixel_error = std::getenv("HAPPYRAY_TARGET_PIXEL_ERROR"))
+	{
+		try
+		{
+			framebuffer.SetTargetPixelError(std::strtof(target_pixel_error, nullptr));
+		}
+		catch (const std::invalid_argument &error)
+		{
+			std::fprintf(stderr, "Ignoring HAPPYRAY_TARGET_PIXEL_ERROR=%s: %s\n", target_pixel_error, error.what());
+		}
+	}
+
 	// HAPPYRAY_ACCEL_TYPE=uniform_grid, two_level_grid, or irregular_grid overrides the default.
 	happyray::AccelType accel_type		   = happyray::AccelType::kTwoLevelGrid;
 	const char		   *initial_accel_type = std::getenv("HAPPYRAY_ACCEL_TYPE");
@@ -588,9 +603,16 @@ int main(int argc, char **argv)
 			}
 		}
 
-		simple_integrator.light_direction = camera.Forward() * -1.0f;
-		renderer.RenderProgressiveFrame(camera, ao_integrator, simple_integrator);
-		++rendered_frame_count;
+		// The error estimate accumulates only while the camera and animation are paused; once the image has
+		// converged, frames are no longer rendered.
+		framebuffer.SetErrorTrackingEnabled(!camera_dirty && (!animation_loaded || animation.IsPaused()));
+		const bool render_converged = framebuffer.Converged();
+		if (!render_converged)
+		{
+			simple_integrator.light_direction = camera.Forward() * -1.0f;
+			renderer.RenderProgressiveFrame(camera, ao_integrator, simple_integrator);
+			++rendered_frame_count;
+		}
 
 		const bool density_search_view_stable = !animation_loaded || animation.IsPaused();
 		if (density_search_enabled && density_search_view_stable && !camera_dirty && running &&
@@ -670,7 +692,8 @@ int main(int argc, char **argv)
 		}
 		const int screenshot_frame_count =
 			animation_loaded ? rendered_frame_count : static_cast<int>(renderer.SampleCount());
-		if (screenshot_path && screenshot_frame_count >= screenshot_at_frame)
+		// A converged image renders no more frames, so it is final.
+		if (screenshot_path && (screenshot_frame_count >= screenshot_at_frame || render_converged))
 		{
 			const std::string path(screenshot_path);
 			if (path.size() >= 4 && path.compare(path.size() - 4, 4, ".png") == 0)
@@ -681,6 +704,10 @@ int main(int argc, char **argv)
 			{
 				WritePpmScreenshot(path, width, height, resolved);
 			}
+			std::printf("Screenshot after %u spp, mean pixel error %g%s\n",
+						renderer.SampleCount(),
+						framebuffer.AveragePixelError(),
+						render_converged ? " (converged)" : "");
 			running = false;
 		}
 		SDL_UpdateTexture(texture, nullptr, pixel_buffer.data(), width * sizeof(uint32_t));
@@ -723,9 +750,27 @@ int main(int argc, char **argv)
 		}
 		if (show_collision_ms && title_used >= 0 && static_cast<size_t>(title_used) < sizeof(title))
 		{
-			std::snprintf(title + title_used, sizeof(title) - title_used, " - coll: %.2f ms", collision_stats.total_ms);
+			const int written = std::snprintf(title + title_used,
+											  sizeof(title) - title_used,
+											  " - coll: %.2f ms",
+											  collision_stats.total_ms);
+			title_used		  = written >= 0 ? title_used + written : -1;
+		}
+		const float pixel_error = framebuffer.AveragePixelError();
+		if (std::isfinite(pixel_error) && title_used >= 0 && static_cast<size_t>(title_used) < sizeof(title))
+		{
+			std::snprintf(title + title_used,
+						  sizeof(title) - title_used,
+						  " - err: %.4f%s",
+						  pixel_error,
+						  framebuffer.Converged() ? " (done)" : "");
 		}
 		SDL_SetWindowTitle(window, title);
+		// Nothing renders until an input changes the view, so wait for one instead of spinning.
+		if (render_converged && running)
+		{
+			SDL_WaitEventTimeout(nullptr, 50);
+		}
 	}
 
 	SDL_DestroyTexture(texture);

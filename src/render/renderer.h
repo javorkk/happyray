@@ -12,6 +12,7 @@
 #include "ao_integrator.h"
 #include "camera.h"
 #include "collision_detector.h"
+#include "framebuffer.h"
 #include "simple_integrator.h"
 
 namespace happyray
@@ -43,16 +44,21 @@ namespace happyray
 		Renderer(const Renderer &)			  = delete;
 		Renderer &operator=(const Renderer &) = delete;
 
-		// Also regenerates the per-pixel jitter table (see random.h).
+		// Framebuffer::Resize; also regenerates the per-pixel jitter table (see random.h).
 		void ResizeFramebuffer(int width, int height);
 
 		// Invalidates stale grids and rebuilds the active one.
 		void UpdateScene(const FlatScene &scene);
 
-		// Keeps the pixel jitter table.
+		// Framebuffer::Reset: also clears the error estimate; keeps the pixel jitter table.
 		void ResetAccumulation();
 
 		uint32_t SampleCount() const;
+
+		// Error tracking and convergence (see framebuffer.h). Only AO frames of
+		// RenderProgressiveFrame (and any RenderFrame) are error samples, not the preview.
+		Framebuffer		  &GetFramebuffer();
+		const Framebuffer &GetFramebuffer() const;
 
 		// No-op for brute force. Settings are kept per grid for scene updates and density tuning.
 		void BuildAccelerationStructure(GridBuildSettings settings = {});

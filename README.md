@@ -122,10 +122,21 @@ camera = ogre.camera.cfg
 Environment variables for headless runs: `HAPPYRAY_SCREENSHOT_PATH=<file.ppm|file.png>` with
 `HAPPYRAY_SCREENSHOT_FRAME=<n>` saves a screenshot after `n` frames and exits;
 `HAPPYRAY_ACCEL_TYPE=uniform_grid|two_level_grid|irregular_grid` selects the starting grid;
-`HAPPYRAY_CELL_OVERLAP=aabb|exact|hybrid` overrides how grids assign primitives to cells.
+`HAPPYRAY_CELL_OVERLAP=aabb|exact|hybrid` overrides how grids assign primitives to cells;
+`HAPPYRAY_TARGET_PIXEL_ERROR=<e>` sets the convergence target (default `0.01`, `0` never stops).
+A screenshot is also taken, and the viewer exits, once the image has converged.
 
 The first frame after a camera move uses simple cartoon shading; after `n` AO frames the
 display is `(1 - w) * simple + w * average_AO` with `w = n / (n + 32)`.
+
+While the camera and animation are paused, the framebuffer (`src/render/framebuffer.h`) splits
+the AO frames since the pause into two alternating half estimates A and B of each pixel's
+luminance `(r+g+b)/3`. The pixel error is `|A - B| / 2`, which is distributed like the error of
+their average, so it holds for any sampler or integrator without assuming a convergence rate.
+For that, alternate frames must each cover the whole sampled domain, so the Halton sequence uses
+bases 3 and 5 (base 2 would split into halves of the domain). After at least 16 frames, rendering
+stops once the mean pixel error falls below the target pixel error; the window title shows
+`err: <mean error>`, followed by `(done)` once it has converged.
 
 After 32 still frames, the viewer searches the active grid's densities in `[0.25x, 4x]` the
 defaults, keeping the candidate with the lowest SAH cost (`src/accel/sah_cost.h`). SAH costs need

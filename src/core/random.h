@@ -69,10 +69,12 @@ namespace happyray
 		return result;
 	}
 
-	// Bases 2 and 3.
+	// Bases 3 and 5, skipping base 2: even (odd) indices have base-2 radical inverses in [0, 0.5)
+	// ([0.5, 1)), so alternate frames would each cover half the domain, while the framebuffer's
+	// error estimate needs alternate frames to cover all of it (see framebuffer.h).
 	HAPPYRAY_HD inline Vec2f Halton2D(uint32_t index)
 	{
-		return Vec2f(HaltonRadicalInverse(index, 2u), HaltonRadicalInverse(index, 3u));
+		return Vec2f(HaltonRadicalInverse(index, 3u), HaltonRadicalInverse(index, 5u));
 	}
 
 	HAPPYRAY_HD inline float Frac(float v)

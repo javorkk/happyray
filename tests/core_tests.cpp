@@ -521,6 +521,22 @@ namespace
 		HAPPYRAY_CHECK(NearlyEqual(HaltonRadicalInverse(1, 3), 1.0f / 3.0f));
 		HAPPYRAY_CHECK(NearlyEqual(HaltonRadicalInverse(3, 3), 1.0f / 9.0f));
 
+		// Even and odd indices (alternate frames, see framebuffer.h) each fill every quarter of
+		// both dimensions about equally.
+		for (uint32_t parity = 0; parity < 2; ++parity)
+		{
+			int quarters[2][4] = {};
+			for (uint32_t i = parity; i < 1024; i += 2)
+			{
+				const Vec2f sample = Halton2D(i);
+				++quarters[0][static_cast<int>(sample.x * 4.0f)];
+				++quarters[1][static_cast<int>(sample.y * 4.0f)];
+			}
+			for (const auto &dimension : quarters)
+				for (int count : dimension)
+					HAPPYRAY_CHECK(count >= 112 && count <= 144); // 128 each.
+		}
+
 		// Every sample stays inside [0, 1), for a reasonable range of indices.
 		for (uint32_t i = 0; i < 1000; ++i)
 		{

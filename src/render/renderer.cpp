@@ -49,8 +49,7 @@ namespace happyray
 			AccelStructures accel;
 			Camera			camera;
 			Integrator		integrator;
-			const Vec2f	   *pixel_jitter;
-			Vec3f		   *accumulated;
+			FramebufferView framebuffer;
 			uint32_t		sample_offset;
 			int				width;
 			int				height;
@@ -72,8 +71,8 @@ namespace happyray
 																			accel,
 																			primary_ray,
 																			sample_offset,
-																			pixel_jitter[pixel_index]);
-				accumulated[pixel_index] += sample;
+																			framebuffer.pixel_jitter[pixel_index]);
+				framebuffer.AddSample(pixel_index, sample);
 			}
 		};
 
@@ -92,21 +91,6 @@ namespace happyray
 		// every other type as stored.
 		template <typename P>
 		using TracedPrimitive = std::conditional_t<std::is_same_v<P, Triangle>, TracedTriangle, P>;
-
-		struct ResolveFunctor
-		{
-			float		 inv_sample_count;
-			const Vec3f *accumulated;
-			Vec3f		*resolved;
-			const Vec3f *preview;
-			float		 ao_weight;
-
-			HAPPYRAY_HD void operator()(uint32_t pixel) const
-			{
-				const Vec3f average = accumulated[pixel] * inv_sample_count;
-				resolved[pixel]		= preview ? Lerp(preview[pixel], average, ao_weight) : average;
-			}
-		};
 
 		// Sets the radius to `world_per_pixel` times the distance from `eye` to the nearest endpoint.
 		template <typename P> struct ScreenSpaceRadiusFunctor
@@ -152,21 +136,13 @@ namespace happyray
 		CollisionStats					   collision_stats;
 		bool							   collision_detection_enabled = true;
 
-		thrust::device_vector<Vec3f> accumulated;
-		thrust::device_vector<Vec2f> pixel_jitter;
-		thrust::device_vector<Vec3f> resolved_device;
-		thrust::device_vector<Vec3f> preview;
-		std::vector<Vec3f>			 resolved_host;
+		Framebuffer framebuffer;
 
 		std::unique_ptr<UniformGrid>	 uniform_grid;
 		std::unique_ptr<TwoLevelGrid>	 two_level_grid;
 		std::unique_ptr<IrregularGrid>	 irregular_grid;
 		AccelType						 accel_type = AccelType::kBruteForce;
 		std::array<GridBuildSettings, 4> grid_settings;
-
-		int		 width		  = 0;
-		int		 height		  = 0;
-		uint32_t sample_count = 0;
 
 		void UploadScene(const FlatScene &scene);
 		void ApplyViewDependentRadii();
@@ -185,13 +161,9 @@ namespace happyray
 				RunCollisionDetection(grid);
 		}
 
+		// Adds one sample per pixel; `error_sample` as in Framebuffer::BeginFrame. Resolve after.
 		template <typename Integrator>
-		void RenderFrame(const Camera	  &camera,
-						 const Integrator &integrator,
-						 uint32_t		   sample_offset,
-						 uint32_t		   accumulated_frames,
-						 const Vec3f	  *preview_pixels = nullptr,
-						 float			   ao_weight	  = 1.0f);
+		void RenderFrame(const Camera &camera, const Integrator &integrator, uint32_t sample_offset, bool error_sample);
 
 		SceneView View() const
 		{
@@ -290,6 +262,7 @@ namespace happyray
 	{
 		points = scene_points;
 		curves = scene_curves;
+		const int height = framebuffer.Height();
 		if (!has_view_camera || screen_space_radius <= 0.0f || height <= 0)
 			return;
 		const float tan_half_fov = std::tan(0.5f * view_camera.vertical_fov_deg * (3.14159265358979323846f / 180.0f));
@@ -313,27 +286,7 @@ namespace happyray
 
 	void Renderer::ResizeFramebuffer(int width, int height)
 	{
-		impl_->width			 = width;
-		impl_->height			 = height;
-		const size_t pixel_count = static_cast<size_t>(width) * height;
-
-		impl_->accumulated.assign(pixel_count, Vec3f(0.0f, 0.0f, 0.0f));
-		impl_->resolved_device.resize(pixel_count);
-		impl_->resolved_host.resize(pixel_count);
-		impl_->sample_count = 0;
-
-		// Per-pixel offset that decorrelates the Halton sequence (see random.h).
-		std::vector<Vec2f> jitter(pixel_count);
-		for (int y = 0; y < height; ++y)
-		{
-			for (int x = 0; x < width; ++x)
-			{
-				Rng rng(HashSeed(static_cast<uint32_t>(x), static_cast<uint32_t>(y), 0u),
-						static_cast<uint64_t>(y) * width + x);
-				jitter[static_cast<size_t>(y) * width + x] = Vec2f(rng.NextFloat(), rng.NextFloat());
-			}
-		}
-		impl_->pixel_jitter.assign(jitter.begin(), jitter.end());
+		impl_->framebuffer.Resize(width, height);
 	}
 
 	void Renderer::UpdateScene(const FlatScene &scene)
@@ -386,13 +339,22 @@ namespace happyray
 
 	void Renderer::ResetAccumulation()
 	{
-		thrust::fill(impl_->accumulated.begin(), impl_->accumulated.end(), Vec3f(0.0f, 0.0f, 0.0f));
-		impl_->sample_count = 0;
+		impl_->framebuffer.Reset();
 	}
 
 	uint32_t Renderer::SampleCount() const
 	{
-		return impl_->sample_count;
+		return impl_->framebuffer.SampleCount();
+	}
+
+	Framebuffer &Renderer::GetFramebuffer()
+	{
+		return impl_->framebuffer;
+	}
+
+	const Framebuffer &Renderer::GetFramebuffer() const
+	{
+		return impl_->framebuffer;
 	}
 
 	void Renderer::BuildAccelerationStructure(GridBuildSettings settings)
@@ -521,18 +483,17 @@ namespace happyray
 	void Renderer::Impl::RenderFrame(const Camera	  &camera,
 									 const Integrator &integrator,
 									 uint32_t		   sample_offset,
-									 uint32_t		   accumulated_frames,
-									 const Vec3f	  *preview_pixels,
-									 float			   ao_weight)
+									 bool			   error_sample)
 	{
+		const int width	 = framebuffer.Width();
+		const int height = framebuffer.Height();
 		if (width <= 0 || height <= 0)
 		{
 			return;
 		}
 
-		const uint32_t pixel_count = static_cast<uint32_t>(width) * height;
-
-		const AccelStructures accel = CurrentAccel();
+		const AccelStructures accel		  = CurrentAccel();
+		const FramebufferView framebuffer_view = framebuffer.BeginFrame(error_sample);
 		DispatchPrimitive(primitive_type,
 						  [&](auto prim_tag)
 						  {
@@ -541,72 +502,59 @@ namespace happyray
 											{
 												using P = TracedPrimitive<typename decltype(prim_tag)::type>;
 												using A = decltype(accel_tag);
-												const RenderPixelFunctor<Integrator, P, A> render{
-													View(),
-													accel,
-													camera,
-													integrator,
-													thrust::raw_pointer_cast(pixel_jitter.data()),
-													thrust::raw_pointer_cast(accumulated.data()),
-													sample_offset,
-													width,
-													height};
+												const RenderPixelFunctor<Integrator, P, A> render{View(),
+																								  accel,
+																								  camera,
+																								  integrator,
+																								  framebuffer_view,
+																								  sample_offset,
+																								  width,
+																								  height};
 												thrust::for_each(
 													thrust::counting_iterator<uint32_t>(0),
 													thrust::counting_iterator<uint32_t>(TiledPixelCount(width, height)),
 													render);
 											});
 						  });
-		++sample_count;
-
-		const ResolveFunctor resolve{1.0f / static_cast<float>(accumulated_frames),
-									 thrust::raw_pointer_cast(accumulated.data()),
-									 thrust::raw_pointer_cast(resolved_device.data()),
-									 preview_pixels,
-									 ao_weight};
-		thrust::for_each(thrust::counting_iterator<uint32_t>(0),
-						 thrust::counting_iterator<uint32_t>(pixel_count),
-						 resolve);
-		thrust::copy(resolved_device.begin(), resolved_device.end(), resolved_host.begin());
+		framebuffer.EndFrame();
 	}
 
 	void Renderer::RenderFrame(const Camera &camera, const AOIntegrator &integrator)
 	{
-		impl_->RenderFrame(camera,
-						   integrator,
-						   impl_->sample_count * integrator.samples_per_pixel_per_frame,
-						   impl_->sample_count + 1);
+		Framebuffer &framebuffer = impl_->framebuffer;
+		impl_->RenderFrame(camera, integrator, framebuffer.SampleCount() * integrator.samples_per_pixel_per_frame, true);
+		framebuffer.Resolve(framebuffer.SampleCount());
 	}
 
 	void Renderer::RenderFrame(const Camera &camera, const SimpleIntegrator &integrator)
 	{
-		impl_->RenderFrame(camera, integrator, 0, impl_->sample_count + 1);
+		Framebuffer &framebuffer = impl_->framebuffer;
+		impl_->RenderFrame(camera, integrator, 0, true);
+		framebuffer.Resolve(framebuffer.SampleCount());
 	}
 
 	void Renderer::RenderProgressiveFrame(const Camera &camera, const AOIntegrator &ao, const SimpleIntegrator &simple)
 	{
-		if (impl_->width <= 0 || impl_->height <= 0)
+		Framebuffer &framebuffer = impl_->framebuffer;
+		if (framebuffer.Width() <= 0 || framebuffer.Height() <= 0)
 			return;
-		if (impl_->sample_count == 0)
+		if (framebuffer.SampleCount() == 0)
 		{
-			RenderFrame(camera, simple);
-			impl_->preview = impl_->resolved_device;
-			thrust::fill(impl_->accumulated.begin(), impl_->accumulated.end(), Vec3f());
+			// The preview is not an AO sample, so it stays out of the error estimate.
+			impl_->RenderFrame(camera, simple, 0, false);
+			framebuffer.Resolve(1);
+			framebuffer.StorePreview();
 			return;
 		}
-		const uint32_t ao_frames = impl_->sample_count;
-		const float	   ao_weight = static_cast<float>(ao_frames) / (static_cast<float>(ao_frames) + 32.0f);
-		impl_->RenderFrame(camera,
-						   ao,
-						   (ao_frames - 1) * ao.samples_per_pixel_per_frame,
-						   ao_frames,
-						   thrust::raw_pointer_cast(impl_->preview.data()),
-						   ao_weight);
+		const uint32_t ao_frames = framebuffer.SampleCount();
+		impl_->RenderFrame(camera, ao, (ao_frames - 1) * ao.samples_per_pixel_per_frame, true);
+		const float ao_weight = static_cast<float>(ao_frames) / (static_cast<float>(ao_frames) + 32.0f);
+		framebuffer.ResolveOverPreview(ao_frames, ao_weight);
 	}
 
 	const std::vector<Vec3f> &Renderer::ResolvedPixels() const
 	{
-		return impl_->resolved_host;
+		return impl_->framebuffer.ResolvedPixels();
 	}
 
 	std::vector<uint32_t> Renderer::CollisionIds() const

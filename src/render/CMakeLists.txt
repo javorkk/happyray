@@ -1,10 +1,11 @@
 add_library(happyray_render STATIC
     renderer.cpp
+    framebuffer.cpp
     collision_detector.cpp
 )
 
 if(HAPPYRAY_THRUST_BACKEND STREQUAL "CUDA")
-    set_source_files_properties(renderer.cpp collision_detector.cpp PROPERTIES LANGUAGE CUDA)
+    set_source_files_properties(renderer.cpp framebuffer.cpp collision_detector.cpp PROPERTIES LANGUAGE CUDA)
     set_target_properties(happyray_render PROPERTIES CUDA_STANDARD 17)
 endif()
 
