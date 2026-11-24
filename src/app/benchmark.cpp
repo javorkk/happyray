@@ -252,12 +252,16 @@ int main(int argc, char **argv)
 			any_failure = true;
 			continue;
 		}
-		const happyray::FlatScene flat_scene = happyray::FlattenScene(scene);
+		const happyray::Vec3f	  scene_offset = happyray::CenterScene(&scene);
+		const happyray::FlatScene flat_scene   = happyray::FlattenScene(scene);
 
 		happyray::Camera camera = happyray::MakeDefaultCamera(scene);
 		happyray::LoadCameraConfig(animation.CameraConfigPath().empty() ? happyray::CameraConfigPathFor(scene_path)
 																		: animation.CameraConfigPath(),
-								   &camera);
+								   &camera,
+								   nullptr,
+								   nullptr,
+								   scene_offset);
 		happyray::AOIntegrator integrator;
 		integrator.samples_per_pixel_per_frame = options.samples_per_pixel_per_frame;
 		integrator.max_distance				   = happyray::DefaultMaxDistance(scene);

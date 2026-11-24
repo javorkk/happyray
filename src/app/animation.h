@@ -126,6 +126,13 @@ namespace happyray
 			return camera_config_path_;
 		}
 
+		// Translates every keyframe (see CenterScene).
+		void Translate(const Vec3f &offset)
+		{
+			for (FlatScene &frame : frames_)
+				TranslateScene(&frame, offset);
+		}
+
 		void Advance()
 		{
 			if (!paused_ && IsLoaded())

@@ -107,12 +107,15 @@ namespace
 					 "Quit: Esc\n");
 	}
 
-	// Prints happyray's camera.cfg format (including resX/resY) for pasting back into a file.
-	void PrintCameraConfig(const happyray::Camera &camera, int width, int height)
+	// Prints happyray's camera.cfg format (including resX/resY) for pasting back into a file, in the
+	// scene file's coordinates (undoing CenterScene's `scene_offset`).
+	void
+	PrintCameraConfig(const happyray::Camera &camera, int width, int height, const happyray::Vec3f &scene_offset)
 	{
-		const happyray::Vec3f forward = camera.Forward();
+		const happyray::Vec3f forward  = camera.Forward();
+		const happyray::Vec3f position = camera.position - scene_offset;
 		std::printf("#camera parameters\n");
-		std::printf("position\t\t%g %g %g\n", camera.position.x, camera.position.y, camera.position.z);
+		std::printf("position\t\t%g %g %g\n", position.x, position.y, position.z);
 		std::printf("orientation\t\t%g %g %g\n", forward.x, forward.y, forward.z);
 		std::printf("up\t\t\t0 1 0\n");
 		std::printf("resX\t\t\t%d\n", width);
@@ -197,13 +200,17 @@ int main(int argc, char **argv)
 	{
 		std::printf("Loaded keyframe animation (frame step %.4g per rendered frame)\n", animation.FrameStep());
 	}
+	// Rendering happens in centered coordinates; camera files and printed cameras stay in the
+	// scene file's.
+	const happyray::Vec3f scene_offset = happyray::CenterScene(&scene);
+	animation.Translate(scene_offset);
 	const happyray::FlatScene flat_scene =
 		animation_loaded ? animation.InterpolatedScene() : happyray::FlattenScene(scene);
 
 	happyray::Camera camera		   = happyray::MakeDefaultCamera(scene);
 	int				 config_width  = 0;
 	int				 config_height = 0;
-	if (happyray::LoadCameraConfig(camera_config_path, &camera, &config_width, &config_height))
+	if (happyray::LoadCameraConfig(camera_config_path, &camera, &config_width, &config_height, scene_offset))
 	{
 		std::printf("Loaded camera viewpoint from '%s'\n", camera_config_path.c_str());
 		if (!width_from_args && config_width > 0)
@@ -462,8 +469,7 @@ int main(int argc, char **argv)
 			}
 			else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_c && event.key.repeat == 0)
 			{
-				PrintCameraConfig(camera, width,
-								  height);
+				PrintCameraConfig(camera, width, height, scene_offset);
 			}
 			else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F1 && event.key.repeat == 0)
 			{

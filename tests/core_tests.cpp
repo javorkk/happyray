@@ -425,6 +425,85 @@ namespace
 		HAPPYRAY_CHECK(mismatches * 1000 <= rays);
 	}
 
+	// Rays aimed just beside shared edges of small, centered triangle fans must not slip through.
+	void TestTriangleWoopCenteredGaps()
+	{
+		using namespace happyray;
+		const Vec3f offset(-78.0f, -112.0f, -18.0f);
+		const Vec3f eye		= Vec3f(95.9467f, 119.6175f, 45.7446f) + offset;
+		const int	kSpokes = 8;
+		Rng			rng(7, 3);
+		int			misses = 0, rays = 0;
+		for (int fan = 0; fan < 200; ++fan)
+		{
+			const Vec3f center = Vec3f(80.0f, 115.0f, 15.0f) + offset +
+								 Vec3f(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f) * 10.0f;
+			const Vec3f normal = Normalize(
+				eye - center + Vec3f(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f, rng.NextFloat()) * 20.0f);
+			const Vec3f tangent	  = Normalize(Cross(normal, Vec3f(0.3f, 1.0f, 0.2f)));
+			const Vec3f bitangent = Cross(normal, tangent);
+			Vec3f		rim[kSpokes];
+			for (int i = 0; i < kSpokes; ++i)
+			{
+				const float angle  = 6.2831853f * (i + 0.4f * rng.NextFloat()) / kSpokes;
+				const float radius = 0.02f + 0.02f * rng.NextFloat();
+				rim[i]			   = center + (tangent * std::cos(angle) + bitangent * std::sin(angle)) * radius +
+									 normal * (0.004f * (rng.NextFloat() - 0.5f));
+			}
+			TriangleWoop woop[kSpokes];
+			for (int i = 0; i < kSpokes; ++i)
+			{
+				Triangle triangle;
+				triangle.vtx[0] = center;
+				triangle.vtx[1] = rim[i];
+				triangle.vtx[2] = rim[(i + 1) % kSpokes];
+				woop[i]			= TriangleWoop::FromTriangle(triangle);
+			}
+			for (int r = 0; r < 64; ++r)
+			{
+				const Vec3f spoke  = rim[r % kSpokes] - center;
+				const Vec3f beside = Normalize(Cross(normal, spoke)) * (rng.NextFloat() < 0.5f ? -1e-5f : 1e-5f);
+				const Ray	ray(eye, Lerp(center, rim[r % kSpokes], 0.05f + 0.9f * rng.NextFloat()) + beside - eye);
+				bool		hit = false;
+				for (int i = 0; i < kSpokes && !hit; ++i)
+				{
+					float t, u, v;
+					hit = IntersectRayTriangleWoop(ray, woop[i], &t, &u, &v);
+				}
+				misses += !hit;
+				++rays;
+			}
+		}
+		HAPPYRAY_CHECK(rays == 200 * 64);
+		HAPPYRAY_CHECK(misses == 0);
+	}
+
+	void TestCenterScene()
+	{
+		using namespace happyray;
+		Scene scene;
+		Mesh  mesh;
+		mesh.positions = {Vec3f(100, 200, 300), Vec3f(102, 200, 300), Vec3f(100, 204, 300)};
+		mesh.attributes.resize(3);
+		mesh.indices = {0, 1, 2};
+		scene.meshes.push_back(mesh);
+		const Vec3f offset = CenterScene(&scene);
+		HAPPYRAY_CHECK(NearlyEqual(offset, Vec3f(-101, -202, -300)));
+		HAPPYRAY_CHECK(NearlyEqual(scene.WorldBounds().Center(), Vec3f(0, 0, 0)));
+		HAPPYRAY_CHECK(NearlyEqual(scene.meshes[0].positions[1], Vec3f(1, -2, 0)));
+
+		FlatScene first = FlattenScene(scene), second = first;
+		second.positions[0] += Vec3f(2, 0, 0);
+		KeyframeAnimation animation({first, second}, 0.5f);
+		animation.Translate(Vec3f(1, 1, 1));
+		HAPPYRAY_CHECK(NearlyEqual(animation.InterpolatedScene().positions[0], Vec3f(0, -1, 1)));
+		animation.Advance();
+		HAPPYRAY_CHECK(NearlyEqual(animation.InterpolatedScene().positions[0], Vec3f(1, -1, 1)));
+
+		Scene empty;
+		HAPPYRAY_CHECK(NearlyEqual(CenterScene(&empty), Vec3f(0, 0, 0)));
+	}
+
 	// Far from the ray origin, hits are still precise enough that AO rays leaving a hit (offset
 	// 1e-3 along the normal, as AOIntegrator does) don't hit the same curve right away.
 	void TestBezierCurveHitsFarFromOrigin()
@@ -447,8 +526,8 @@ namespace
 			{
 				const Vec3f target = EvaluateBezierCurve(curve, rng.NextFloat()) +
 									 Vec3f(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f, 0.0f) * 0.4f;
-				const Ray primary(eye, target - eye);
-				float	  t = 0.0f, u = 0.0f;
+				const Ray	primary(eye, target - eye);
+				float		t = 0.0f, u = 0.0f;
 				if (!IntersectRayBezierCurve(primary, curve, &t, &u))
 					continue;
 				++hits;
@@ -840,6 +919,8 @@ int main(int argc, char **argv)
 	TestAdditionalPrimitiveBounds();
 	TestPrimitiveIntersections();
 	TestBezierCurveMatchesStackSubdivision();
+	TestTriangleWoopCenteredGaps();
+	TestCenterScene();
 	TestBezierCurveHitsFarFromOrigin();
 	TestQuaternion();
 	TestHalton();

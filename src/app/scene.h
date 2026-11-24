@@ -25,10 +25,10 @@ namespace happyray
 	// Non-owning view over host or device memory holding one primitive type.
 	struct SceneView
 	{
-		const Vec3f	   *positions	 = nullptr;
-		const Vec3f	   *normals		 = nullptr;
-		const uint32_t *indices		 = nullptr; // 3 per triangle, indexing positions/normals.
-		const uint32_t *material_ids = nullptr; // 1 per primitive.
+		const Vec3f	   *positions				= nullptr;
+		const Vec3f	   *normals					= nullptr;
+		const uint32_t *indices					= nullptr; // 3 per triangle, indexing positions/normals.
+		const uint32_t *material_ids			= nullptr; // 1 per primitive.
 		const Vec3f	   *material_diffuse_colors = nullptr;
 		uint32_t		primitive_count			= 0;
 		const uint32_t *object_ids				= nullptr; // 1 per primitive; may be null.
@@ -315,6 +315,47 @@ namespace happyray
 		return longest_side * 0.1f;
 	}
 
+	template <typename P> inline void TranslatePrimitives(std::vector<P> *primitives, const Vec3f &offset)
+	{
+		for (P &primitive : *primitives)
+			for (Vec3f &vertex : primitive.vtx)
+				vertex += offset;
+	}
+
+	inline void TranslateScene(Scene *scene, const Vec3f &offset)
+	{
+		for (Mesh &mesh : scene->meshes)
+			for (Vec3f &position : mesh.positions)
+				position += offset;
+		TranslatePrimitives(&scene->points, offset);
+		TranslatePrimitives(&scene->spheres, offset);
+		TranslatePrimitives(&scene->curves, offset);
+	}
+
+	inline void TranslateScene(FlatScene *scene, const Vec3f &offset)
+	{
+		for (Vec3f &position : scene->positions)
+			position += offset;
+		TranslatePrimitives(&scene->points, offset);
+		TranslatePrimitives(&scene->spheres, offset);
+		TranslatePrimitives(&scene->curves, offset);
+		for (BBox &box : scene->boxes)
+		{
+			box.min_bound += offset;
+			box.max_bound += offset;
+		}
+	}
+
+	inline Vec3f CenterScene(Scene *scene)
+	{
+		const BBox bounds = scene->WorldBounds();
+		if (bounds.IsEmpty())
+			return Vec3f(0.0f);
+		const Vec3f offset = bounds.Center() * -1.0f;
+		TranslateScene(scene, offset);
+		return offset;
+	}
+
 	// "assets/ogre.obj" -> "assets/ogre.camera.cfg".
 	inline std::string CameraConfigPathFor(const std::string &scene_path)
 	{
@@ -329,9 +370,13 @@ namespace happyray
 
 	// Loads a happyray camera.cfg. "orientation" is the view direction; "up" and "rotation" are
 	// ignored since Camera has no roll. resX/resY are written to `out_width`/`out_height` if given.
-	// Returns false if the file doesn't exist.
-	inline bool
-	LoadCameraConfig(const std::string &path, Camera *camera, int *out_width = nullptr, int *out_height = nullptr)
+	// `scene_offset` (from CenterScene) is added to the file's position. Returns false if the file
+	// doesn't exist.
+	inline bool LoadCameraConfig(const std::string &path,
+								 Camera			   *camera,
+								 int			   *out_width	 = nullptr,
+								 int			   *out_height	 = nullptr,
+								 const Vec3f	   &scene_offset = Vec3f(0.0f))
 	{
 		std::FILE *file = std::fopen(path.c_str(), "r");
 		if (!file)
@@ -350,6 +395,7 @@ namespace happyray
 			if (keyword == "position")
 			{
 				line >> camera->position.x >> camera->position.y >> camera->position.z;
+				camera->position += scene_offset;
 			}
 			else if (keyword == "orientation")
 			{
