@@ -74,7 +74,7 @@ namespace happyray
 	struct ClosestPointCounters
 	{
 		uint32_t cells_examined = 0; // Cell distance tests at every level, pruned cells included.
-		uint32_t leaves_visited = 0; // Leaf cells whose primitives were tested.
+		uint32_t leaves_visited = 0; // Non-empty leaf cells whose primitives were tested.
 		uint32_t prims_tested	= 0; // Primitive tests; a primitive counts once per leaf holding it.
 	};
 
@@ -234,10 +234,11 @@ namespace happyray
 				counters);
 		}
 
-		// Rings over the top level, then over each top-level cell's finest local voxels. A merged cell
-		// spans many voxels, so it is visited only from the voxel holding its lattice point nearest to
-		// the query, unless expansion grew it over that voxel (which then maps to a neighbor): then from
-		// every voxel mapping to it.
+		// Rings over the top level; in each top-level cell, rings over its rows of local voxels, each
+		// walked outwards from the query along x, a merged cell at a time. Voxels a cell's bounds cover
+		// map to it or to cells whose references are a subset (HAGrid's expand), so they are skipped.
+		// A cell is visited from the run holding its lattice voxel nearest to the query, unless that
+		// voxel maps to another cell (expansion grew it there): then from every run mapping to it.
 		template <typename BoundFn, typename VisitFn>
 		HAPPYRAY_HD inline bool VisitLeavesByDistance(const IrregularGridView &grid,
 													  const Vec3f			  &query,
@@ -262,32 +263,81 @@ namespace happyray
 				{
 					const IrregularCellInfo info	= grid.cell_infos[top_index];
 					const uint32_t		   *entries = grid.local_entries + info.entries_offset;
+					const Vec3i			   &offset	= info.global_offset;
+					const Vec3i			   &shift	= info.shift;
+					const Vec3i			   &res		= info.resolution;
+					const int				start_x =
+						ClampInt(static_cast<int>(std::floor((query.x - info.bounds_min.x) * info.inv_cell_size.x)),
+								 0,
+								 res.x - 1);
+					// Visits `cell` (at `cell_index`) for the run of local voxels [begin, end) of `row`.
+					auto visit_run =
+						[&](const IrregularCell &cell, uint32_t cell_index, int begin, int end, const Vec3i &row)
+					{
+						if (cell.references.start == cell.references.end)
+							return false;
+						const Vec3i nearest(ClampInt(query_voxel.x, cell.min.x, cell.max.x - 1),
+											ClampInt(query_voxel.y, cell.min.y, cell.max.y - 1),
+											ClampInt(query_voxel.z, cell.min.z, cell.max.z - 1));
+						const int	row_y = offset.y + (row.y << shift.y), row_z = offset.z + (row.z << shift.z);
+						const bool	holds_nearest = nearest.x >= offset.x + (begin << shift.x) &&
+												   nearest.x < offset.x + (end << shift.x) && nearest.y >= row_y &&
+												   nearest.y < row_y + (1 << shift.y) && nearest.z >= row_z &&
+												   nearest.z < row_z + (1 << shift.z);
+						if (!holds_nearest && LookupIrregularCell(grid, nearest) == cell_index)
+							return false;
+						return visit(cell.references);
+					};
+					auto lookup = [&](int x, const Vec3i &row, uint32_t *cell_index)
+					{
+						if (counters)
+							++counters->cells_examined;
+						*cell_index = LoadRO(entries + FlattenCellIndex(Vec3i(x, row.y, row.z), res));
+						return LoadRO(grid.local_cells + *cell_index);
+					};
+					const Vec3f row_size(info.cell_size.x * res.x, info.cell_size.y, info.cell_size.z);
+					const Vec3f row_inv(info.inv_cell_size.x / res.x, info.inv_cell_size.y, info.inv_cell_size.z);
 					return VisitCellsByDistance(
 						info.bounds_min,
-						info.cell_size,
-						info.inv_cell_size,
-						info.resolution,
+						row_size,
+						row_inv,
+						Vec3i(1, res.y, res.z),
 						query,
 						bound,
-						[&](uint32_t index, const Vec3i &local)
+						[&](uint32_t, const Vec3i &row)
 						{
-							const uint32_t		cell_index = LoadRO(entries + index);
-							const IrregularCell cell	   = LoadRO(grid.local_cells + cell_index);
-							if (cell.references.start == cell.references.end)
-								return false;
-							const Vec3i first(info.global_offset.x + (local.x << info.shift.x),
-											  info.global_offset.y + (local.y << info.shift.y),
-											  info.global_offset.z + (local.z << info.shift.z));
-							const Vec3i nearest(ClampInt(query_voxel.x, cell.min.x, cell.max.x - 1),
-												ClampInt(query_voxel.y, cell.min.y, cell.max.y - 1),
-												ClampInt(query_voxel.z, cell.min.z, cell.max.z - 1));
-							const bool	holds_nearest =
-								nearest.x >= first.x && nearest.x < first.x + (1 << info.shift.x) &&
-								nearest.y >= first.y && nearest.y < first.y + (1 << info.shift.y) &&
-								nearest.z >= first.z && nearest.z < first.z + (1 << info.shift.z);
-							if (!holds_nearest && LookupIrregularCell(grid, nearest) == cell_index)
-								return false;
-							return visit(cell.references);
+							// Voxels get farther from the query in both directions from `start_x`.
+							for (int x = start_x; x < res.x;)
+							{
+								if (CellDistanceSquared(query,
+														info.bounds_min,
+														info.cell_size,
+														Vec3i(x, row.y, row.z)) > bound())
+									break;
+								uint32_t			cell_index;
+								const IrregularCell cell = lookup(x, row, &cell_index);
+								int					next = (cell.max.x - offset.x) >> shift.x;
+								next					 = next > x ? (next < res.x ? next : res.x) : x + 1;
+								if (visit_run(cell, cell_index, x, next, row))
+									return true;
+								x = next;
+							}
+							for (int x = start_x - 1; x >= 0;)
+							{
+								if (CellDistanceSquared(query,
+														info.bounds_min,
+														info.cell_size,
+														Vec3i(x, row.y, row.z)) > bound())
+									break;
+								uint32_t			cell_index;
+								const IrregularCell cell = lookup(x, row, &cell_index);
+								int previous = cell.min.x > offset.x ? (cell.min.x - 1 - offset.x) >> shift.x : -1;
+								previous	 = previous < x ? previous : x - 1;
+								if (visit_run(cell, cell_index, previous + 1, x + 1, row))
+									return true;
+								x = previous;
+							}
+							return false;
 						},
 						counters);
 				},
@@ -332,7 +382,7 @@ namespace happyray
 				[&]() { return hit.distance_squared; },
 				[&](CellRange range)
 				{
-					if (counters)
+					if (counters && range.start != range.end)
 					{
 						++counters->leaves_visited;
 						counters->prims_tested += range.end - range.start;

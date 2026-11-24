@@ -34,8 +34,9 @@ namespace
 
 	using namespace happyray;
 
-	constexpr uint32_t kRayCount   = 1024 * 1024;
-	constexpr uint32_t kQueryCount = 256 * 1024;
+	constexpr uint32_t kRayCount		 = 1024 * 1024;
+	constexpr uint32_t kQueryCount		 = 256 * 1024;
+	constexpr int	   kClosestPointRuns = 5;
 
 	template <typename T> T *Raw(thrust::device_vector<T> &values)
 	{
@@ -278,7 +279,10 @@ namespace
 		const char *const grid_names[] = {"uniform", "two-level", "irregular"};
 		const char *const set_names[]  = {"near", "inside", "far"};
 
-		std::printf("\nClosest point: %u queries per set; counts per query (mean/p50/p99/max)\n", kQueryCount);
+		std::printf("\nClosest point: %u queries per set, median of %d timed runs; counts per query "
+					"(mean/p50/p99/max)\n",
+					kQueryCount,
+					kClosestPointRuns);
 		std::printf("%-10s %-7s %10s %9s %30s %30s %10s\n",
 					"Grid",
 					"Set",
@@ -287,7 +291,8 @@ namespace
 					"cells examined",
 					"primitives tested",
 					"leaves");
-		size_t mismatches = 0;
+		size_t mismatches		= 0;
+		double throughput[3][3] = {};
 		for (int set = 0; set < 3; ++set)
 		{
 			const std::vector<Vec3f>					host_queries = MakeClosestPointQueries(flat, bounds, set);
@@ -301,13 +306,19 @@ namespace
 				// The counting pass doubles as the warm-up.
 				FindClosestPoints(view, accel, Raw(queries), kQueryCount, INFINITY, Raw(records), Raw(counters));
 				Synchronize(Raw(counters));
-				const auto begin = std::chrono::steady_clock::now();
-				FindClosestPoints(view, accel, Raw(queries), kQueryCount, INFINITY, Raw(records));
-				Synchronize(Raw(records));
-				const float ms =
-					std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - begin).count();
-				if (!std::isfinite(ms) || ms <= 0)
-					throw std::runtime_error("Invalid measured duration");
+				float runs[kClosestPointRuns];
+				for (float &run : runs)
+				{
+					const auto begin = std::chrono::steady_clock::now();
+					FindClosestPoints(view, accel, Raw(queries), kQueryCount, INFINITY, Raw(records));
+					Synchronize(Raw(records));
+					run = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - begin).count();
+					if (!std::isfinite(run) || run <= 0)
+						throw std::runtime_error("Invalid measured duration");
+				}
+				std::sort(runs, runs + kClosestPointRuns);
+				const float ms	   = runs[kClosestPointRuns / 2];
+				throughput[set][t] = kQueryCount / (1000.0 * ms);
 
 				const thrust::host_vector<ClosestPointCounters> host_counters = counters;
 				std::vector<uint32_t>							cells, prims, leaves;
@@ -358,6 +369,25 @@ namespace
 					for (uint32_t i = 0; i < kQueryCount; ++i)
 						mismatches += !SameClosestPoint(host_records[i], reference[i]);
 			}
+		}
+		std::printf("\nClosest-point throughput, Mq/s (speedup over uniform)\n%-7s", "Set");
+		for (const char *name : grid_names)
+			std::printf(" %20s", name);
+		std::printf("\n");
+		for (int set = 0; set < 3; ++set)
+		{
+			std::printf("%-7s", set_names[set]);
+			for (int t = 0; t < 3; ++t)
+			{
+				char cell[32];
+				std::snprintf(cell,
+							  sizeof(cell),
+							  "%.2f (%.2fx)",
+							  throughput[set][t],
+							  throughput[set][t] / throughput[set][0]);
+				std::printf(" %20s", cell);
+			}
+			std::printf("\n");
 		}
 		if (mismatches)
 		{
