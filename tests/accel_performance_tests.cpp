@@ -1,5 +1,6 @@
-// Builds and traces every grid once after a warm-up; timings are informational, only correctness
-// and allocation errors fail. Pure Thrust, so it builds for both backends.
+// Builds and traces every grid once after a warm-up, then runs closest-point query sets through
+// each; timings are informational, only correctness and allocation errors fail. Pure Thrust, so it
+// builds for both backends.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
 #define THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_TBB
@@ -21,8 +22,9 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-#include "../src/accel/sah_cost.h"
+#include "../src/accel/closest_point.h"
 #include "../src/accel/intersect_common.h"
+#include "../src/accel/sah_cost.h"
 #include "../src/app/obj_loader.h"
 #include "../src/app/scene.h"
 #include "../src/core/random.h"
@@ -32,7 +34,8 @@ namespace
 
 	using namespace happyray;
 
-	constexpr uint32_t kRayCount = 1024 * 1024;
+	constexpr uint32_t kRayCount   = 1024 * 1024;
+	constexpr uint32_t kQueryCount = 256 * 1024;
 
 	template <typename T> T *Raw(thrust::device_vector<T> &values)
 	{
@@ -196,6 +199,173 @@ namespace
 										std::fabs(a - b) <= 1e-4f * std::max(1.0f, std::fabs(b)));
 	}
 
+	struct Distribution
+	{
+		double	 mean = 0;
+		uint32_t p50 = 0, p99 = 0, max = 0;
+	};
+
+	Distribution Summarize(std::vector<uint32_t> values)
+	{
+		Distribution result;
+		if (values.empty())
+			return result;
+		std::sort(values.begin(), values.end());
+		double sum = 0;
+		for (uint32_t value : values)
+			sum += value;
+		result.mean = sum / values.size();
+		result.p50	= values[values.size() / 2];
+		result.p99	= values[values.size() * 99 / 100];
+		result.max	= values.back();
+		return result;
+	}
+
+	// Near: on a random triangle, offset along its normal by up to 1% of the scene diagonal.
+	// Inside: uniform in the scene bounds. Far: outside the bounds, within three times their extent.
+	std::vector<Vec3f> MakeClosestPointQueries(const FlatScene &flat, const BBox &bounds, int set)
+	{
+		Rng				   rng(20261124, 3 + set);
+		const float		   diagonal = Length(bounds.Extent());
+		const SceneView	   view		= flat.View();
+		std::vector<Vec3f> queries;
+		queries.reserve(kQueryCount);
+		while (queries.size() < kQueryCount)
+		{
+			const Vec3f unit(rng.NextFloat(), rng.NextFloat(), rng.NextFloat());
+			if (set == 0)
+			{
+				const Triangle triangle = FetchTriangle(view, rng.NextUint32() % view.primitive_count);
+				float		   u = rng.NextFloat(), v = rng.NextFloat();
+				if (u + v > 1)
+				{
+					u = 1 - u;
+					v = 1 - v;
+				}
+				const Vec3f normal =
+					Normalize(Cross(triangle.vtx[1] - triangle.vtx[0], triangle.vtx[2] - triangle.vtx[0]));
+				queries.push_back(triangle.vtx[0] * (1 - u - v) + triangle.vtx[1] * u + triangle.vtx[2] * v +
+								  normal * (0.02f * diagonal * (rng.NextFloat() - 0.5f)));
+			}
+			else if (set == 1)
+				queries.push_back(bounds.min_bound + bounds.Extent() * unit);
+			else
+			{
+				const Vec3f query = bounds.Center() + bounds.Extent() * (unit - Vec3f(0.5f)) * 3.0f;
+				if (DistanceSquaredToBBox(query, bounds) > 0)
+					queries.push_back(query);
+			}
+		}
+		return queries;
+	}
+
+	bool SameClosestPoint(const ClosestPointRecord &a, const ClosestPointRecord &b)
+	{
+		return a.prim != 0xffffffffu && b.prim != 0xffffffffu &&
+			   std::fabs(a.distance - b.distance) <= 1e-5f * std::max(1.0f, b.distance);
+	}
+
+	void RunClosestPoint(const FlatScene &flat, const SceneView &view, const BBox &bounds)
+	{
+		const UniformGrid	uniform(view);
+		const TwoLevelGrid	two_level(view);
+		const IrregularGrid irregular(view);
+		AccelStructures		accel;
+		accel.uniform_grid			   = uniform.View();
+		accel.two_level_grid		   = two_level.View();
+		accel.irregular_grid		   = irregular.View();
+		const AccelType	  types[]	   = {AccelType::kUniformGrid, AccelType::kTwoLevelGrid, AccelType::kIrregularGrid};
+		const char *const grid_names[] = {"uniform", "two-level", "irregular"};
+		const char *const set_names[]  = {"near", "inside", "far"};
+
+		std::printf("\nClosest point: %u queries per set; counts per query (mean/p50/p99/max)\n", kQueryCount);
+		std::printf("%-10s %-7s %10s %9s %30s %30s %10s\n",
+					"Grid",
+					"Set",
+					"ms",
+					"Mq/s",
+					"cells examined",
+					"primitives tested",
+					"leaves");
+		size_t mismatches = 0;
+		for (int set = 0; set < 3; ++set)
+		{
+			const std::vector<Vec3f>					host_queries = MakeClosestPointQueries(flat, bounds, set);
+			thrust::device_vector<Vec3f>				queries(host_queries);
+			thrust::device_vector<ClosestPointRecord>	records(kQueryCount);
+			thrust::device_vector<ClosestPointCounters> counters(kQueryCount);
+			std::vector<ClosestPointRecord>				reference;
+			for (int t = 0; t < 3; ++t)
+			{
+				accel.type = types[t];
+				// The counting pass doubles as the warm-up.
+				FindClosestPoints(view, accel, Raw(queries), kQueryCount, INFINITY, Raw(records), Raw(counters));
+				Synchronize(Raw(counters));
+				const auto begin = std::chrono::steady_clock::now();
+				FindClosestPoints(view, accel, Raw(queries), kQueryCount, INFINITY, Raw(records));
+				Synchronize(Raw(records));
+				const float ms =
+					std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - begin).count();
+				if (!std::isfinite(ms) || ms <= 0)
+					throw std::runtime_error("Invalid measured duration");
+
+				const thrust::host_vector<ClosestPointCounters> host_counters = counters;
+				std::vector<uint32_t>							cells, prims, leaves;
+				for (const ClosestPointCounters &c : host_counters)
+				{
+					cells.push_back(c.cells_examined);
+					prims.push_back(c.prims_tested);
+					leaves.push_back(c.leaves_visited);
+				}
+				const Distribution cell_stats = Summarize(cells), prim_stats = Summarize(prims);
+				char			   cell_text[64], prim_text[64];
+				std::snprintf(cell_text,
+							  sizeof(cell_text),
+							  "%.1f/%u/%u/%u",
+							  cell_stats.mean,
+							  cell_stats.p50,
+							  cell_stats.p99,
+							  cell_stats.max);
+				std::snprintf(prim_text,
+							  sizeof(prim_text),
+							  "%.1f/%u/%u/%u",
+							  prim_stats.mean,
+							  prim_stats.p50,
+							  prim_stats.p99,
+							  prim_stats.max);
+				std::printf("%-10s %-7s %10.3f %9.2f %30s %30s %10.1f\n",
+							grid_names[t],
+							set_names[set],
+							ms,
+							kQueryCount / (1000.0 * ms),
+							cell_text,
+							prim_text,
+							Summarize(leaves).mean);
+
+				const thrust::host_vector<ClosestPointRecord> host_records = records;
+				if (t == 0)
+				{
+					reference.assign(host_records.begin(), host_records.end());
+					for (uint32_t sample = 0; sample < 64; ++sample)
+					{
+						const uint32_t	   i = sample * (kQueryCount / 64);
+						ClosestPointRecord expected;
+						FindClosestPointBruteForce<Triangle>(flat.View(), host_queries[i], INFINITY, &expected);
+						mismatches += !SameClosestPoint(reference[i], expected);
+					}
+				}
+				else
+					for (uint32_t i = 0; i < kQueryCount; ++i)
+						mismatches += !SameClosestPoint(host_records[i], reference[i]);
+			}
+		}
+		if (mismatches)
+		{
+			std::printf("Closest-point mismatches: %zu (grids vs uniform + 64 oracle queries/set)\n", mismatches);
+			throw std::runtime_error("Closest-point correctness check failed");
+		}
+	}
+
 	void Run(const char *path)
 	{
 		Scene scene;
@@ -325,6 +495,7 @@ namespace
 			std::printf("Closest-hit mismatches: %zu (full-batch comparison + 256 oracle rays/grid)\n", mismatches);
 			throw std::runtime_error("Closest-hit correctness check failed");
 		}
+		RunClosestPoint(flat, view, bounds);
 	}
 
 } // namespace

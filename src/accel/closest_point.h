@@ -70,6 +70,14 @@ namespace happyray
 		return hit;
 	}
 
+	// Per-query work of a closest-point search, for profiling and load-balance studies.
+	struct ClosestPointCounters
+	{
+		uint32_t cells_examined = 0; // Cell distance tests at every level, pruned cells included.
+		uint32_t leaves_visited = 0; // Leaf cells whose primitives were tested.
+		uint32_t prims_tested	= 0; // Primitive tests; a primitive counts once per leaf holding it.
+	};
+
 	namespace detail
 	{
 		// Cell `cell` of a grid, grown like the builders' exact cell test so rounding never prunes a
@@ -117,13 +125,14 @@ namespace happyray
 		// skipping cells farther than `bound()` and stopping once a whole ring is. `visit(index, cell)`
 		// returns true to stop the query. Bounds are inclusive so equal-distance ties are seen.
 		template <typename BoundFn, typename VisitFn>
-		HAPPYRAY_HD inline bool VisitCellsByDistance(const Vec3f &bounds_min,
-													 const Vec3f &cell_size,
-													 const Vec3f &inv_cell_size,
-													 const Vec3i &resolution,
-													 const Vec3f &query,
-													 BoundFn	&&bound,
-													 VisitFn	&&visit)
+		HAPPYRAY_HD inline bool VisitCellsByDistance(const Vec3f		  &bounds_min,
+													 const Vec3f		  &cell_size,
+													 const Vec3f		  &inv_cell_size,
+													 const Vec3i		  &resolution,
+													 const Vec3f		  &query,
+													 BoundFn			 &&bound,
+													 VisitFn			 &&visit,
+													 ClosestPointCounters *counters)
 		{
 			const Vec3f entry = (query - bounds_min) * inv_cell_size;
 			const Vec3i center(ClampInt(static_cast<int>(std::floor(entry.x)), 0, resolution.x - 1),
@@ -152,6 +161,8 @@ namespace happyray
 							if (x < 0 || x >= resolution.x)
 								continue;
 							const Vec3i cell(x, y, z);
+							if (counters)
+								++counters->cells_examined;
 							if (CellDistanceSquared(query, bounds_min, cell_size, cell) > bound())
 								continue;
 							if (visit(FlattenCellIndex(cell, resolution), cell))
@@ -163,8 +174,11 @@ namespace happyray
 		}
 
 		template <typename View, typename BoundFn, typename VisitFn>
-		HAPPYRAY_HD inline bool
-		VisitCellsByDistance(const View &grid, const Vec3f &query, BoundFn &&bound, VisitFn &&visit)
+		HAPPYRAY_HD inline bool VisitCellsByDistance(const View			  &grid,
+													 const Vec3f		  &query,
+													 BoundFn			 &&bound,
+													 VisitFn			 &&visit,
+													 ClosestPointCounters *counters)
 		{
 			return VisitCellsByDistance(grid.bounds_min,
 										grid.cell_size,
@@ -172,42 +186,52 @@ namespace happyray
 										grid.resolution,
 										query,
 										bound,
-										visit);
+										visit,
+										counters);
 		}
 
 		// Calls `visit(range)` for leaf cells in near-to-far rings; `visit` returns true to stop.
 		template <typename BoundFn, typename VisitFn>
-		HAPPYRAY_HD inline bool
-		VisitLeavesByDistance(const UniformGridView &grid, const Vec3f &query, BoundFn &&bound, VisitFn &&visit)
+		HAPPYRAY_HD inline bool VisitLeavesByDistance(const UniformGridView &grid,
+													  const Vec3f			&query,
+													  BoundFn			   &&bound,
+													  VisitFn			   &&visit,
+													  ClosestPointCounters	*counters)
 		{
-			return VisitCellsByDistance(grid,
-										query,
-										bound,
-										[&](uint32_t index, const Vec3i &)
-										{ return visit(LoadRO(grid.cell_ranges + index)); });
+			return VisitCellsByDistance(
+				grid,
+				query,
+				bound,
+				[&](uint32_t index, const Vec3i &) { return visit(LoadRO(grid.cell_ranges + index)); },
+				counters);
 		}
 
 		// Rings over the top level; each non-empty top-level cell runs its own rings over its
 		// nested grid.
 		template <typename BoundFn, typename VisitFn>
-		HAPPYRAY_HD inline bool
-		VisitLeavesByDistance(const TwoLevelGridView &grid, const Vec3f &query, BoundFn &&bound, VisitFn &&visit)
+		HAPPYRAY_HD inline bool VisitLeavesByDistance(const TwoLevelGridView &grid,
+													  const Vec3f			 &query,
+													  BoundFn				&&bound,
+													  VisitFn				&&visit,
+													  ClosestPointCounters	 *counters)
 		{
-			return VisitCellsByDistance(grid.top_level,
-										query,
-										bound,
-										[&](uint32_t top_index, const Vec3i &)
-										{
-											if (LoadRO(grid.top_level_cells + top_index).IsEmpty())
-												return false;
-											const GridRangeView nested = SecondLevelView(grid, top_index);
-											return VisitCellsByDistance(
-												nested,
-												query,
-												bound,
-												[&](uint32_t index, const Vec3i &)
-												{ return visit(LoadRO(nested.cell_ranges + index)); });
-										});
+			return VisitCellsByDistance(
+				grid.top_level,
+				query,
+				bound,
+				[&](uint32_t top_index, const Vec3i &)
+				{
+					if (LoadRO(grid.top_level_cells + top_index).IsEmpty())
+						return false;
+					const GridRangeView nested = SecondLevelView(grid, top_index);
+					return VisitCellsByDistance(
+						nested,
+						query,
+						bound,
+						[&](uint32_t index, const Vec3i &) { return visit(LoadRO(nested.cell_ranges + index)); },
+						counters);
+				},
+				counters);
 		}
 
 		// Rings over the top level, then over each top-level cell's finest local voxels. A merged cell
@@ -215,8 +239,11 @@ namespace happyray
 		// the query, unless expansion grew it over that voxel (which then maps to a neighbor): then from
 		// every voxel mapping to it.
 		template <typename BoundFn, typename VisitFn>
-		HAPPYRAY_HD inline bool
-		VisitLeavesByDistance(const IrregularGridView &grid, const Vec3f &query, BoundFn &&bound, VisitFn &&visit)
+		HAPPYRAY_HD inline bool VisitLeavesByDistance(const IrregularGridView &grid,
+													  const Vec3f			  &query,
+													  BoundFn				 &&bound,
+													  VisitFn				 &&visit,
+													  ClosestPointCounters	  *counters)
 		{
 			// Clamped just outside the lattice so far queries don't overflow the conversion.
 			const Vec3f lattice =
@@ -261,8 +288,10 @@ namespace happyray
 							if (!holds_nearest && LookupIrregularCell(grid, nearest) == cell_index)
 								return false;
 							return visit(cell.references);
-						});
-				});
+						},
+						counters);
+				},
+				counters);
 		}
 
 		template <typename GridView> HAPPYRAY_HD inline const uint32_t *LeafPrimIndices(const GridView &grid)
@@ -274,21 +303,24 @@ namespace happyray
 		}
 	} // namespace detail
 
+	// `counters`, if given, accumulates the search's work.
 	template <typename P = DynamicPrimitive, typename GridView>
-	HAPPYRAY_HD inline bool FindClosestPointGrid(const SceneView	&scene,
-												 const GridView		&grid,
-												 const Vec3f		&query,
-												 float				 max_distance,
-												 ClosestPointRecord *out)
+	HAPPYRAY_HD inline bool FindClosestPointGrid(const SceneView	  &scene,
+												 const GridView		  &grid,
+												 const Vec3f		  &query,
+												 float				   max_distance,
+												 ClosestPointRecord	  *out,
+												 ClosestPointCounters *counters = nullptr)
 	{
 		if constexpr (std::is_same_v<P, DynamicPrimitive>)
 		{
-			return DispatchPrimitive(scene.primitive_type,
-									 [&](auto tag)
-									 {
-										 using Q = typename decltype(tag)::type;
-										 return FindClosestPointGrid<Q>(scene, grid, query, max_distance, out);
-									 });
+			return DispatchPrimitive(
+				scene.primitive_type,
+				[&](auto tag)
+				{
+					using Q = typename decltype(tag)::type;
+					return FindClosestPointGrid<Q>(scene, grid, query, max_distance, out, counters);
+				});
 		}
 		else
 		{
@@ -300,30 +332,42 @@ namespace happyray
 				[&]() { return hit.distance_squared; },
 				[&](CellRange range)
 				{
+					if (counters)
+					{
+						++counters->leaves_visited;
+						counters->prims_tested += range.end - range.start;
+					}
 					for (uint32_t i = range.start; i < range.end; ++i)
 						ClosestPointPrimitive<P>(scene, LoadRO(prim_indices + i), query, &hit);
 					return false;
-				});
+				},
+				counters);
 			return ResolveClosestPoint<P>(scene, query, hit, out);
 		}
 	}
 
 	template <typename P = DynamicPrimitive>
-	HAPPYRAY_HD inline bool
-	FindClosestPointBruteForce(const SceneView &scene, const Vec3f &query, float max_distance, ClosestPointRecord *out)
+	HAPPYRAY_HD inline bool FindClosestPointBruteForce(const SceneView		&scene,
+													   const Vec3f			&query,
+													   float				 max_distance,
+													   ClosestPointRecord	*out,
+													   ClosestPointCounters *counters = nullptr)
 	{
 		if constexpr (std::is_same_v<P, DynamicPrimitive>)
 		{
-			return DispatchPrimitive(scene.primitive_type,
-									 [&](auto tag)
-									 {
-										 using Q = typename decltype(tag)::type;
-										 return FindClosestPointBruteForce<Q>(scene, query, max_distance, out);
-									 });
+			return DispatchPrimitive(
+				scene.primitive_type,
+				[&](auto tag)
+				{
+					using Q = typename decltype(tag)::type;
+					return FindClosestPointBruteForce<Q>(scene, query, max_distance, out, counters);
+				});
 		}
 		else
 		{
 			ClosestPointHit hit = InitialClosestPointHit(max_distance);
+			if (counters)
+				counters->prims_tested += scene.primitive_count;
 			for (uint32_t prim = 0; prim < scene.primitive_count; ++prim)
 				ClosestPointPrimitive<P>(scene, prim, query, &hit);
 			return ResolveClosestPoint<P>(scene, query, hit, out);
@@ -337,31 +381,35 @@ namespace happyray
 											 const AccelStructures &accel,
 											 const Vec3f		   &query,
 											 float					max_distance,
-											 ClosestPointRecord	   *out)
+											 ClosestPointRecord	   *out,
+											 ClosestPointCounters  *counters = nullptr)
 	{
 		if constexpr (std::is_same_v<A, DynamicAccel>)
 		{
 			return DispatchAccel(
 				accel.type,
-				[&](auto tag) { return FindClosestPoint<P, decltype(tag)>(scene, accel, query, max_distance, out); });
+				[&](auto tag)
+				{ return FindClosestPoint<P, decltype(tag)>(scene, accel, query, max_distance, out, counters); });
 		}
 		else if constexpr (A::value == AccelType::kUniformGrid)
-			return FindClosestPointGrid<P>(scene, accel.uniform_grid, query, max_distance, out);
+			return FindClosestPointGrid<P>(scene, accel.uniform_grid, query, max_distance, out, counters);
 		else if constexpr (A::value == AccelType::kTwoLevelGrid)
-			return FindClosestPointGrid<P>(scene, accel.two_level_grid, query, max_distance, out);
+			return FindClosestPointGrid<P>(scene, accel.two_level_grid, query, max_distance, out, counters);
 		else if constexpr (A::value == AccelType::kIrregularGrid)
-			return FindClosestPointGrid<P>(scene, accel.irregular_grid, query, max_distance, out);
+			return FindClosestPointGrid<P>(scene, accel.irregular_grid, query, max_distance, out, counters);
 		else
-			return FindClosestPointBruteForce<P>(scene, query, max_distance, out);
+			return FindClosestPointBruteForce<P>(scene, query, max_distance, out, counters);
 	}
 
-	// One FindClosestPoint per query, instantiated per primitive type and structure. `queries` and
-	// `out` must be reachable by the active Thrust backend; misses keep a default record.
+	// One FindClosestPoint per query, instantiated per primitive type and structure. Pointers must be
+	// reachable by the active Thrust backend; misses keep a default record. `counters`, if given,
+	// receives each query's work (from a separate instantiation, so the default path pays nothing).
 	void FindClosestPoints(const SceneView		 &scene,
 						   const AccelStructures &accel,
 						   const Vec3f			 *queries,
 						   uint32_t				  count,
 						   float				  max_distance,
-						   ClosestPointRecord	 *out);
+						   ClosestPointRecord	 *out,
+						   ClosestPointCounters	 *counters = nullptr);
 
 } // namespace happyray
