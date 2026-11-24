@@ -166,6 +166,14 @@ namespace happyray
 	{
 		return a + (b - a) * t;
 	}
+	// Fraction along segment [a, b] of its point closest to `p`.
+	HAPPYRAY_HD inline float ClosestSegmentParameter(const Vec3f &p, const Vec3f &a, const Vec3f &b)
+	{
+		const Vec3f edge				= b - a;
+		const float edge_length_squared = LengthSquared(edge);
+		const float t					= edge_length_squared > 0.0f ? Dot(p - a, edge) / edge_length_squared : 0.0f;
+		return t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+	}
 	HAPPYRAY_HD inline Vec3f Reflect(const Vec3f &incident, const Vec3f &normal)
 	{
 		return incident - normal * (2.0f * Dot(incident, normal));

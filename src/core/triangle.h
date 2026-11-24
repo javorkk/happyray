@@ -55,6 +55,81 @@ namespace happyray
 		return true;
 	}
 
+	namespace detail
+	{
+		// Closest point of the triangle's edges; `out_u`, `out_v` are barycentrics as below.
+		HAPPYRAY_HD inline float ClosestPointOnTriangleEdges(const Triangle &triangle,
+															 const Vec3f	&p,
+															 Vec3f			*out_point,
+															 float			*out_u,
+															 float			*out_v)
+		{
+			const Vec3f &a = triangle.vtx[0], &b = triangle.vtx[1], &c = triangle.vtx[2];
+			const float	 s_ab		   = ClosestSegmentParameter(p, a, b);
+			const float	 s_ac		   = ClosestSegmentParameter(p, a, c);
+			const float	 s_bc		   = ClosestSegmentParameter(p, b, c);
+			const Vec3f	 candidates[3] = {Lerp(a, b, s_ab), Lerp(a, c, s_ac), Lerp(b, c, s_bc)};
+			const float	 us[3] = {s_ab, 0.0f, 1.0f - s_bc}, vs[3] = {0.0f, s_ac, s_bc};
+			float		 best = INFINITY;
+			for (int i = 0; i < 3; ++i)
+			{
+				const float distance_squared = LengthSquared(p - candidates[i]);
+				if (distance_squared < best)
+				{
+					best	   = distance_squared;
+					*out_point = candidates[i];
+					*out_u	   = us[i];
+					*out_v	   = vs[i];
+				}
+			}
+			return best;
+		}
+	} // namespace detail
+
+	// Ericson's Voronoi-region test (Real-Time Collision Detection, 5.1.5). `out_u`, `out_v` weight
+	// vtx[1], vtx[2] as in IntersectRayTriangle. Degenerate triangles fall back to their edges.
+	HAPPYRAY_HD inline float
+	ClosestPoint(const Triangle &triangle, const Vec3f &p, Vec3f *out_point, float *out_u, float *out_v)
+	{
+		const Vec3f &a = triangle.vtx[0], &b = triangle.vtx[1], &c = triangle.vtx[2];
+		const Vec3f	 ab = b - a, ac = c - a;
+		if (!(LengthSquared(Cross(ab, ac)) > 1e-12f * LengthSquared(ab) * LengthSquared(ac)))
+			return detail::ClosestPointOnTriangleEdges(triangle, p, out_point, out_u, out_v);
+		float		u = 0.0f, v = 0.0f;
+		const Vec3f ap = p - a;
+		const float d1 = Dot(ab, ap), d2 = Dot(ac, ap);
+		const Vec3f bp = p - b;
+		const float d3 = Dot(ab, bp), d4 = Dot(ac, bp);
+		const Vec3f cp = p - c;
+		const float d5 = Dot(ab, cp), d6 = Dot(ac, cp);
+		const float vc = d1 * d4 - d3 * d2, vb = d5 * d2 - d1 * d6, va = d3 * d6 - d5 * d4;
+		if (d1 <= 0.0f && d2 <= 0.0f)
+			u = 0.0f; // Vertex a.
+		else if (d3 >= 0.0f && d4 <= d3)
+			u = 1.0f;
+		else if (vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f)
+			u = d1 / (d1 - d3);
+		else if (d6 >= 0.0f && d5 <= d6)
+			v = 1.0f;
+		else if (vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f)
+			v = d2 / (d2 - d6);
+		else if (va <= 0.0f && d4 - d3 >= 0.0f && d5 - d6 >= 0.0f)
+		{
+			v = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+			u = 1.0f - v;
+		}
+		else
+		{
+			const float inv_denominator = 1.0f / (va + vb + vc);
+			u							= vb * inv_denominator;
+			v							= vc * inv_denominator;
+		}
+		*out_point = a + ab * u + ac * v;
+		*out_u	   = u;
+		*out_v	   = v;
+		return LengthSquared(p - *out_point);
+	}
+
 	// One row of TriangleWoop's affine transform: `Dot(axis, p) + offset`.
 	struct alignas(16) WoopRow
 	{

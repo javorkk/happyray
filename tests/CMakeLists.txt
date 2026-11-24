@@ -32,6 +32,11 @@ add_test(NAME renderer_tests COMMAND happyray_renderer_tests "${CMAKE_SOURCE_DIR
 add_executable(happyray_grid_build_tests grid_build_tests.cpp)
 target_link_libraries(happyray_grid_build_tests PRIVATE happyray_accel happyray_thrust_backend)
 
+add_executable(happyray_closest_point_tests closest_point_tests.cpp)
+target_link_libraries(happyray_closest_point_tests PRIVATE
+    happyray_accel happyray_obj_loader happyray_thrust_backend)
+add_test(NAME closest_point_tests COMMAND happyray_closest_point_tests "${CMAKE_SOURCE_DIR}/assets")
+
 # Pure Thrust, so this builds for both backends.
 add_executable(happyray_accel_performance_tests accel_performance_tests.cpp)
 target_link_libraries(happyray_accel_performance_tests PRIVATE
@@ -58,7 +63,7 @@ if(EXISTS "${HAPPYRAY_FAIRY_ANIMATION_DIR}/f100.obj" AND EXISTS "${HAPPYRAY_FAIR
 endif()
 
 if(HAPPYRAY_THRUST_BACKEND STREQUAL "CUDA")
-    set_source_files_properties(grid_build_tests.cpp accel_performance_tests.cpp collision_performance_tests.cpp
+    set_source_files_properties(grid_build_tests.cpp closest_point_tests.cpp accel_performance_tests.cpp collision_performance_tests.cpp
         PROPERTIES LANGUAGE CUDA)
 endif()
 add_test(NAME grid_build_tests COMMAND happyray_grid_build_tests)

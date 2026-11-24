@@ -50,6 +50,13 @@ namespace happyray
 		return true;
 	}
 
+	// Closest-point queries treat the point as a position: `radius` only sizes its ray-facing disc.
+	HAPPYRAY_HD inline float ClosestPoint(const Point &point, const Vec3f &p, Vec3f *out_point)
+	{
+		*out_point = point.vtx[0];
+		return LengthSquared(p - point.vtx[0]);
+	}
+
 	// Conservative: tests the disc's bounding sphere.
 	HAPPYRAY_HD inline bool Intersects(const Point &point, const BBox &box)
 	{

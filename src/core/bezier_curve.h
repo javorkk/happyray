@@ -55,11 +55,7 @@ namespace happyray
 
 		HAPPYRAY_HD inline float DistanceSquaredToSegment(const Vec3f &point, const Vec3f &a, const Vec3f &b)
 		{
-			const Vec3f edge				= b - a;
-			const float edge_length_squared = LengthSquared(edge);
-			const float t		  = edge_length_squared > 0.0f ? Dot(point - a, edge) / edge_length_squared : 0.0f;
-			const float clamped_t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-			return LengthSquared(point - (a + edge * clamped_t));
+			return LengthSquared(point - Lerp(a, b, ClosestSegmentParameter(point, a, b)));
 		}
 
 		// `out_s` receives the hit's fraction along [a, b].
@@ -199,6 +195,11 @@ namespace happyray
 				return (a * (3.0f * u) + b * 2.0f) * u + c;
 			}
 
+			HAPPYRAY_HD Vec3f SecondDerivative(float u) const
+			{
+				return a * (6.0f * u) + b * 2.0f;
+			}
+
 			// The sub-curve over [u0, u1] from its end points and derivatives: for dyadic intervals,
 			// the control points SplitBezierSegment reaches, up to rounding.
 			HAPPYRAY_HD static BezierSegment
@@ -314,6 +315,121 @@ namespace happyray
 	{
 		float u;
 		return IntersectRayBezierCurve(ray, curve, out_t, &u, tolerance);
+	}
+
+	namespace detail
+	{
+		// Newton steps on (B(u) - p) . B'(u) = 0, kept while they get closer to `p`.
+		HAPPYRAY_HD inline float RefineClosestBezierParameter(const BezierPolynomial &polynomial,
+															  const Vec3f			 &p,
+															  float					  u,
+															  float					 *io_distance_squared)
+		{
+			for (int step = 0; step < 2; ++step)
+			{
+				const Vec3f offset	   = polynomial.Position(u) - p;
+				const Vec3f derivative = polynomial.Derivative(u);
+				const float slope	   = LengthSquared(derivative) + Dot(offset, polynomial.SecondDerivative(u));
+				if (!(slope > 0.0f))
+					break;
+				const float next			 = fminf(fmaxf(u - Dot(offset, derivative) / slope, 0.0f), 1.0f);
+				const float distance_squared = LengthSquared(polynomial.Position(next) - p);
+				if (!(distance_squared < *io_distance_squared))
+					break;
+				u					 = next;
+				*io_distance_squared = distance_squared;
+			}
+			return u;
+		}
+	} // namespace detail
+
+	// Closest point of the solid tube (`p` itself inside); `out_u` is the curve parameter of the
+	// closest axis point. Branch and bound over IntersectRayBezierCurve's subdivision walk, pruning
+	// nodes whose control hull is farther than the best axis point so far. Returns INFINITY unsearched
+	// when the whole hull is farther than sqrt(bound_squared).
+	HAPPYRAY_HD inline float ClosestPoint(const BezierCurve &curve,
+										  const Vec3f		&p,
+										  Vec3f				*out_point,
+										  float				*out_u,
+										  float				 bound_squared = INFINITY,
+										  float				 tolerance	   = kBezierRayTolerance)
+	{
+		if (curve.radius < 0.0f)
+			return INFINITY;
+		BBox hull;
+		for (int i = 0; i < BezierCurve::kNumVertices; ++i)
+			hull.Grow(curve.vtx[i]);
+		// The slack keeps rounding from rejecting a tube exactly at the bound.
+		const float axis_bound = (std::sqrt(bound_squared) + curve.radius) * 1.0001f;
+		if (DistanceSquaredToBBox(p, hull) > axis_bound * axis_bound)
+			return INFINITY;
+
+		const detail::BezierPolynomial polynomial(curve);
+		const float					   tolerance_squared = tolerance * tolerance;
+		float						   best				 = LengthSquared(p - curve.vtx[0]);
+		float						   best_u			 = 0.0f;
+		if (LengthSquared(p - curve.vtx[3]) < best)
+		{
+			best   = LengthSquared(p - curve.vtx[3]);
+			best_u = 1.0f;
+		}
+		int		 depth = 0;
+		uint32_t index = 0; // The node spans [index, index + 1] / 2^depth.
+		Vec3f	 q0	   = curve.vtx[0];
+		Vec3f	 d0	   = polynomial.c;
+		for (;;)
+		{
+			const float					scale	= 1.0f / static_cast<float>(1u << depth);
+			const float					u0		= static_cast<float>(index) * scale;
+			const float					u1		= static_cast<float>(index + 1) * scale;
+			const Vec3f					q3		= polynomial.Position(u1);
+			const Vec3f					d1		= polynomial.Derivative(u1);
+			const detail::BezierSegment segment = detail::BezierPolynomial::Segment(u0, u1, depth, q0, d0, q3, d1);
+			BBox						node;
+			for (int i = 0; i < 4; ++i)
+				node.Grow(segment.control[i]);
+			if (DistanceSquaredToBBox(p, node) < best)
+			{
+				if (detail::BezierFlatnessSquared(segment) > tolerance_squared && depth < kBezierMaxSubdivisionDepth)
+				{
+					++depth; // Left child.
+					index *= 2;
+					continue;
+				}
+				float u				   = u0 + ClosestSegmentParameter(p, q0, q3) * (u1 - u0);
+				float distance_squared = LengthSquared(polynomial.Position(u) - p);
+				u					   = detail::RefineClosestBezierParameter(polynomial, p, u, &distance_squared);
+				if (distance_squared < best)
+				{
+					best   = distance_squared;
+					best_u = u;
+				}
+			}
+
+			// Climb past right children, then step to the next sibling.
+			while (index & 1u)
+			{
+				index >>= 1;
+				--depth;
+			}
+			if (depth == 0)
+				break;
+			++index;
+			q0 = q3;
+			d0 = d1;
+		}
+
+		*out_u					  = best_u;
+		const Vec3f axis_point	  = polynomial.Position(best_u);
+		const float axis_distance = std::sqrt(best);
+		if (axis_distance <= curve.radius)
+		{
+			*out_point = p;
+			return 0.0f;
+		}
+		*out_point		= axis_point + (p - axis_point) * (curve.radius / axis_distance);
+		const float gap = axis_distance - curve.radius;
+		return gap * gap;
 	}
 
 	// Conservative w.r.t. IntersectRayBezierCurve's hits: subdivides the curve, culling sub-curves

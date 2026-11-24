@@ -29,6 +29,29 @@ namespace happyray
 		float	 t = 0.0f, u = 0.0f, v = 0.0f;
 	};
 
+	// Closest-point state carried through a query; resolved into a ClosestPointRecord afterwards.
+	struct ClosestPointHit
+	{
+		uint32_t prim			  = 0xffffffffu;
+		float	 distance_squared = INFINITY;
+		Vec3f	 point;
+		float	 u = 0.0f, v = 0.0f;
+	};
+
+	// Normalized `d`, or +z when it is zero (the query point is a point primitive or on a curve axis).
+	HAPPYRAY_HD inline Vec3f NormalizeOrZAxis(const Vec3f &d)
+	{
+		return LengthSquared(d) > 0.0f ? Normalize(d) : Vec3f(0.0f, 0.0f, 1.0f);
+	}
+
+	HAPPYRAY_HD inline Vec3f InterpolateTriangleNormal(const SceneView &scene, uint32_t prim, float u, float v)
+	{
+		const uint32_t i0 = scene.indices[prim * 3 + 0];
+		const uint32_t i1 = scene.indices[prim * 3 + 1];
+		const uint32_t i2 = scene.indices[prim * 3 + 2];
+		return Normalize(scene.normals[i0] * (1.0f - u - v) + scene.normals[i1] * u + scene.normals[i2] * v);
+	}
+
 	// Selects the primitive type from SceneView::primitive_type at runtime.
 	struct DynamicPrimitive
 	{
@@ -55,7 +78,8 @@ namespace happyray
 	};
 
 	// Specializations provide: Fetch, Intersect (t and up to two hit parameters), Normal, and
-	// CellOverlap (constructed once per primitive, then tested against many boxes).
+	// CellOverlap (constructed once per primitive, then tested against many boxes). All but
+	// TriangleWoop also provide ClosestPoint (squared unsigned distance) and ClosestPointNormal.
 	template <typename P> struct PrimitiveTraits;
 
 	template <> struct PrimitiveTraits<Triangle>
@@ -76,11 +100,18 @@ namespace happyray
 		// Barycentric-interpolated shading normal.
 		HAPPYRAY_HD static Vec3f Normal(const SceneView &scene, const Ray &, const ClosestHit &hit)
 		{
-			const uint32_t i0 = scene.indices[hit.prim * 3 + 0];
-			const uint32_t i1 = scene.indices[hit.prim * 3 + 1];
-			const uint32_t i2 = scene.indices[hit.prim * 3 + 2];
-			return Normalize(scene.normals[i0] * (1.0f - hit.u - hit.v) + scene.normals[i1] * hit.u +
-							 scene.normals[i2] * hit.v);
+			return InterpolateTriangleNormal(scene, hit.prim, hit.u, hit.v);
+		}
+
+		HAPPYRAY_HD static float
+		ClosestPoint(const Triangle &p, const Vec3f &q, float, Vec3f *point, float *u, float *v)
+		{
+			return happyray::ClosestPoint(p, q, point, u, v);
+		}
+
+		HAPPYRAY_HD static Vec3f ClosestPointNormal(const SceneView &scene, const Vec3f &, const ClosestPointHit &hit)
+		{
+			return InterpolateTriangleNormal(scene, hit.prim, hit.u, hit.v);
 		}
 	};
 
@@ -128,6 +159,17 @@ namespace happyray
 		{
 			return Normalize(ray.direction) * -1.0f;
 		}
+
+		HAPPYRAY_HD static float ClosestPoint(const Point &p, const Vec3f &q, float, Vec3f *point, float *, float *)
+		{
+			return happyray::ClosestPoint(p, q, point);
+		}
+
+		// Faces the query point.
+		HAPPYRAY_HD static Vec3f ClosestPointNormal(const SceneView &, const Vec3f &q, const ClosestPointHit &hit)
+		{
+			return NormalizeOrZAxis(q - hit.point);
+		}
 	};
 
 	template <> struct PrimitiveTraits<Sphere>
@@ -148,6 +190,17 @@ namespace happyray
 		HAPPYRAY_HD static Vec3f Normal(const SceneView &scene, const Ray &ray, const ClosestHit &hit)
 		{
 			return Normalize(ray.At(hit.t) - scene.spheres[hit.prim].vtx[0]);
+		}
+
+		HAPPYRAY_HD static float ClosestPoint(const Sphere &p, const Vec3f &q, float, Vec3f *point, float *, float *)
+		{
+			return happyray::ClosestPoint(p, q, point);
+		}
+
+		// Radial, also for query points inside the sphere.
+		HAPPYRAY_HD static Vec3f ClosestPointNormal(const SceneView &scene, const Vec3f &q, const ClosestPointHit &hit)
+		{
+			return NormalizeOrZAxis(q - scene.spheres[hit.prim].vtx[0]);
 		}
 	};
 
@@ -171,6 +224,18 @@ namespace happyray
 		{
 			const Vec3f offset = ray.At(hit.t) - EvaluateBezierCurve(scene.curves[hit.prim], hit.u);
 			return LengthSquared(offset) > 0.0f ? Normalize(offset) : Normalize(ray.direction) * -1.0f;
+		}
+
+		HAPPYRAY_HD static float
+		ClosestPoint(const BezierCurve &p, const Vec3f &q, float bound_squared, Vec3f *point, float *u, float *)
+		{
+			return happyray::ClosestPoint(p, q, point, u, bound_squared);
+		}
+
+		// Away from the curve axis, also for query points inside the tube.
+		HAPPYRAY_HD static Vec3f ClosestPointNormal(const SceneView &scene, const Vec3f &q, const ClosestPointHit &hit)
+		{
+			return NormalizeOrZAxis(q - EvaluateBezierCurve(scene.curves[hit.prim], hit.u));
 		}
 	};
 
@@ -201,6 +266,19 @@ namespace happyray
 			const float component = (&ray.direction.x)[axis];
 			Vec3f		normal(0.0f, 0.0f, 0.0f);
 			(&normal.x)[axis] = component > 0.0f ? -1.0f : 1.0f;
+			return normal;
+		}
+
+		HAPPYRAY_HD static float ClosestPoint(const BBox &p, const Vec3f &q, float, Vec3f *point, float *u, float *v)
+		{
+			return happyray::ClosestPoint(p, q, point, u, v);
+		}
+
+		// The face normal chosen by ClosestPoint (axis in u, sign in v).
+		HAPPYRAY_HD static Vec3f ClosestPointNormal(const SceneView &, const Vec3f &, const ClosestPointHit &hit)
+		{
+			Vec3f normal(0.0f, 0.0f, 0.0f);
+			(&normal.x)[static_cast<int>(hit.u)] = hit.v;
 			return normal;
 		}
 	};

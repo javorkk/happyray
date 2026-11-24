@@ -57,6 +57,23 @@ namespace happyray
 		return false;
 	}
 
+	// Closest point of the solid sphere (`p` itself inside).
+	HAPPYRAY_HD inline float ClosestPoint(const Sphere &sphere, const Vec3f &p, Vec3f *out_point)
+	{
+		if (sphere.radius < 0.0f)
+			return INFINITY;
+		const Vec3f offset = p - sphere.vtx[0];
+		const float length = Length(offset);
+		if (length <= sphere.radius)
+		{
+			*out_point = p;
+			return 0.0f;
+		}
+		const float gap = length - sphere.radius;
+		*out_point		= sphere.vtx[0] + offset * (sphere.radius / length);
+		return gap * gap;
+	}
+
 	HAPPYRAY_HD inline bool Intersects(const Sphere &sphere, const BBox &box)
 	{
 		if (sphere.radius < 0.0f || box.IsEmpty())

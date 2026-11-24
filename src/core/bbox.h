@@ -124,6 +124,62 @@ namespace happyray
 		return !primitive.IsEmpty() && !box.IsEmpty() && Overlaps(primitive, box);
 	}
 
+	// Zero inside the box; a lower bound on the distance to anything the box contains.
+	HAPPYRAY_HD inline float DistanceSquaredToBBox(const Vec3f &p, const BBox &box)
+	{
+		return LengthSquared(Max(Max(box.min_bound - p, p - box.max_bound), Vec3f(0.0f)));
+	}
+
+	// Closest point of the solid box (`p` itself inside). `out_u` is the axis of the face whose
+	// normal the query reports and `out_v` its sign: the largest offset outside, the nearest face inside.
+	HAPPYRAY_HD inline float ClosestPoint(const BBox &box, const Vec3f &p, Vec3f *out_point, float *out_u, float *out_v)
+	{
+		if (box.IsEmpty())
+			return INFINITY;
+		const float *query	 = &p.x;
+		const float *box_min = &box.min_bound.x;
+		const float *box_max = &box.max_bound.x;
+		Vec3f		 point;
+		float		*closest		  = &point.x;
+		float		 distance_squared = 0.0f, largest_gap = 0.0f, sign = 1.0f;
+		int			 axis = 0;
+		for (int a = 0; a < 3; ++a)
+		{
+			closest[a]		= fminf(fmaxf(query[a], box_min[a]), box_max[a]);
+			const float gap = query[a] - closest[a];
+			distance_squared += gap * gap;
+			if (std::fabs(gap) > largest_gap)
+			{
+				largest_gap = std::fabs(gap);
+				axis		= a;
+				sign		= gap > 0.0f ? 1.0f : -1.0f;
+			}
+		}
+		if (distance_squared == 0.0f)
+		{
+			float nearest = INFINITY;
+			for (int a = 0; a < 3; ++a)
+			{
+				if (query[a] - box_min[a] < nearest)
+				{
+					nearest = query[a] - box_min[a];
+					axis	= a;
+					sign	= -1.0f;
+				}
+				if (box_max[a] - query[a] < nearest)
+				{
+					nearest = box_max[a] - query[a];
+					axis	= a;
+					sign	= 1.0f;
+				}
+			}
+		}
+		*out_point = point;
+		*out_u	   = static_cast<float>(axis);
+		*out_v	   = sign;
+		return distance_squared;
+	}
+
 	// Ray hit on the surface of a solid box: the entry point, or the exit point if the ray starts
 	// inside. Writes the hit distance and the axis (0..2) of the face that was hit.
 	HAPPYRAY_HD inline bool IntersectRayBoxSurface(const Ray &ray, const BBox &box, float *out_t, int *out_axis)

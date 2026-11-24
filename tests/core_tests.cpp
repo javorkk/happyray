@@ -383,6 +383,120 @@ namespace
 	}
 
 	// The stackless subdivision walk finds the same capsules as splitting on a stack.
+	void TestClosestPointPrimitives()
+	{
+		using namespace happyray;
+		Vec3f point;
+		float u = -1.0f, v = -1.0f;
+
+		Triangle triangle;
+		triangle.vtx[0] = Vec3f(0, 0, 0);
+		triangle.vtx[1] = Vec3f(1, 0, 0);
+		triangle.vtx[2] = Vec3f(0, 1, 0);
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(triangle, Vec3f(0.25f, 0.25f, 2), &point, &u, &v), 4.0f));
+		HAPPYRAY_CHECK(NearlyEqual(point, Vec3f(0.25f, 0.25f, 0)) && NearlyEqual(u, 0.25f) && NearlyEqual(v, 0.25f));
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(triangle, Vec3f(-1, -1, 0), &point, &u, &v), 2.0f));
+		HAPPYRAY_CHECK(NearlyEqual(point, Vec3f(0, 0, 0)) && u == 0.0f && v == 0.0f);
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(triangle, Vec3f(2, -1, 0), &point, &u, &v), 2.0f));
+		HAPPYRAY_CHECK(NearlyEqual(point, Vec3f(1, 0, 0)) && u == 1.0f && v == 0.0f);
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(triangle, Vec3f(1, 1, 0), &point, &u, &v), 0.5f));
+		HAPPYRAY_CHECK(NearlyEqual(point, Vec3f(0.5f, 0.5f, 0)) && NearlyEqual(u, 0.5f) && NearlyEqual(v, 0.5f));
+		Triangle collinear;
+		collinear.vtx[0] = Vec3f(0, 0, 0);
+		collinear.vtx[1] = Vec3f(1, 0, 0);
+		collinear.vtx[2] = Vec3f(2, 0, 0);
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(collinear, Vec3f(1.5f, 1, 0), &point, &u, &v), 1.0f));
+		HAPPYRAY_CHECK(NearlyEqual(point, Vec3f(1.5f, 0, 0)));
+
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(Point(Vec3f(1, 2, 3), 0.5f), Vec3f(1, 2, 5), &point), 4.0f));
+		HAPPYRAY_CHECK(NearlyEqual(point, Vec3f(1, 2, 3)));
+
+		const Sphere sphere(Vec3f(1, 0, 0), 0.5f);
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(sphere, Vec3f(3, 0, 0), &point), 1.5f * 1.5f));
+		HAPPYRAY_CHECK(NearlyEqual(point, Vec3f(1.5f, 0, 0)));
+		HAPPYRAY_CHECK(ClosestPoint(sphere, Vec3f(1.2f, 0, 0), &point) == 0.0f &&
+					   NearlyEqual(point, Vec3f(1.2f, 0, 0)));
+		HAPPYRAY_CHECK(ClosestPoint(Sphere(Vec3f(0), -1.0f), Vec3f(3, 0, 0), &point) == INFINITY);
+
+		const BBox box(Vec3f(-1, -1, -1), Vec3f(1, 1, 1));
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(box, Vec3f(3, 0.5f, 0), &point, &u, &v), 4.0f));
+		HAPPYRAY_CHECK(NearlyEqual(point, Vec3f(1, 0.5f, 0)) && u == 0.0f && v == 1.0f);
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(box, Vec3f(2, -3, 2), &point, &u, &v), 6.0f));
+		HAPPYRAY_CHECK(NearlyEqual(point, Vec3f(1, -1, 1)) && u == 1.0f && v == -1.0f);
+		HAPPYRAY_CHECK(ClosestPoint(box, Vec3f(0.2f, 0.1f, -0.9f), &point, &u, &v) == 0.0f);
+		HAPPYRAY_CHECK(NearlyEqual(point, Vec3f(0.2f, 0.1f, -0.9f)) && u == 2.0f && v == -1.0f);
+		HAPPYRAY_CHECK(DistanceSquaredToBBox(Vec3f(0.5f), box) == 0.0f);
+		HAPPYRAY_CHECK(NearlyEqual(DistanceSquaredToBBox(Vec3f(2, 3, 0), box), 5.0f));
+
+		const BezierCurve line_curve(Vec3f(4, 0, 0), Vec3f(5, 0, 0), Vec3f(6, 0, 0), Vec3f(7, 0, 0), 0.5f);
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(line_curve, Vec3f(5.5f, 2, 0), &point, &u), 1.5f * 1.5f));
+		HAPPYRAY_CHECK(NearlyEqual(point, Vec3f(5.5f, 0.5f, 0)) && NearlyEqual(u, 0.5f));
+		HAPPYRAY_CHECK(ClosestPoint(line_curve, Vec3f(6, 0.3f, 0), &point, &u) == 0.0f);
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(line_curve, Vec3f(9, 0, 0), &point, &u), 1.5f * 1.5f) && u == 1.0f);
+		HAPPYRAY_CHECK(ClosestPoint(line_curve, Vec3f(5.5f, 2, 0), &point, &u, 1.0f) == INFINITY);
+		HAPPYRAY_CHECK(NearlyEqual(ClosestPoint(line_curve, Vec3f(5.5f, 2, 0), &point, &u, 1.5f * 1.5f), 1.5f * 1.5f));
+	}
+
+	// No dense sample of a random triangle or curve may beat ClosestPoint, which must report a point
+	// on the primitive within sampling error of the best sample.
+	void TestClosestPointMatchesSampling()
+	{
+		using namespace happyray;
+		Rng	 rng(11, 5);
+		auto random_point = [&](float scale)
+		{ return (Vec3f(rng.NextFloat(), rng.NextFloat(), rng.NextFloat()) - Vec3f(0.5f)) * scale; };
+		int failures = 0;
+		for (int c = 0; c < 200; ++c)
+		{
+			Triangle triangle;
+			for (int i = 0; i < 3; ++i)
+				triangle.vtx[i] = random_point(2.0f);
+			const Vec3f query = random_point(4.0f);
+			Vec3f		point;
+			float		u, v;
+			const float distance	= std::sqrt(ClosestPoint(triangle, query, &point, &u, &v));
+			const Vec3f on_triangle = triangle.vtx[0] * (1.0f - u - v) + triangle.vtx[1] * u + triangle.vtx[2] * v;
+			float		sampled		= INFINITY;
+			for (int i = 0; i <= 256; ++i)
+				for (int j = 0; i + j <= 256; ++j)
+				{
+					const float su = i / 256.0f, sv = j / 256.0f;
+					const Vec3f sample =
+						triangle.vtx[0] * (1.0f - su - sv) + triangle.vtx[1] * su + triangle.vtx[2] * sv;
+					sampled = std::fmin(sampled, Length(query - sample));
+				}
+			failures += !(u >= -1e-5f && v >= -1e-5f && u + v <= 1.0f + 1e-5f && NearlyEqual(point, on_triangle) &&
+						  distance <= sampled + 1e-5f && distance >= sampled - 1e-2f);
+		}
+		HAPPYRAY_CHECK(failures == 0);
+
+		failures = 0;
+		for (int c = 0; c < 200; ++c)
+		{
+			const float		  bend = c % 3 == 0 ? 0.01f : 1.5f;
+			const Vec3f		  p0 = random_point(2.0f), p3 = random_point(2.0f);
+			const BezierCurve curve(p0,
+									Lerp(p0, p3, 1.0f / 3.0f) + random_point(bend),
+									Lerp(p0, p3, 2.0f / 3.0f) + random_point(bend),
+									p3,
+									c % 4 == 0 ? 0.0f : 0.05f * rng.NextFloat());
+			const Vec3f		  query = random_point(4.0f);
+			Vec3f			  point;
+			float			  u;
+			const float		  distance = std::sqrt(ClosestPoint(curve, query, &point, &u));
+			float			  sampled  = INFINITY;
+			for (int i = 0; i <= 8192; ++i)
+				sampled = std::fmin(sampled, Length(query - EvaluateBezierCurve(curve, i / 8192.0f)));
+			sampled						 = std::fmax(sampled - curve.radius, 0.0f);
+			const float axis_distance	 = Length(query - EvaluateBezierCurve(curve, u));
+			const float surface_distance = std::fmax(axis_distance - curve.radius, 0.0f);
+			failures += !(u >= 0.0f && u <= 1.0f && NearlyEqual(distance, surface_distance) &&
+						  NearlyEqual(Length(query - point), distance) && distance <= sampled + 1e-5f &&
+						  distance >= sampled - 1e-3f);
+		}
+		HAPPYRAY_CHECK(failures == 0);
+	}
+
 	void TestBezierCurveMatchesStackSubdivision()
 	{
 		using namespace happyray;
@@ -918,6 +1032,8 @@ int main(int argc, char **argv)
 	TestBBoxExtractor();
 	TestAdditionalPrimitiveBounds();
 	TestPrimitiveIntersections();
+	TestClosestPointPrimitives();
+	TestClosestPointMatchesSampling();
 	TestBezierCurveMatchesStackSubdivision();
 	TestTriangleWoopCenteredGaps();
 	TestCenterScene();
