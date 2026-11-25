@@ -9,6 +9,7 @@
 #include "two_level_grid.h"
 #include "grid_common.h"
 
+#include <thrust/binary_search.h>
 #include <thrust/device_vector.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -109,15 +110,15 @@ namespace happyray
 				const int			cy	 = static_cast<int>((owner / top_resolution_x) % top_resolution_y);
 				const int			cz	 = static_cast<int>(owner / (top_resolution_x * top_resolution_y));
 				const Vec3f			cell_min(top_bounds_min.x + cx * top_cell_size.x,
-											 top_bounds_min.y + cy * top_cell_size.y,
-											 top_bounds_min.z + cz * top_cell_size.z);
+									 top_bounds_min.y + cy * top_cell_size.y,
+									 top_bounds_min.z + cz * top_cell_size.z);
 				const int			resolution = info.Resolution();
 				const Vec3f			sub_inv(top_inv_cell_size.x * resolution,
-											top_inv_cell_size.y * resolution,
-											top_inv_cell_size.z * resolution);
+									top_inv_cell_size.y * resolution,
+									top_inv_cell_size.z * resolution);
 				const Vec3f			sub_cell_size(top_cell_size.x / resolution,
-												  top_cell_size.y / resolution,
-												  top_cell_size.z / resolution);
+										  top_cell_size.y / resolution,
+										  top_cell_size.z / resolution);
 				const uint32_t		tri = top_prim_indices[i];
 				P					primitive;
 				if constexpr (Mode != CellOverlapMode::kAabb)
@@ -138,20 +139,20 @@ namespace happyray
 					const uint32_t write_end   = inclusive_offsets[i];
 					uint32_t	   offset	   = write_begin;
 					exact_counts[i]			   = detail::ForEachOverlappedCell<P, Mode>(
-						primitive,
-						box,
-						cell_min,
-						sub_inv,
-						sub_cell_size,
-						Vec3i(resolution, resolution, resolution),
-						[&](const Vec3i &cell)
-						{
-							out_cell_indices[offset] =
-								info.cell_range_offset +
-								FlattenCellIndex(cell, Vec3i(resolution, resolution, resolution));
-							out_prim_indices[offset] = tri;
-							++offset;
-						});
+						   primitive,
+						   box,
+						   cell_min,
+						   sub_inv,
+						   sub_cell_size,
+						   Vec3i(resolution, resolution, resolution),
+						   [&](const Vec3i &cell)
+						   {
+							   out_cell_indices[offset] =
+								   info.cell_range_offset +
+								   FlattenCellIndex(cell, Vec3i(resolution, resolution, resolution));
+							   out_prim_indices[offset] = tri;
+							   ++offset;
+						   });
 					while (offset < write_end)
 					{
 						out_cell_indices[offset] = invalid_cell_index;
@@ -200,6 +201,94 @@ namespace happyray
 			}
 		};
 
+		// A nested cell's top-level cell, nested resolution, and coordinates in its nested grid.
+		struct NestedCellLocator
+		{
+			const TopLevelCell *top_level_cells;
+			const uint32_t	   *owners; // Top-level cell of each nested cell.
+
+			HAPPYRAY_HD uint32_t operator()(uint32_t i, Vec3i *resolution, Vec3i *cell) const
+			{
+				const uint32_t	   owner = owners[i];
+				const TopLevelCell info	 = top_level_cells[owner];
+				const int		   r	 = info.Resolution();
+				const int		   local = static_cast<int>(i - info.cell_range_offset);
+				*resolution				 = Vec3i(r, r, r);
+				*cell					 = Vec3i(local % r, (local / r) % r, local / (r * r));
+				return owner;
+			}
+		};
+
+		struct TopLevelCellLocator
+		{
+			Vec3i resolution;
+
+			HAPPYRAY_HD uint32_t operator()(uint32_t i, Vec3i *out_resolution, Vec3i *cell) const
+			{
+				const int c		= static_cast<int>(i);
+				*out_resolution = resolution;
+				*cell = Vec3i(c % resolution.x, (c / resolution.x) % resolution.y, c / (resolution.x * resolution.y));
+				return i;
+			}
+		};
+
+		// Separable Chebyshev distance transform, one axis per pass: the distance along `axis` to
+		// the nearest cell, combined by max with that cell's distance over the earlier axes.
+		template <typename Locator> struct EmptyRadiusPass
+		{
+			Locator		   locate;
+			int			   axis;
+			const uint8_t *in;
+
+			HAPPYRAY_HD uint8_t operator()(uint32_t i) const
+			{
+				Vec3i resolution, cell;
+				locate(i, &resolution, &cell);
+				const int n = (&resolution.x)[axis], at = (&cell.x)[axis];
+				const int stride = axis == 0 ? 1 : (axis == 1 ? resolution.x : resolution.x * resolution.y);
+				int		  best	 = 255;
+				for (int k = 0; k < n; ++k)
+				{
+					const int steps = k > at ? k - at : at - k;
+					if (steps >= best)
+						continue;
+					const int radius = in[static_cast<int>(i) + (k - at) * stride];
+					best			 = radius > steps ? (radius < best ? radius : best) : steps;
+				}
+				return static_cast<uint8_t>(best);
+			}
+		};
+
+		struct EmptyRadiusSeed
+		{
+			HAPPYRAY_HD uint8_t operator()(const CellRange &range) const
+			{
+				return range.start == range.end ? 255 : 0;
+			}
+
+			HAPPYRAY_HD uint8_t operator()(const TopLevelCell &cell) const
+			{
+				return cell.IsEmpty() ? 255 : 0;
+			}
+		};
+
+		struct CellRangeOffset
+		{
+			HAPPYRAY_HD uint32_t operator()(const TopLevelCell &cell) const
+			{
+				return cell.cell_range_offset;
+			}
+		};
+
+		// thrust::upper_bound yields one past each nested cell's owner.
+		struct Predecessor
+		{
+			HAPPYRAY_HD uint32_t operator()(uint32_t i) const
+			{
+				return i - 1;
+			}
+		};
+
 	} // namespace
 
 	struct TwoLevelGrid::Impl
@@ -210,6 +299,7 @@ namespace happyray
 		thrust::device_vector<uint32_t>		top_level_prim_ref_counts;
 		thrust::device_vector<CellRange>	second_level_cell_ranges;
 		thrust::device_vector<uint32_t>		second_level_prim_indices;
+		thrust::device_vector<uint8_t>		top_level_empty_radius, second_level_empty_radius;
 
 		TwoLevelGridView View() const
 		{
@@ -221,11 +311,21 @@ namespace happyray
 			return view;
 		}
 
+		TwoLevelGridClosestPointView ClosestPointView() const
+		{
+			TwoLevelGridClosestPointView view(View());
+			view.top_level_empty_radius	   = thrust::raw_pointer_cast(top_level_empty_radius.data());
+			view.second_level_empty_radius = thrust::raw_pointer_cast(second_level_empty_radius.data());
+			return view;
+		}
+
 		template <typename P, CellOverlapMode Mode>
 		void Build(const SceneView &scene,
 				   float			top_level_density,
 				   float			second_level_density,
 				   uint32_t			dense_cell_threshold);
+
+		void BuildEmptyRadii();
 	};
 
 	TwoLevelGrid::TwoLevelGrid(const SceneView &scene,
@@ -366,6 +466,57 @@ namespace happyray
 		this->top_level_cells			= std::move(top_level_cells);
 		this->top_level_prim_ref_counts = std::move(top_level_prim_ref_counts);
 		second_level_prim_indices		= std::move(second_prim_indices);
+		BuildEmptyRadii();
+	}
+
+	void TwoLevelGrid::Impl::BuildEmptyRadii()
+	{
+		const auto	   policy = thrust::device(cell_reference_scratch.allocator);
+		const auto	   first  = thrust::counting_iterator<uint32_t>(0);
+		const uint32_t n_top  = static_cast<uint32_t>(top_level_cells.size());
+		const uint32_t n_leaf = static_cast<uint32_t>(second_level_cell_ranges.size());
+
+		const auto *cells = thrust::raw_pointer_cast(top_level_cells.data());
+
+		// Top level: empty means no nested cell holds references.
+		thrust::device_vector<uint8_t> radius(n_top), scratch(n_top);
+		thrust::transform(policy, top_level_cells.begin(), top_level_cells.end(), radius.begin(), EmptyRadiusSeed{});
+		const TopLevelCellLocator top_locator{top_level.resolution};
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			thrust::transform(
+				policy,
+				first,
+				first + n_top,
+				scratch.begin(),
+				EmptyRadiusPass<TopLevelCellLocator>{top_locator, axis, thrust::raw_pointer_cast(radius.data())});
+			radius.swap(scratch);
+		}
+		top_level_empty_radius = std::move(radius);
+
+		// Nested cells, each within its own grid; their owners come from the sorted cell offsets.
+		thrust::device_vector<uint32_t> offsets(n_top), owners(n_leaf);
+		thrust::transform(policy, top_level_cells.begin(), top_level_cells.end(), offsets.begin(), CellRangeOffset{});
+		thrust::upper_bound(policy, offsets.begin(), offsets.end(), first, first + n_leaf, owners.begin());
+		thrust::transform(policy, owners.begin(), owners.end(), owners.begin(), Predecessor{});
+		const NestedCellLocator		   nested{cells, thrust::raw_pointer_cast(owners.data())};
+		thrust::device_vector<uint8_t> leaf_radius(n_leaf), leaf_scratch(n_leaf);
+		thrust::transform(policy,
+						  second_level_cell_ranges.begin(),
+						  second_level_cell_ranges.end(),
+						  leaf_radius.begin(),
+						  EmptyRadiusSeed{});
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			thrust::transform(
+				policy,
+				first,
+				first + n_leaf,
+				leaf_scratch.begin(),
+				EmptyRadiusPass<NestedCellLocator>{nested, axis, thrust::raw_pointer_cast(leaf_radius.data())});
+			leaf_radius.swap(leaf_scratch);
+		}
+		second_level_empty_radius = std::move(leaf_radius);
 	}
 
 	TwoLevelGrid::~TwoLevelGrid() = default;
@@ -384,7 +535,7 @@ namespace happyray
 	{
 		const TwoLevelGridView view = impl_->View();
 		const auto num_top_cells	= static_cast<uint32_t>(view.top_level.resolution.x) * view.top_level.resolution.y *
-									  view.top_level.resolution.z;
+								   view.top_level.resolution.z;
 		float total = HalfSurfaceArea(view.top_level.cell_size) * static_cast<float>(num_top_cells) * costs.traversal;
 		if (num_top_cells > 0)
 		{
@@ -404,6 +555,11 @@ namespace happyray
 	TwoLevelGridView TwoLevelGrid::View() const
 	{
 		return impl_->View();
+	}
+
+	TwoLevelGridClosestPointView TwoLevelGrid::ClosestPointView() const
+	{
+		return impl_->ClosestPointView();
 	}
 
 } // namespace happyray

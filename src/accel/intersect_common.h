@@ -230,10 +230,10 @@ namespace happyray
 
 	struct AccelStructures
 	{
-		AccelType		  type = AccelType::kBruteForce;
-		UniformGridView	  uniform_grid;
-		TwoLevelGridView  two_level_grid;
-		IrregularGridView irregular_grid;
+		AccelType					 type = AccelType::kBruteForce;
+		UniformGridView				 uniform_grid;
+		TwoLevelGridClosestPointView two_level_grid; // Rays use its TwoLevelGridView base.
+		IrregularGridView			 irregular_grid;
 	};
 
 	// Compile-time structure selector. A kernel containing every traversal pays the largest one's
@@ -281,7 +281,10 @@ namespace happyray
 		else if constexpr (A::value == AccelType::kUniformGrid)
 			return IntersectSceneGrid<P>(scene, accel.uniform_grid, ray, out_hit);
 		else if constexpr (A::value == AccelType::kTwoLevelGrid)
-			return IntersectSceneGrid<P>(scene, accel.two_level_grid, ray, out_hit);
+			return IntersectSceneGrid<P>(scene,
+										 static_cast<const TwoLevelGridView &>(accel.two_level_grid),
+										 ray,
+										 out_hit);
 		else if constexpr (A::value == AccelType::kIrregularGrid)
 			return IntersectSceneGrid<P>(scene, accel.irregular_grid, ray, out_hit);
 		else
@@ -298,7 +301,7 @@ namespace happyray
 		else if constexpr (A::value == AccelType::kUniformGrid)
 			return IsOccludedGrid<P>(scene, accel.uniform_grid, ray);
 		else if constexpr (A::value == AccelType::kTwoLevelGrid)
-			return IsOccludedGrid<P>(scene, accel.two_level_grid, ray);
+			return IsOccludedGrid<P>(scene, static_cast<const TwoLevelGridView &>(accel.two_level_grid), ray);
 		else if constexpr (A::value == AccelType::kIrregularGrid)
 			return IsOccludedGrid<P>(scene, accel.irregular_grid, ray);
 		else

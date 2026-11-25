@@ -170,7 +170,7 @@ namespace
 										  mode);
 			AccelStructures		accel;
 			accel.uniform_grid		  = uniform.View();
-			accel.two_level_grid	  = two_level.View();
+			accel.two_level_grid	  = two_level.ClosestPointView();
 			accel.irregular_grid	  = irregular.View();
 			const AccelType	  types[] = {AccelType::kUniformGrid, AccelType::kTwoLevelGrid, AccelType::kIrregularGrid};
 			const char *const type_names[] = {"uniform", "two-level", "irregular"};

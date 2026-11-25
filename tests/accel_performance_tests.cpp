@@ -37,6 +37,10 @@ namespace
 	constexpr uint32_t kRayCount		 = 1024 * 1024;
 	constexpr uint32_t kQueryCount		 = 256 * 1024;
 	constexpr int	   kClosestPointRuns = 5;
+	// Sparser than the ray-tuned defaults: closest-point queries spend their time walking cells, so
+	// fewer, larger cells are faster with both backends. The uniform grid keeps its default.
+	constexpr float kClosestPointTopLevelDensity = 0.06f;
+	constexpr float kClosestPointLeafDensity	 = 0.6f;
 
 	template <typename T> T *Raw(thrust::device_vector<T> &values)
 	{
@@ -114,6 +118,8 @@ namespace
 		bytes += num_top_cells * sizeof(uint32_t);
 		bytes += static_cast<size_t>(grid.LeafCellCount()) * sizeof(CellRange);
 		bytes += static_cast<size_t>(grid.SecondLevelPrimIndexCount()) * sizeof(uint32_t);
+		// Closest-point empty radius per top-level and nested cell.
+		bytes += (num_top_cells + static_cast<size_t>(grid.LeafCellCount())) * sizeof(uint8_t);
 		return bytes;
 	}
 
@@ -269,20 +275,22 @@ namespace
 	void RunClosestPoint(const FlatScene &flat, const SceneView &view, const BBox &bounds)
 	{
 		const UniformGrid	uniform(view);
-		const TwoLevelGrid	two_level(view);
-		const IrregularGrid irregular(view);
+		const TwoLevelGrid	two_level(view, kClosestPointTopLevelDensity, kClosestPointLeafDensity);
+		const IrregularGrid irregular(view, kClosestPointTopLevelDensity, kClosestPointLeafDensity);
 		AccelStructures		accel;
 		accel.uniform_grid			   = uniform.View();
-		accel.two_level_grid		   = two_level.View();
+		accel.two_level_grid		   = two_level.ClosestPointView();
 		accel.irregular_grid		   = irregular.View();
 		const AccelType	  types[]	   = {AccelType::kUniformGrid, AccelType::kTwoLevelGrid, AccelType::kIrregularGrid};
 		const char *const grid_names[] = {"uniform", "two-level", "irregular"};
 		const char *const set_names[]  = {"near", "inside", "far"};
 
-		std::printf("\nClosest point: %u queries per set, median of %d timed runs; counts per query "
-					"(mean/p50/p99/max)\n",
+		std::printf("\nClosest point: %u queries per set, median of %d timed runs; two-level and irregular "
+					"grids at top=%g, leaf=%g (uniform at its default); counts per query (mean/p50/p99/max)\n",
 					kQueryCount,
-					kClosestPointRuns);
+					kClosestPointRuns,
+					kClosestPointTopLevelDensity,
+					kClosestPointLeafDensity);
 		std::printf("%-10s %-7s %10s %9s %30s %30s %10s\n",
 					"Grid",
 					"Set",
@@ -291,8 +299,9 @@ namespace
 					"cells examined",
 					"primitives tested",
 					"leaves");
-		size_t mismatches		= 0;
-		double throughput[3][3] = {};
+		size_t					 mismatches		  = 0;
+		double					 throughput[3][3] = {};
+		std::vector<std::string> breakdown_rows;
 		for (int set = 0; set < 3; ++set)
 		{
 			const std::vector<Vec3f>					host_queries = MakeClosestPointQueries(flat, bounds, set);
@@ -324,12 +333,41 @@ namespace
 				std::vector<uint32_t>							cells, prims, leaves;
 				for (const ClosestPointCounters &c : host_counters)
 				{
-					cells.push_back(c.cells_examined);
+					cells.push_back(c.top_cells_examined + c.rows_examined + c.cells_examined);
 					prims.push_back(c.prims_tested);
 					leaves.push_back(c.leaves_visited);
 				}
 				const Distribution cell_stats = Summarize(cells), prim_stats = Summarize(prims);
-				char			   cell_text[64], prim_text[64];
+				double			   sums[10] = {};
+				for (const ClosestPointCounters &c : host_counters)
+				{
+					const uint32_t fields[10] = {c.top_cells_examined,
+												 c.top_cells_empty,
+												 c.rows_examined,
+												 c.cells_examined,
+												 c.leaves_loaded,
+												 c.leaves_empty,
+												 c.leaves_skipped,
+												 c.nearest_lookups,
+												 c.leaves_visited,
+												 c.prims_tested};
+					for (int f = 0; f < 10; ++f)
+						sums[f] += fields[f];
+				}
+				char breakdown[256];
+				int	 length = std::snprintf(breakdown, sizeof(breakdown), "%-10s %-7s", grid_names[t], set_names[set]);
+				for (int f = 0; f < 10; ++f)
+				{
+					length +=
+						std::snprintf(breakdown + length, sizeof(breakdown) - length, " %9.1f", sums[f] / kQueryCount);
+					if (f == 5)
+						length += std::snprintf(breakdown + length,
+												sizeof(breakdown) - length,
+												" %6.1f%%",
+												sums[4] > 0 ? 100.0 * sums[5] / sums[4] : 0.0);
+				}
+				breakdown_rows.push_back(breakdown);
+				char cell_text[64], prim_text[64];
 				std::snprintf(cell_text,
 							  sizeof(cell_text),
 							  "%.1f/%u/%u/%u",
@@ -370,6 +408,26 @@ namespace
 						mismatches += !SameClosestPoint(host_records[i], reference[i]);
 			}
 		}
+		std::printf("\nClosest-point work per query (means). Distance tests: top-level cells, irregular voxel rows, "
+					"leaf cells (irregular: voxel steps). Loaded leaf cells: empty ones, non-empty ones left to "
+					"another run (irregular), extra voxel lookups for that choice, and ones tested\n");
+		std::printf("%-10s %-7s %9s %9s %9s %9s %9s %9s %7s %9s %9s %9s %9s\n",
+					"Grid",
+					"Set",
+					"top",
+					"top empty",
+					"rows",
+					"cells",
+					"loaded",
+					"empty",
+					"empty%",
+					"skipped",
+					"nearest",
+					"visited",
+					"prims");
+		for (const std::string &row : breakdown_rows)
+			std::printf("%s\n", row.c_str());
+
 		std::printf("\nClosest-point throughput, Mq/s (speedup over uniform)\n%-7s", "Set");
 		for (const char *name : grid_names)
 			std::printf(" %20s", name);

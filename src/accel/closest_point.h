@@ -70,12 +70,19 @@ namespace happyray
 		return hit;
 	}
 
-	// Per-query work of a closest-point search, for profiling and load-balance studies.
+	// Per-query work of a closest-point search, for profiling. The fields don't overlap.
 	struct ClosestPointCounters
 	{
-		uint32_t cells_examined = 0; // Cell distance tests at every level, pruned cells included.
-		uint32_t leaves_visited = 0; // Non-empty leaf cells whose primitives were tested.
-		uint32_t prims_tested	= 0; // Primitive tests; a primitive counts once per leaf holding it.
+		uint32_t top_cells_examined = 0; // Top-level distance tests (two-level, irregular).
+		uint32_t top_cells_empty	= 0; // Top-level cells within the bound holding no references.
+		uint32_t rows_examined		= 0; // Irregular: distance tests of local voxel rows.
+		uint32_t cells_examined		= 0; // Leaf-level distance tests (irregular: voxel steps along rows).
+		uint32_t leaves_loaded		= 0; // Leaf cells loaded after passing their distance test.
+		uint32_t leaves_empty		= 0; // Loaded leaf cells without references.
+		uint32_t leaves_skipped		= 0; // Irregular: non-empty cells left to the run nearest the query.
+		uint32_t nearest_lookups	= 0; // Irregular: voxel lookups deciding which run visits a cell.
+		uint32_t leaves_visited		= 0; // Non-empty leaf cells whose primitives were tested.
+		uint32_t prims_tested		= 0; // Primitive tests; a primitive counts once per leaf holding it.
 	};
 
 	namespace detail
@@ -121,18 +128,28 @@ namespace happyray
 			return lower;
 		}
 
+		struct FirstRingZero
+		{
+			HAPPYRAY_HD int operator()(uint32_t) const
+			{
+				return 0;
+			}
+		};
+
 		// Visits a grid's cells in rings of growing Chebyshev distance around the query's cell,
 		// skipping cells farther than `bound()` and stopping once a whole ring is. `visit(index, cell)`
-		// returns true to stop the query. Bounds are inclusive so equal-distance ties are seen.
-		template <typename BoundFn, typename VisitFn>
-		HAPPYRAY_HD inline bool VisitCellsByDistance(const Vec3f		  &bounds_min,
-													 const Vec3f		  &cell_size,
-													 const Vec3f		  &inv_cell_size,
-													 const Vec3i		  &resolution,
-													 const Vec3f		  &query,
-													 BoundFn			 &&bound,
-													 VisitFn			 &&visit,
-													 ClosestPointCounters *counters)
+		// returns true to stop the query. Bounds are inclusive so equal-distance ties are seen. Rings
+		// start at `first_ring(center index)`, which may skip rings holding only empty cells.
+		template <typename BoundFn, typename VisitFn, typename FirstRingFn = FirstRingZero>
+		HAPPYRAY_HD inline bool VisitCellsByDistance(const Vec3f &bounds_min,
+													 const Vec3f &cell_size,
+													 const Vec3f &inv_cell_size,
+													 const Vec3i &resolution,
+													 const Vec3f &query,
+													 BoundFn	&&bound,
+													 VisitFn	&&visit,
+													 uint32_t	 *examined,
+													 FirstRingFn  first_ring = {})
 		{
 			const Vec3f entry = (query - bounds_min) * inv_cell_size;
 			const Vec3i center(ClampInt(static_cast<int>(std::floor(entry.x)), 0, resolution.x - 1),
@@ -141,7 +158,10 @@ namespace happyray
 			const Vec3i reach = Max(center, resolution - Vec3i(1, 1, 1) - center);
 			const int	last_ring =
 				  reach.x > reach.y ? (reach.x > reach.z ? reach.x : reach.z) : (reach.y > reach.z ? reach.y : reach.z);
-			for (int ring = 0; ring <= last_ring; ++ring)
+			int start = 0;
+			if constexpr (!std::is_same_v<FirstRingFn, FirstRingZero>)
+				start = first_ring(FlattenCellIndex(center, resolution));
+			for (int ring = start; ring <= last_ring; ++ring)
 			{
 				if (ring > 0 && RingDistanceSquared(query, bounds_min, cell_size, resolution, center, ring) > bound())
 					return false;
@@ -161,8 +181,8 @@ namespace happyray
 							if (x < 0 || x >= resolution.x)
 								continue;
 							const Vec3i cell(x, y, z);
-							if (counters)
-								++counters->cells_examined;
+							if (examined)
+								++*examined;
 							if (CellDistanceSquared(query, bounds_min, cell_size, cell) > bound())
 								continue;
 							if (visit(FlattenCellIndex(cell, resolution), cell))
@@ -173,12 +193,13 @@ namespace happyray
 			return false;
 		}
 
-		template <typename View, typename BoundFn, typename VisitFn>
-		HAPPYRAY_HD inline bool VisitCellsByDistance(const View			  &grid,
-													 const Vec3f		  &query,
-													 BoundFn			 &&bound,
-													 VisitFn			 &&visit,
-													 ClosestPointCounters *counters)
+		template <typename View, typename BoundFn, typename VisitFn, typename FirstRingFn = FirstRingZero>
+		HAPPYRAY_HD inline bool VisitCellsByDistance(const View	 &grid,
+													 const Vec3f &query,
+													 BoundFn	&&bound,
+													 VisitFn	&&visit,
+													 uint32_t	 *examined,
+													 FirstRingFn  first_ring = {})
 		{
 			return VisitCellsByDistance(grid.bounds_min,
 										grid.cell_size,
@@ -187,7 +208,38 @@ namespace happyray
 										query,
 										bound,
 										visit,
-										counters);
+										examined,
+										first_ring);
+		}
+
+		// The first ring holding a non-empty cell, from a grid's per-cell empty radius.
+		struct FirstRingFromRadius
+		{
+			const uint8_t *radius;
+			uint32_t	   offset;
+
+			HAPPYRAY_HD int operator()(uint32_t center) const
+			{
+				return radius ? LoadRO(radius + offset + center) : 0;
+			}
+		};
+
+		// Loads a leaf cell's range, counting it and whether it is empty.
+		HAPPYRAY_HD inline CellRange LoadLeaf(const CellRange *ranges, uint32_t index, ClosestPointCounters *counters)
+		{
+			const CellRange range = LoadRO(ranges + index);
+			if (counters)
+			{
+				++counters->leaves_loaded;
+				counters->leaves_empty += range.start == range.end;
+			}
+			return range;
+		}
+
+		// Address of one counter, or null without counters.
+		HAPPYRAY_HD inline uint32_t *Counter(ClosestPointCounters *counters, uint32_t ClosestPointCounters::*field)
+		{
+			return counters ? &(counters->*field) : nullptr;
 		}
 
 		// Calls `visit(range)` for leaf cells in near-to-far rings; `visit` returns true to stop.
@@ -202,18 +254,18 @@ namespace happyray
 				grid,
 				query,
 				bound,
-				[&](uint32_t index, const Vec3i &) { return visit(LoadRO(grid.cell_ranges + index)); },
-				counters);
+				[&](uint32_t index, const Vec3i &) { return visit(LoadLeaf(grid.cell_ranges, index, counters)); },
+				Counter(counters, &ClosestPointCounters::cells_examined));
 		}
 
 		// Rings over the top level; each non-empty top-level cell runs its own rings over its
 		// nested grid.
 		template <typename BoundFn, typename VisitFn>
-		HAPPYRAY_HD inline bool VisitLeavesByDistance(const TwoLevelGridView &grid,
-													  const Vec3f			 &query,
-													  BoundFn				&&bound,
-													  VisitFn				&&visit,
-													  ClosestPointCounters	 *counters)
+		HAPPYRAY_HD inline bool VisitLeavesByDistance(const TwoLevelGridClosestPointView &grid,
+													  const Vec3f						 &query,
+													  BoundFn							&&bound,
+													  VisitFn							&&visit,
+													  ClosestPointCounters				 *counters)
 		{
 			return VisitCellsByDistance(
 				grid.top_level,
@@ -222,16 +274,24 @@ namespace happyray
 				[&](uint32_t top_index, const Vec3i &)
 				{
 					if (LoadRO(grid.top_level_cells + top_index).IsEmpty())
+					{
+						if (counters)
+							++counters->top_cells_empty;
 						return false;
+					}
 					const GridRangeView nested = SecondLevelView(grid, top_index);
 					return VisitCellsByDistance(
 						nested,
 						query,
 						bound,
-						[&](uint32_t index, const Vec3i &) { return visit(LoadRO(nested.cell_ranges + index)); },
-						counters);
+						[&](uint32_t index, const Vec3i &)
+						{ return visit(LoadLeaf(nested.cell_ranges, index, counters)); },
+						Counter(counters, &ClosestPointCounters::cells_examined),
+						FirstRingFromRadius{grid.second_level_empty_radius,
+											static_cast<uint32_t>(nested.cell_ranges - grid.second_level_cell_ranges)});
 				},
-				counters);
+				Counter(counters, &ClosestPointCounters::top_cells_examined),
+				FirstRingFromRadius{grid.top_level_empty_radius, 0});
 		}
 
 		// Rings over the top level; in each top-level cell, rings over its rows of local voxels, each
@@ -261,6 +321,11 @@ namespace happyray
 				bound,
 				[&](uint32_t top_index, const Vec3i &)
 				{
+					if (counters)
+					{
+						const CellRange top = grid.top_level.cell_ranges[top_index];
+						counters->top_cells_empty += top.start == top.end;
+					}
 					const IrregularCellInfo info	= grid.cell_infos[top_index];
 					const uint32_t		   *entries = grid.local_entries + info.entries_offset;
 					const Vec3i			   &offset	= info.global_offset;
@@ -275,7 +340,11 @@ namespace happyray
 						[&](const IrregularCell &cell, uint32_t cell_index, int begin, int end, const Vec3i &row)
 					{
 						if (cell.references.start == cell.references.end)
+						{
+							if (counters)
+								++counters->leaves_empty;
 							return false;
+						}
 						const Vec3i nearest(ClampInt(query_voxel.x, cell.min.x, cell.max.x - 1),
 											ClampInt(query_voxel.y, cell.min.y, cell.max.y - 1),
 											ClampInt(query_voxel.z, cell.min.z, cell.max.z - 1));
@@ -284,14 +353,23 @@ namespace happyray
 												   nearest.x < offset.x + (end << shift.x) && nearest.y >= row_y &&
 												   nearest.y < row_y + (1 << shift.y) && nearest.z >= row_z &&
 												   nearest.z < row_z + (1 << shift.z);
-						if (!holds_nearest && LookupIrregularCell(grid, nearest) == cell_index)
-							return false;
+						if (!holds_nearest)
+						{
+							if (counters)
+								++counters->nearest_lookups;
+							if (LookupIrregularCell(grid, nearest) == cell_index)
+							{
+								if (counters)
+									++counters->leaves_skipped;
+								return false;
+							}
+						}
 						return visit(cell.references);
 					};
 					auto lookup = [&](int x, const Vec3i &row, uint32_t *cell_index)
 					{
 						if (counters)
-							++counters->cells_examined;
+							++counters->leaves_loaded;
 						*cell_index = LoadRO(entries + FlattenCellIndex(Vec3i(x, row.y, row.z), res));
 						return LoadRO(grid.local_cells + *cell_index);
 					};
@@ -309,6 +387,8 @@ namespace happyray
 							// Voxels get farther from the query in both directions from `start_x`.
 							for (int x = start_x; x < res.x;)
 							{
+								if (counters)
+									++counters->cells_examined;
 								if (CellDistanceSquared(query,
 														info.bounds_min,
 														info.cell_size,
@@ -324,6 +404,8 @@ namespace happyray
 							}
 							for (int x = start_x - 1; x >= 0;)
 							{
+								if (counters)
+									++counters->cells_examined;
 								if (CellDistanceSquared(query,
 														info.bounds_min,
 														info.cell_size,
@@ -339,14 +421,14 @@ namespace happyray
 							}
 							return false;
 						},
-						counters);
+						Counter(counters, &ClosestPointCounters::rows_examined));
 				},
-				counters);
+				Counter(counters, &ClosestPointCounters::top_cells_examined));
 		}
 
 		template <typename GridView> HAPPYRAY_HD inline const uint32_t *LeafPrimIndices(const GridView &grid)
 		{
-			if constexpr (std::is_same_v<GridView, TwoLevelGridView>)
+			if constexpr (std::is_base_of_v<TwoLevelGridView, GridView>)
 				return grid.second_level_prim_indices;
 			else
 				return grid.prim_indices;
@@ -376,6 +458,7 @@ namespace happyray
 		{
 			const uint32_t *prim_indices = detail::LeafPrimIndices(grid);
 			ClosestPointHit hit			 = InitialClosestPointHit(max_distance);
+
 			detail::VisitLeavesByDistance(
 				grid,
 				query,

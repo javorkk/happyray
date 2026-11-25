@@ -57,6 +57,20 @@ namespace happyray
 		const uint32_t	   *second_level_prim_indices = nullptr; // Sorted by second-level cell.
 	};
 
+	// Adds what closest-point queries skip empty space with: per cell, the Chebyshev distance in cells
+	// to the nearest non-empty cell of its level (nested cells: within their own grid), saturated at
+	// 255. Converts from a TwoLevelGridView without them (queries then start every walk at ring 0).
+	struct TwoLevelGridClosestPointView : TwoLevelGridView
+	{
+		const uint8_t *top_level_empty_radius	 = nullptr;
+		const uint8_t *second_level_empty_radius = nullptr;
+
+		HAPPYRAY_HD TwoLevelGridClosestPointView() = default;
+		HAPPYRAY_HD TwoLevelGridClosestPointView(const TwoLevelGridView &view) : TwoLevelGridView(view)
+		{
+		}
+	};
+
 	HAPPYRAY_HD inline GridRangeView SecondLevelView(const TwoLevelGridView &grid, uint32_t cell_index)
 	{
 		const GridBoundsView &top		 = grid.top_level;
@@ -267,7 +281,8 @@ namespace happyray
 		TwoLevelGrid(const TwoLevelGrid &)			  = delete;
 		TwoLevelGrid &operator=(const TwoLevelGrid &) = delete;
 
-		TwoLevelGridView View() const;
+		TwoLevelGridView			 View() const;
+		TwoLevelGridClosestPointView ClosestPointView() const;
 
 		// Element counts for memory-footprint estimates.
 		uint32_t LeafCellCount() const;
