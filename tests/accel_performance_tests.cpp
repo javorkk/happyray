@@ -41,6 +41,8 @@ namespace
 	// fewer, larger cells are faster with both backends. The uniform grid keeps its default.
 	constexpr float kClosestPointTopLevelDensity = 0.06f;
 	constexpr float kClosestPointLeafDensity	 = 0.6f;
+	// Prints per-query work counters before the throughput summary when working on closest point.
+	constexpr bool kPrintClosestPointDetails = false;
 
 	template <typename T> T *Raw(thrust::device_vector<T> &values)
 	{
@@ -285,20 +287,23 @@ namespace
 		const char *const grid_names[] = {"uniform", "two-level", "irregular"};
 		const char *const set_names[]  = {"near", "inside", "far"};
 
-		std::printf("\nClosest point: %u queries per set, median of %d timed runs; two-level and irregular "
-					"grids at top=%g, leaf=%g (uniform at its default); counts per query (mean/p50/p99/max)\n",
-					kQueryCount,
-					kClosestPointRuns,
-					kClosestPointTopLevelDensity,
-					kClosestPointLeafDensity);
-		std::printf("%-10s %-7s %10s %9s %30s %30s %10s\n",
-					"Grid",
-					"Set",
-					"ms",
-					"Mq/s",
-					"cells examined",
-					"primitives tested",
-					"leaves");
+		if constexpr (kPrintClosestPointDetails)
+		{
+			std::printf("\nClosest point: %u queries per set, median of %d timed runs; two-level and irregular "
+						"grids at top=%g, leaf=%g (uniform at its default); counts per query (mean/p50/p99/max)\n",
+						kQueryCount,
+						kClosestPointRuns,
+						kClosestPointTopLevelDensity,
+						kClosestPointLeafDensity);
+			std::printf("%-10s %-7s %10s %9s %30s %30s %10s\n",
+						"Grid",
+						"Set",
+						"ms",
+						"Mq/s",
+						"cells examined",
+						"primitives tested",
+						"leaves");
+		}
 		size_t					 mismatches		  = 0;
 		double					 throughput[3][3] = {};
 		std::vector<std::string> breakdown_rows;
@@ -329,67 +334,73 @@ namespace
 				const float ms	   = runs[kClosestPointRuns / 2];
 				throughput[set][t] = kQueryCount / (1000.0 * ms);
 
-				const thrust::host_vector<ClosestPointCounters> host_counters = counters;
-				std::vector<uint32_t>							cells, prims, leaves;
-				for (const ClosestPointCounters &c : host_counters)
+				if constexpr (kPrintClosestPointDetails)
 				{
-					cells.push_back(c.top_cells_examined + c.rows_examined + c.cells_examined);
-					prims.push_back(c.prims_tested);
-					leaves.push_back(c.leaves_visited);
-				}
-				const Distribution cell_stats = Summarize(cells), prim_stats = Summarize(prims);
-				double			   sums[10] = {};
-				for (const ClosestPointCounters &c : host_counters)
-				{
-					const uint32_t fields[10] = {c.top_cells_examined,
-												 c.top_cells_empty,
-												 c.rows_examined,
-												 c.cells_examined,
-												 c.leaves_loaded,
-												 c.leaves_empty,
-												 c.leaves_skipped,
-												 c.nearest_lookups,
-												 c.leaves_visited,
-												 c.prims_tested};
+					const thrust::host_vector<ClosestPointCounters> host_counters = counters;
+					std::vector<uint32_t>							cells, prims, leaves;
+					for (const ClosestPointCounters &c : host_counters)
+					{
+						cells.push_back(c.top_cells_examined + c.rows_examined + c.cells_examined);
+						prims.push_back(c.prims_tested);
+						leaves.push_back(c.leaves_visited);
+					}
+					const Distribution cell_stats = Summarize(cells), prim_stats = Summarize(prims);
+					double			   sums[10] = {};
+					for (const ClosestPointCounters &c : host_counters)
+					{
+						const uint32_t fields[10] = {c.top_cells_examined,
+													 c.top_cells_empty,
+													 c.rows_examined,
+													 c.cells_examined,
+													 c.leaves_loaded,
+													 c.leaves_empty,
+													 c.leaves_skipped,
+													 c.nearest_lookups,
+													 c.leaves_visited,
+													 c.prims_tested};
+						for (int f = 0; f < 10; ++f)
+							sums[f] += fields[f];
+					}
+					char breakdown[256];
+					int	 length =
+						std::snprintf(breakdown, sizeof(breakdown), "%-10s %-7s", grid_names[t], set_names[set]);
 					for (int f = 0; f < 10; ++f)
-						sums[f] += fields[f];
-				}
-				char breakdown[256];
-				int	 length = std::snprintf(breakdown, sizeof(breakdown), "%-10s %-7s", grid_names[t], set_names[set]);
-				for (int f = 0; f < 10; ++f)
-				{
-					length +=
-						std::snprintf(breakdown + length, sizeof(breakdown) - length, " %9.1f", sums[f] / kQueryCount);
-					if (f == 5)
+					{
 						length += std::snprintf(breakdown + length,
 												sizeof(breakdown) - length,
-												" %6.1f%%",
-												sums[4] > 0 ? 100.0 * sums[5] / sums[4] : 0.0);
+												" %9.1f",
+												sums[f] / kQueryCount);
+						if (f == 5)
+							length += std::snprintf(breakdown + length,
+													sizeof(breakdown) - length,
+													" %6.1f%%",
+													sums[4] > 0 ? 100.0 * sums[5] / sums[4] : 0.0);
+					}
+					breakdown_rows.push_back(breakdown);
+					char cell_text[64], prim_text[64];
+					std::snprintf(cell_text,
+								  sizeof(cell_text),
+								  "%.1f/%u/%u/%u",
+								  cell_stats.mean,
+								  cell_stats.p50,
+								  cell_stats.p99,
+								  cell_stats.max);
+					std::snprintf(prim_text,
+								  sizeof(prim_text),
+								  "%.1f/%u/%u/%u",
+								  prim_stats.mean,
+								  prim_stats.p50,
+								  prim_stats.p99,
+								  prim_stats.max);
+					std::printf("%-10s %-7s %10.3f %9.2f %30s %30s %10.1f\n",
+								grid_names[t],
+								set_names[set],
+								ms,
+								kQueryCount / (1000.0 * ms),
+								cell_text,
+								prim_text,
+								Summarize(leaves).mean);
 				}
-				breakdown_rows.push_back(breakdown);
-				char cell_text[64], prim_text[64];
-				std::snprintf(cell_text,
-							  sizeof(cell_text),
-							  "%.1f/%u/%u/%u",
-							  cell_stats.mean,
-							  cell_stats.p50,
-							  cell_stats.p99,
-							  cell_stats.max);
-				std::snprintf(prim_text,
-							  sizeof(prim_text),
-							  "%.1f/%u/%u/%u",
-							  prim_stats.mean,
-							  prim_stats.p50,
-							  prim_stats.p99,
-							  prim_stats.max);
-				std::printf("%-10s %-7s %10.3f %9.2f %30s %30s %10.1f\n",
-							grid_names[t],
-							set_names[set],
-							ms,
-							kQueryCount / (1000.0 * ms),
-							cell_text,
-							prim_text,
-							Summarize(leaves).mean);
 
 				const thrust::host_vector<ClosestPointRecord> host_records = records;
 				if (t == 0)
@@ -408,25 +419,29 @@ namespace
 						mismatches += !SameClosestPoint(host_records[i], reference[i]);
 			}
 		}
-		std::printf("\nClosest-point work per query (means). Distance tests: top-level cells, irregular voxel rows, "
-					"leaf cells (irregular: voxel steps). Loaded leaf cells: empty ones, non-empty ones left to "
-					"another run (irregular), extra voxel lookups for that choice, and ones tested\n");
-		std::printf("%-10s %-7s %9s %9s %9s %9s %9s %9s %7s %9s %9s %9s %9s\n",
-					"Grid",
-					"Set",
-					"top",
-					"top empty",
-					"rows",
-					"cells",
-					"loaded",
-					"empty",
-					"empty%",
-					"skipped",
-					"nearest",
-					"visited",
-					"prims");
-		for (const std::string &row : breakdown_rows)
-			std::printf("%s\n", row.c_str());
+		if constexpr (kPrintClosestPointDetails)
+		{
+			std::printf(
+				"\nClosest-point work per query (means). Distance tests: top-level cells, irregular voxel rows, "
+				"leaf cells (irregular: voxel steps). Loaded leaf cells: empty ones, non-empty ones left to "
+				"another run (irregular), extra voxel lookups for that choice, and ones tested\n");
+			std::printf("%-10s %-7s %9s %9s %9s %9s %9s %9s %7s %9s %9s %9s %9s\n",
+						"Grid",
+						"Set",
+						"top",
+						"top empty",
+						"rows",
+						"cells",
+						"loaded",
+						"empty",
+						"empty%",
+						"skipped",
+						"nearest",
+						"visited",
+						"prims");
+			for (const std::string &row : breakdown_rows)
+				std::printf("%s\n", row.c_str());
+		}
 
 		std::printf("\nClosest-point throughput, Mq/s (speedup over uniform)\n%-7s", "Set");
 		for (const char *name : grid_names)
