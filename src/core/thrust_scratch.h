@@ -5,9 +5,11 @@
 
 #include <cstddef>
 #include <map>
+#include <mutex>
 
 #include <thrust/device_free.h>
 #include <thrust/device_malloc.h>
+#include <thrust/device_malloc_allocator.h>
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
 
@@ -37,11 +39,12 @@ namespace happyray
 
 		char *allocate(std::ptrdiff_t bytes)
 		{
-			const size_t size = static_cast<size_t>(bytes);
+			const size_t size = bytes > 0 ? static_cast<size_t>(bytes) : 1;
 			auto		 it	  = free_blocks_.lower_bound(size);
 			char		*block;
 			size_t		 block_size;
-			if (it != free_blocks_.end())
+			// Blocks over twice the request stay free for the larger requests they were made for.
+			if (it != free_blocks_.end() && it->first / 2 <= size)
 			{
 				block_size = it->first;
 				block	   = it->second;
@@ -68,9 +71,78 @@ namespace happyray
 		std::map<char *, size_t>	  used_blocks_;
 	};
 
+	// Process-wide CachingAllocator for acceleration structure builds, so a rebuild reuses the
+	// previous build's memory instead of allocating afresh. Intentionally never destroyed: blocks
+	// may be returned by static objects or after the backend has shut down.
+	class SharedBuildAllocator
+	{
+	  public:
+		using value_type = char;
+
+		char *allocate(std::ptrdiff_t bytes)
+		{
+			State							 &state = Get();
+			const std::lock_guard<std::mutex> lock(state.mutex);
+			return state.allocator.allocate(bytes);
+		}
+
+		void deallocate(char *block, size_t bytes)
+		{
+			State							 &state = Get();
+			const std::lock_guard<std::mutex> lock(state.mutex);
+			state.allocator.deallocate(block, bytes);
+		}
+
+	  private:
+		struct State
+		{
+			std::mutex		 mutex;
+			CachingAllocator allocator;
+		};
+
+		static State &Get()
+		{
+			static State *state = new State;
+			return *state;
+		}
+	};
+
+	// device_vector storage drawn from SharedBuildAllocator.
+	template <typename T> class PooledAllocator : public thrust::device_malloc_allocator<T>
+	{
+		using Base = thrust::device_malloc_allocator<T>;
+
+	  public:
+		using pointer	= typename Base::pointer;
+		using size_type = typename Base::size_type;
+
+		template <typename U> struct rebind
+		{
+			using other = PooledAllocator<U>;
+		};
+
+		PooledAllocator() = default;
+		template <typename U> PooledAllocator(const PooledAllocator<U> &)
+		{
+		}
+
+		pointer allocate(size_type count)
+		{
+			return pointer(reinterpret_cast<T *>(SharedBuildAllocator().allocate(count * sizeof(T))));
+		}
+
+		void deallocate(pointer block, size_type count)
+		{
+			SharedBuildAllocator().deallocate(reinterpret_cast<char *>(thrust::raw_pointer_cast(block)),
+											  count * sizeof(T));
+		}
+	};
+
+	template <typename T> using PooledVector = thrust::device_vector<T, PooledAllocator<T>>;
+
 	// Grows `values` to at least `count` elements; never shrinks, so the storage persists.
 	// Callers address their first `count` elements explicitly.
-	template <typename T> T *Reserve(thrust::device_vector<T> *values, size_t count)
+	template <typename T, typename Alloc> T *Reserve(thrust::device_vector<T, Alloc> *values, size_t count)
 	{
 		if (values->size() < count)
 		{

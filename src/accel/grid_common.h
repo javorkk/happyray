@@ -120,25 +120,22 @@ namespace happyray
 		struct BuiltCellReferences
 		{
 			UniformGridView					 geometry;
-			thrust::device_vector<uint32_t>	 prims;
-			thrust::device_vector<CellRange> ranges;
+			PooledVector<uint32_t>			 prims;
+			PooledVector<CellRange>			 ranges;
 			uint32_t						 reference_count = 0;
 		};
 
 		struct CellReferenceScratch
 		{
-			CachingAllocator				allocator;
-			thrust::device_vector<BBox>		boxes;
-			thrust::device_vector<uint32_t> counts, offsets, keys;
+			SharedBuildAllocator   allocator;
+			PooledVector<BBox>	   boxes;
+			PooledVector<uint32_t> counts, offsets, keys;
 		};
 
 		// Drops the invalid-key padding the kHybrid writing pass sorted to the end. Only `values`
 		// (kept by the grid) is reallocated; keys are build-time temporaries.
-		template <typename Policy>
-		inline uint32_t TrimInvalidPairs(const Policy					 &policy,
-										 thrust::device_vector<uint32_t> *keys,
-										 thrust::device_vector<uint32_t> *values,
-										 uint32_t						  invalid_key)
+		template <typename Policy, typename Vector>
+		inline uint32_t TrimInvalidPairs(const Policy &policy, Vector *keys, Vector *values, uint32_t invalid_key)
 		{
 			const uint32_t valid = static_cast<uint32_t>(
 				thrust::lower_bound(policy, keys->begin(), keys->end(), invalid_key) - keys->begin());
@@ -179,8 +176,8 @@ namespace happyray
 
 			Reserve(&scratch.counts, n);
 			Reserve(&scratch.offsets, n);
-			thrust::device_vector<uint32_t> &counts	 = scratch.counts;
-			thrust::device_vector<uint32_t> &offsets = scratch.offsets;
+			PooledVector<uint32_t>			&counts	 = scratch.counts;
+			PooledVector<uint32_t>			&offsets = scratch.offsets;
 			const BBox						*boxes	 = thrust::raw_pointer_cast(scratch.boxes.data());
 			thrust::transform(policy,
 							  first,

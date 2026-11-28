@@ -295,11 +295,11 @@ namespace happyray
 	{
 		detail::CellReferenceScratch		cell_reference_scratch;
 		GridBoundsView						top_level;
-		thrust::device_vector<TopLevelCell> top_level_cells;
-		thrust::device_vector<uint32_t>		top_level_prim_ref_counts;
-		thrust::device_vector<CellRange>	second_level_cell_ranges;
-		thrust::device_vector<uint32_t>		second_level_prim_indices;
-		thrust::device_vector<uint8_t>		top_level_empty_radius, second_level_empty_radius;
+		PooledVector<TopLevelCell>			top_level_cells;
+		PooledVector<uint32_t>				top_level_prim_ref_counts;
+		PooledVector<CellRange>				second_level_cell_ranges;
+		PooledVector<uint32_t>				second_level_prim_indices;
+		PooledVector<uint8_t>				top_level_empty_radius, second_level_empty_radius;
 
 		TwoLevelGridView View() const
 		{
@@ -369,7 +369,7 @@ namespace happyray
 		const uint32_t total_top_pairs = static_cast<uint32_t>(top_cell_keys.size());
 
 		const GridBoundsView				top_view = View().top_level;
-		thrust::device_vector<TopLevelCell> top_level_cells(num_top_cells);
+		PooledVector<TopLevelCell>			top_level_cells(num_top_cells);
 		thrust::transform(policy,
 						  thrust::counting_iterator<uint32_t>(0),
 						  thrust::counting_iterator<uint32_t>(num_top_cells),
@@ -382,13 +382,13 @@ namespace happyray
 													 second_level_density,
 													 dense_cell_threshold});
 
-		thrust::device_vector<uint32_t> num_second_cells(num_top_cells);
+		PooledVector<uint32_t> num_second_cells(num_top_cells);
 		thrust::transform(policy,
 						  top_level_cells.begin(),
 						  top_level_cells.end(),
 						  num_second_cells.begin(),
 						  ExtractNumCellsFunctor());
-		thrust::device_vector<uint32_t> second_cell_offsets(num_top_cells);
+		PooledVector<uint32_t> second_cell_offsets(num_top_cells);
 		thrust::exclusive_scan(policy, num_second_cells.begin(), num_second_cells.end(), second_cell_offsets.begin());
 		const uint32_t total_second_cells = second_cell_offsets.back() + num_second_cells.back();
 		thrust::transform(policy,
@@ -398,7 +398,7 @@ namespace happyray
 						  top_level_cells.begin(),
 						  SetCellRangeOffsetFunctor());
 
-		thrust::device_vector<uint32_t> second_pair_counts(total_top_pairs);
+		PooledVector<uint32_t> second_pair_counts(total_top_pairs);
 		thrust::transform(policy,
 						  thrust::counting_iterator<uint32_t>(0),
 						  thrust::counting_iterator<uint32_t>(total_top_pairs),
@@ -419,9 +419,9 @@ namespace happyray
 							   second_pair_counts.end(),
 							   second_pair_counts.begin());
 		const uint32_t					total_second_pairs = total_top_pairs > 0 ? second_pair_counts.back() : 0u;
-		thrust::device_vector<uint32_t> second_cell_keys(total_second_pairs);
-		thrust::device_vector<uint32_t> second_prim_indices(total_second_pairs);
-		thrust::device_vector<uint32_t> exact_second_pair_counts(total_top_pairs, 0u);
+		PooledVector<uint32_t>			second_cell_keys(total_second_pairs);
+		PooledVector<uint32_t>			second_prim_indices(total_second_pairs);
+		PooledVector<uint32_t>			exact_second_pair_counts(total_top_pairs, 0u);
 		thrust::for_each(policy,
 						 thrust::counting_iterator<uint32_t>(0),
 						 thrust::counting_iterator<uint32_t>(total_top_pairs),
@@ -441,7 +441,7 @@ namespace happyray
 												  total_second_cells,
 												  thrust::raw_pointer_cast(second_cell_keys.data()),
 												  thrust::raw_pointer_cast(second_prim_indices.data())});
-		thrust::device_vector<uint32_t> top_level_prim_ref_counts(num_top_cells);
+		PooledVector<uint32_t> top_level_prim_ref_counts(num_top_cells);
 		thrust::transform(
 			policy,
 			thrust::counting_iterator<uint32_t>(0),
@@ -479,7 +479,7 @@ namespace happyray
 		const auto *cells = thrust::raw_pointer_cast(top_level_cells.data());
 
 		// Top level: empty means no nested cell holds references.
-		thrust::device_vector<uint8_t> radius(n_top), scratch(n_top);
+		PooledVector<uint8_t> radius(n_top), scratch(n_top);
 		thrust::transform(policy, top_level_cells.begin(), top_level_cells.end(), radius.begin(), EmptyRadiusSeed{});
 		const TopLevelCellLocator top_locator{top_level.resolution};
 		for (int axis = 0; axis < 3; ++axis)
@@ -495,12 +495,12 @@ namespace happyray
 		top_level_empty_radius = std::move(radius);
 
 		// Nested cells, each within its own grid; their owners come from the sorted cell offsets.
-		thrust::device_vector<uint32_t> offsets(n_top), owners(n_leaf);
+		PooledVector<uint32_t> offsets(n_top), owners(n_leaf);
 		thrust::transform(policy, top_level_cells.begin(), top_level_cells.end(), offsets.begin(), CellRangeOffset{});
 		thrust::upper_bound(policy, offsets.begin(), offsets.end(), first, first + n_leaf, owners.begin());
 		thrust::transform(policy, owners.begin(), owners.end(), owners.begin(), Predecessor{});
 		const NestedCellLocator		   nested{cells, thrust::raw_pointer_cast(owners.data())};
-		thrust::device_vector<uint8_t> leaf_radius(n_leaf), leaf_scratch(n_leaf);
+		PooledVector<uint8_t>		   leaf_radius(n_leaf), leaf_scratch(n_leaf);
 		thrust::transform(policy,
 						  second_level_cell_ranges.begin(),
 						  second_level_cell_ranges.end(),

@@ -18,13 +18,17 @@
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
-#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
+#if !HAPPYRAY_THRUST_BACKEND_IS_TBB
+#include <thrust/system/cuda/error.h>
+#include <thrust/system_error.h>
+#endif
 
 #include "../core/thrust_scratch.h"
 
@@ -117,6 +121,48 @@ namespace happyray
 			return count;
 		}
 
+		// Builds skip Thrust's per-algorithm synchronization; host reads of results still wait.
+		inline auto BuildPolicy(SharedBuildAllocator &allocator)
+		{
+#if HAPPYRAY_THRUST_BACKEND_IS_TBB
+			return thrust::device(allocator);
+#else
+			return thrust::cuda::par_nosync(allocator);
+#endif
+		}
+
+		inline void SynchronizeBuild()
+		{
+#if !HAPPYRAY_THRUST_BACKEND_IS_TBB
+			const cudaError_t status = cudaDeviceSynchronize();
+			if (status != cudaSuccess)
+				throw thrust::system_error(status, thrust::cuda_category(), "IrregularGrid build");
+#endif
+		}
+
+		struct PaddedCount
+		{
+			const uint32_t *values;
+			uint32_t		count;
+
+			HAPPYRAY_HD uint32_t operator()(uint32_t i) const
+			{
+				return i < count ? values[i] : 0u;
+			}
+		};
+
+		// Exclusive scan of `count` values into `out[0, count]`; returns the total, `out[count]`.
+		template <typename Policy>
+		uint32_t
+		ScanWithTotal(const Policy &policy, const uint32_t *values, uint32_t count, PooledVector<uint32_t> *out)
+		{
+			out->resize(count + 1);
+			const auto padded =
+				thrust::make_transform_iterator(thrust::counting_iterator<uint32_t>(0), PaddedCount{values, count});
+			thrust::exclusive_scan(policy, padded, padded + count + 1, out->begin());
+			return (*out)[count];
+		}
+
 		// Axis-generic helpers.
 
 		HAPPYRAY_HD inline IrregularCell
@@ -205,6 +251,22 @@ namespace happyray
 				info.global_offset =
 					Vec3i(cx * global_resolution.x, cy * global_resolution.y, cz * global_resolution.z);
 				return info;
+			}
+		};
+
+		struct InfoResolutionFunctor
+		{
+			HAPPYRAY_HD Vec3i operator()(const IrregularCellInfo &info) const
+			{
+				return info.resolution;
+			}
+		};
+
+		struct MaxVec3iFunctor
+		{
+			HAPPYRAY_HD Vec3i operator()(const Vec3i &a, const Vec3i &b) const
+			{
+				return Vec3i(a.x > b.x ? a.x : b.x, a.y > b.y ? a.y : b.y, a.z > b.z ? a.z : b.z);
 			}
 		};
 
@@ -318,18 +380,18 @@ namespace happyray
 		// Unsorted (finest voxel, primitive) pairs of every top-level pair; padding uses key
 		// `total_entries`.
 		template <typename P, CellOverlapMode Mode, typename Policy>
-		void BuildFinestPairs(const SceneView								 &scene,
-							  const thrust::device_vector<uint32_t>			 &owning_top_cell,
-							  const uint32_t								 *top_prim_indices,
-							  const thrust::device_vector<IrregularCellInfo> &infos,
-							  uint32_t										  total_top_level_pairs,
-							  uint32_t										  total_entries,
-							  thrust::device_vector<uint32_t>				 *pair_voxel_indices,
-							  thrust::device_vector<uint32_t>				 *pair_prim_indices,
-							  const Policy									 &policy)
+		void BuildFinestPairs(const SceneView						&scene,
+							  const PooledVector<uint32_t>			&owning_top_cell,
+							  const uint32_t						*top_prim_indices,
+							  const PooledVector<IrregularCellInfo> &infos,
+							  uint32_t								 total_top_level_pairs,
+							  uint32_t								 total_entries,
+							  PooledVector<uint32_t>				*pair_voxel_indices,
+							  PooledVector<uint32_t>				*pair_prim_indices,
+							  const Policy							&policy)
 		{
 			const auto						first = thrust::counting_iterator<uint32_t>(0);
-			thrust::device_vector<uint32_t> counts(total_top_level_pairs);
+			PooledVector<uint32_t>			counts(total_top_level_pairs);
 			thrust::transform(policy,
 							  first,
 							  first + total_top_level_pairs,
@@ -339,9 +401,9 @@ namespace happyray
 														top_prim_indices,
 														thrust::raw_pointer_cast(infos.data())});
 
-			thrust::device_vector<uint32_t> write_offsets(total_top_level_pairs);
-			thrust::exclusive_scan(policy, counts.begin(), counts.end(), write_offsets.begin());
-			const uint32_t total_pairs = (total_top_level_pairs > 0) ? (write_offsets.back() + counts.back()) : 0u;
+			PooledVector<uint32_t> write_offsets;
+			const uint32_t		   total_pairs =
+				ScanWithTotal(policy, thrust::raw_pointer_cast(counts.data()), total_top_level_pairs, &write_offsets);
 
 			pair_voxel_indices->resize(total_pairs);
 			pair_prim_indices->resize(total_pairs);
@@ -444,17 +506,34 @@ namespace happyray
 			uint32_t ref_count = 0;	 // This cell's reference count after merging (or its own, if not).
 		};
 
+		// Kept cells and references before a cell; one scan yields both insertion positions.
+		struct MergeCounts
+		{
+			uint32_t cells = 0;
+			uint32_t refs  = 0;
+		};
+
+		struct AddMergeCounts
+		{
+			HAPPYRAY_HD MergeCounts operator()(const MergeCounts &a, const MergeCounts &b) const
+			{
+				return {a.cells + b.cells, a.refs + b.refs};
+			}
+		};
+
 		struct MergeScratch
 		{
-			thrust::device_vector<MergeCandidate> candidates;
-			thrust::device_vector<int32_t>		  prev;
-			thrust::device_vector<uint32_t>		  cell_flags, ref_counts, cell_scan, ref_scan, remap_table;
-			thrust::device_vector<IrregularCell>  new_cells, expanded_cells;
-			thrust::device_vector<uint32_t>		  new_triangle_indices;
+			PooledVector<MergeCandidate> candidates;
+			PooledVector<int32_t>		 prev;
+			PooledVector<uint32_t>		 cell_flags, remap_table;
+			PooledVector<MergeCounts>	 scan;
+			PooledVector<IrregularCell>	 new_cells, expanded_cells;
+			PooledVector<uint32_t>		 new_triangle_indices;
 		};
 
 		// Decides whether cell `i` and its +axis neighbor are aligned and merging doesn't raise SAH
-		// cost (merge.cu's test, with its early exit before computing the reference union).
+		// cost (merge.cu's test, with its early exit before computing the reference union). An
+		// aligned neighbor has no other aligned -axis neighbor, so writing `prev` is race-free.
 		struct MergeCandidateFunctor
 		{
 			const IrregularCell		*cells;
@@ -465,8 +544,20 @@ namespace happyray
 			Vec3f					 global_cell_size;
 			Vec3i					 global_shift;
 			Vec3i					 top_resolution;
+			MergeCandidate			*candidates;
+			int32_t					*prev;
 
-			HAPPYRAY_HD MergeCandidate operator()(uint32_t i) const
+			HAPPYRAY_HD void operator()(uint32_t i) const
+			{
+				const MergeCandidate result = Evaluate(i);
+				candidates[i]				= result;
+				if (result.next_cell >= 0)
+				{
+					prev[result.next_cell] = static_cast<int32_t>(i);
+				}
+			}
+
+			HAPPYRAY_HD MergeCandidate Evaluate(uint32_t i) const
 			{
 				const IrregularCell cell = cells[i];
 				int					cell_min[3], cell_max[3];
@@ -545,21 +636,6 @@ namespace happyray
 			}
 		};
 
-		struct ScatterPrevFunctor
-		{
-			const MergeCandidate *candidates;
-			int32_t				 *prev;
-
-			HAPPYRAY_HD void operator()(uint32_t i) const
-			{
-				const int32_t next = candidates[i].next_cell;
-				if (next >= 0)
-				{
-					prev[next] = static_cast<int32_t>(i);
-				}
-			}
-		};
-
 		// Flags even chain positions as kept; odd ones are absorbed into their predecessor. Chains are
 		// disjoint, so they parallelize freely.
 		struct ChainFlagFunctor
@@ -590,27 +666,34 @@ namespace happyray
 			}
 		};
 
-		struct RefCountForKeptFunctor
+		// Padded with an empty entry at `num_cells`, so the exclusive scan's last element is the total.
+		struct KeptCountsFunctor
 		{
 			const MergeCandidate *candidates;
 			const uint32_t		 *cell_flags;
+			uint32_t			  num_cells;
 
-			HAPPYRAY_HD uint32_t operator()(uint32_t i) const
+			HAPPYRAY_HD MergeCounts operator()(uint32_t i) const
 			{
-				return cell_flags[i] ? candidates[i].ref_count : 0u;
+				if (i >= num_cells || !cell_flags[i])
+				{
+					return {};
+				}
+				return {1u, candidates[i].ref_count};
 			}
 		};
 
+		// Writes each kept cell, its references and the remap entries for it and the cell it absorbs.
 		struct WriteMergedFunctor
 		{
 			const IrregularCell	 *cells;
 			const MergeCandidate *candidates;
 			const uint32_t		 *cell_flags;
-			const uint32_t		 *cell_scan;
-			const uint32_t		 *ref_scan;
+			const MergeCounts	 *scan;
 			const uint32_t		 *prim_indices;
 			IrregularCell		 *new_cells;
 			uint32_t			 *new_triangle_indices;
+			uint32_t			 *remap_table;
 
 			HAPPYRAY_HD void operator()(uint32_t i) const
 			{
@@ -618,18 +701,20 @@ namespace happyray
 				{
 					return;
 				}
-				const uint32_t		new_index	  = cell_scan[i];
-				const uint32_t		new_ref_start = ref_scan[i];
-				const IrregularCell cell		  = cells[i];
-				const int32_t		next		  = candidates[i].next_cell;
+				const MergeCounts	offsets = scan[i];
+				const IrregularCell cell	= cells[i];
+				const int32_t		next	= candidates[i].next_cell;
+				remap_table[i]				= offsets.cells;
 
-				IrregularCell result;
+				int min_arr[3], max_arr[3];
+				CellMinArr(cell, min_arr);
+				CellMaxArr(cell, max_arr);
+				uint32_t count = cell.references.end - cell.references.start;
 				if (next >= 0)
 				{
+					remap_table[next]			  = offsets.cells;
 					const IrregularCell next_cell = cells[next];
-					int					min_arr[3], max_arr[3], next_min[3], next_max[3];
-					CellMinArr(cell, min_arr);
-					CellMaxArr(cell, max_arr);
+					int					next_min[3], next_max[3];
 					CellMinArr(next_cell, next_min);
 					CellMaxArr(next_cell, next_max);
 					for (int a = 0; a < 3; ++a)
@@ -637,38 +722,20 @@ namespace happyray
 						min_arr[a] = min_arr[a] < next_min[a] ? min_arr[a] : next_min[a];
 						max_arr[a] = max_arr[a] > next_max[a] ? max_arr[a] : next_max[a];
 					}
-					const uint32_t count = MergeSortedUnique(prim_indices + cell.references.start,
-															 cell.references.end - cell.references.start,
-															 prim_indices + next_cell.references.start,
-															 next_cell.references.end - next_cell.references.start,
-															 new_triangle_indices + new_ref_start);
-					result				 = MakeCell(min_arr, max_arr, new_ref_start, new_ref_start + count);
+					count = MergeSortedUnique(prim_indices + cell.references.start,
+											  count,
+											  prim_indices + next_cell.references.start,
+											  next_cell.references.end - next_cell.references.start,
+											  new_triangle_indices + offsets.refs);
 				}
 				else
 				{
-					const uint32_t count = cell.references.end - cell.references.start;
 					for (uint32_t k = 0; k < count; ++k)
 					{
-						new_triangle_indices[new_ref_start + k] = prim_indices[cell.references.start + k];
+						new_triangle_indices[offsets.refs + k] = prim_indices[cell.references.start + k];
 					}
-					int min_arr[3], max_arr[3];
-					CellMinArr(cell, min_arr);
-					CellMaxArr(cell, max_arr);
-					result = MakeCell(min_arr, max_arr, new_ref_start, new_ref_start + count);
 				}
-				new_cells[new_index] = result;
-			}
-		};
-
-		struct ComputeRemapFunctor
-		{
-			const uint32_t *cell_flags;
-			const uint32_t *cell_scan;
-			const int32_t  *prev;
-
-			HAPPYRAY_HD uint32_t operator()(uint32_t i) const
-			{
-				return cell_flags[i] ? cell_scan[i] : cell_scan[prev[i]];
+				new_cells[offsets.cells] = MakeCell(min_arr, max_arr, offsets.refs, offsets.refs + count);
 			}
 		};
 
@@ -684,16 +751,16 @@ namespace happyray
 
 		// One merge round along `axis`; updates `cells`/`prim_indices` (swapped) and `entries`.
 		template <typename Policy>
-		void MergeRound(const Policy								   &policy,
-						MergeScratch								   &scratch,
-						int												axis,
-						const thrust::device_vector<IrregularCellInfo> &cell_infos,
-						thrust::device_vector<IrregularCell>		   *cells,
-						thrust::device_vector<uint32_t>				   *entries,
-						thrust::device_vector<uint32_t>				   *prim_indices,
-						const Vec3f									   &global_cell_size,
-						const Vec3i									   &global_shift,
-						const Vec3i									   &top_resolution)
+		void MergeRound(const Policy						  &policy,
+						MergeScratch						  &scratch,
+						int									   axis,
+						const PooledVector<IrregularCellInfo> &cell_infos,
+						PooledVector<IrregularCell>			  *cells,
+						PooledVector<uint32_t>				  *entries,
+						PooledVector<uint32_t>				  *prim_indices,
+						const Vec3f							  &global_cell_size,
+						const Vec3i							  &global_shift,
+						const Vec3i							  &top_resolution)
 		{
 			const uint32_t n = static_cast<uint32_t>(cells->size());
 			if (n == 0)
@@ -704,77 +771,57 @@ namespace happyray
 			Reserve(&scratch.candidates, n);
 			Reserve(&scratch.prev, n);
 			Reserve(&scratch.cell_flags, n);
-			Reserve(&scratch.ref_counts, n);
-			Reserve(&scratch.cell_scan, n);
-			Reserve(&scratch.ref_scan, n);
 			Reserve(&scratch.remap_table, n);
+			Reserve(&scratch.scan, n + 1);
 			const auto first = thrust::counting_iterator<uint32_t>(0);
-			thrust::transform(policy,
-							  first,
-							  first + n,
-							  scratch.candidates.begin(),
-							  MergeCandidateFunctor{thrust::raw_pointer_cast(cells->data()),
-													thrust::raw_pointer_cast(cell_infos.data()),
-													thrust::raw_pointer_cast(entries->data()),
-													thrust::raw_pointer_cast(prim_indices->data()),
-													axis,
-													global_cell_size,
-													global_shift,
-													top_resolution});
-
 			thrust::fill(policy, scratch.prev.begin(), scratch.prev.begin() + n, -1);
 			thrust::for_each(policy,
 							 first,
 							 first + n,
-							 ScatterPrevFunctor{thrust::raw_pointer_cast(scratch.candidates.data()),
-												thrust::raw_pointer_cast(scratch.prev.data())});
+							 MergeCandidateFunctor{thrust::raw_pointer_cast(cells->data()),
+												   thrust::raw_pointer_cast(cell_infos.data()),
+												   thrust::raw_pointer_cast(entries->data()),
+												   thrust::raw_pointer_cast(prim_indices->data()),
+												   axis,
+												   global_cell_size,
+												   global_shift,
+												   top_resolution,
+												   thrust::raw_pointer_cast(scratch.candidates.data()),
+												   thrust::raw_pointer_cast(scratch.prev.data())});
 			thrust::for_each(policy,
 							 first,
 							 first + n,
 							 ChainFlagFunctor{thrust::raw_pointer_cast(scratch.candidates.data()),
 											  thrust::raw_pointer_cast(scratch.prev.data()),
 											  thrust::raw_pointer_cast(scratch.cell_flags.data())});
-			thrust::transform(policy,
-							  first,
-							  first + n,
-							  scratch.ref_counts.begin(),
-							  RefCountForKeptFunctor{thrust::raw_pointer_cast(scratch.candidates.data()),
-													 thrust::raw_pointer_cast(scratch.cell_flags.data())});
 
-			thrust::exclusive_scan(policy,
-								   scratch.cell_flags.begin(),
-								   scratch.cell_flags.begin() + n,
-								   scratch.cell_scan.begin());
-			const uint32_t new_num_cells = scratch.cell_scan[n - 1] + scratch.cell_flags[n - 1];
-			thrust::exclusive_scan(policy,
-								   scratch.ref_counts.begin(),
-								   scratch.ref_counts.begin() + n,
-								   scratch.ref_scan.begin());
-			const uint32_t new_num_refs = scratch.ref_scan[n - 1] + scratch.ref_counts[n - 1];
+			const auto kept =
+				thrust::make_transform_iterator(first,
+												KeptCountsFunctor{thrust::raw_pointer_cast(scratch.candidates.data()),
+																  thrust::raw_pointer_cast(scratch.cell_flags.data()),
+																  n});
+			thrust::exclusive_scan(policy, kept, kept + (n + 1), scratch.scan.begin(), MergeCounts{}, AddMergeCounts{});
+			const MergeCounts totals = scratch.scan[n];
+			if (totals.cells == n)
+			{
+				return; // Nothing merged.
+			}
 
-			Reserve(&scratch.new_cells, new_num_cells);
-			scratch.new_cells.resize(new_num_cells);
-			Reserve(&scratch.new_triangle_indices, new_num_refs);
-			scratch.new_triangle_indices.resize(new_num_refs);
+			Reserve(&scratch.new_cells, totals.cells);
+			scratch.new_cells.resize(totals.cells);
+			Reserve(&scratch.new_triangle_indices, totals.refs);
+			scratch.new_triangle_indices.resize(totals.refs);
 			thrust::for_each(policy,
 							 first,
 							 first + n,
 							 WriteMergedFunctor{thrust::raw_pointer_cast(cells->data()),
 												thrust::raw_pointer_cast(scratch.candidates.data()),
 												thrust::raw_pointer_cast(scratch.cell_flags.data()),
-												thrust::raw_pointer_cast(scratch.cell_scan.data()),
-												thrust::raw_pointer_cast(scratch.ref_scan.data()),
+												thrust::raw_pointer_cast(scratch.scan.data()),
 												thrust::raw_pointer_cast(prim_indices->data()),
 												thrust::raw_pointer_cast(scratch.new_cells.data()),
-												thrust::raw_pointer_cast(scratch.new_triangle_indices.data())});
-
-			thrust::transform(policy,
-							  first,
-							  first + n,
-							  scratch.remap_table.begin(),
-							  ComputeRemapFunctor{thrust::raw_pointer_cast(scratch.cell_flags.data()),
-												  thrust::raw_pointer_cast(scratch.cell_scan.data()),
-												  thrust::raw_pointer_cast(scratch.prev.data())});
+												thrust::raw_pointer_cast(scratch.new_triangle_indices.data()),
+												thrust::raw_pointer_cast(scratch.remap_table.data())});
 			thrust::transform(policy,
 							  entries->begin(),
 							  entries->end(),
@@ -784,6 +831,7 @@ namespace happyray
 			cells->swap(scratch.new_cells);
 			prim_indices->swap(scratch.new_triangle_indices);
 		}
+
 		// Phase C: subset-safe expand passes (HAGrid's expand.cu). Only bounds change.
 
 		struct ExpandFunctor
@@ -886,14 +934,12 @@ namespace happyray
 
 	struct IrregularGrid::Impl
 	{
-		CachingAllocator						 allocator;
-		MergeScratch							 merge_scratch;
 		UniformGrid								 top_level;
-		thrust::device_vector<IrregularCellInfo> cell_infos;
-		thrust::device_vector<IrregularTopCell>	 top_cells;
-		thrust::device_vector<uint32_t>			 entries;
-		thrust::device_vector<IrregularCell>	 cells;
-		thrust::device_vector<uint32_t>			 prim_indices;
+		PooledVector<IrregularCellInfo>			 cell_infos;
+		PooledVector<IrregularTopCell>			 top_cells;
+		PooledVector<uint32_t>					 entries;
+		PooledVector<IrregularCell>				 cells;
+		PooledVector<uint32_t>					 prim_indices;
 		Vec3f									 global_cell_size;
 		Vec3i									 global_resolution = Vec3i(1, 1, 1);
 
@@ -930,14 +976,16 @@ namespace happyray
 								 CellOverlapMode  mode)
 		: impl_(std::make_unique<Impl>(scene, top_level_density, mode))
 	{
-		const auto			  policy   = thrust::device(impl_->allocator);
+		SharedBuildAllocator  allocator;
+		const auto			  policy = BuildPolicy(allocator);
+		MergeScratch		  merge_scratch;
 		const UniformGridView top_view = impl_->top_level.View();
 		const uint32_t		  num_top_cells =
 			static_cast<uint32_t>(top_view.resolution.x) * top_view.resolution.y * top_view.resolution.z;
 		const uint32_t total_top_level_pairs = impl_->top_level.PrimIndexCount();
 
 		// Phase A.
-		thrust::device_vector<IrregularCellInfo> infos(num_top_cells);
+		PooledVector<IrregularCellInfo> infos(num_top_cells);
 		thrust::transform(policy,
 						  thrust::counting_iterator<uint32_t>(0),
 						  thrust::counting_iterator<uint32_t>(num_top_cells),
@@ -951,17 +999,12 @@ namespace happyray
 
 		// All top-level cells are the same size, so the per-axis maximum power-of-2 resolution is
 		// divisible by every cell's resolution.
-		Vec3i global_resolution(1, 1, 1);
-		if (num_top_cells > 0)
-		{
-			const thrust::host_vector<IrregularCellInfo> host_infos = infos;
-			for (const IrregularCellInfo &info : host_infos)
-			{
-				global_resolution.x = std::max(global_resolution.x, info.resolution.x);
-				global_resolution.y = std::max(global_resolution.y, info.resolution.y);
-				global_resolution.z = std::max(global_resolution.z, info.resolution.z);
-			}
-		}
+		const Vec3i global_resolution = thrust::transform_reduce(policy,
+																 infos.begin(),
+																 infos.end(),
+																 InfoResolutionFunctor{},
+																 Vec3i(1, 1, 1),
+																 MaxVec3iFunctor{});
 		impl_->global_cell_size	 = Vec3f(top_view.cell_size.x / global_resolution.x,
 										 top_view.cell_size.y / global_resolution.y,
 										 top_view.cell_size.z / global_resolution.z);
@@ -980,21 +1023,14 @@ namespace happyray
 				SetGlobalScaleFunctor{Vec2i(top_view.resolution.x, top_view.resolution.y), global_resolution});
 		}
 
-		thrust::device_vector<uint32_t> num_voxels_per_cell(num_top_cells);
+		PooledVector<uint32_t> num_voxels_per_cell(num_top_cells);
 		thrust::transform(policy, infos.begin(), infos.end(), num_voxels_per_cell.begin(), ExtractNumVoxelsFunctor());
 
-		thrust::device_vector<uint32_t> entries_offset_bounds(num_top_cells + 1, 0u);
-		if (num_top_cells > 0)
-		{
-			thrust::exclusive_scan(policy,
-								   num_voxels_per_cell.begin(),
-								   num_voxels_per_cell.end(),
-								   entries_offset_bounds.begin());
-			entries_offset_bounds[num_top_cells] =
-				entries_offset_bounds[num_top_cells - 1] + num_voxels_per_cell[num_top_cells - 1];
-		}
-		const uint32_t total_entries =
-			(num_top_cells > 0) ? static_cast<uint32_t>(entries_offset_bounds[num_top_cells]) : 0u;
+		PooledVector<uint32_t> entries_offset_bounds;
+		const uint32_t		   total_entries = ScanWithTotal(policy,
+													 thrust::raw_pointer_cast(num_voxels_per_cell.data()),
+													 num_top_cells,
+													 &entries_offset_bounds);
 
 		thrust::transform(policy,
 						  infos.begin(),
@@ -1004,14 +1040,14 @@ namespace happyray
 						  SetEntriesOffsetFunctor());
 
 		// Owning top-level cell of each (cell, triangle) pair and of each finest voxel.
-		thrust::device_vector<uint32_t> owning_top_cell(total_top_level_pairs);
+		PooledVector<uint32_t> owning_top_cell(total_top_level_pairs);
 		thrust::for_each(
 			policy,
 			thrust::counting_iterator<uint32_t>(0),
 			thrust::counting_iterator<uint32_t>(num_top_cells),
 			ScatterCellRangeOwnerFunctor{top_view.cell_ranges, thrust::raw_pointer_cast(owning_top_cell.data())});
 
-		thrust::device_vector<uint32_t> voxel_owner(total_entries);
+		PooledVector<uint32_t> voxel_owner(total_entries);
 		thrust::for_each(policy,
 						 thrust::counting_iterator<uint32_t>(0),
 						 thrust::counting_iterator<uint32_t>(num_top_cells),
@@ -1019,8 +1055,8 @@ namespace happyray
 											 thrust::raw_pointer_cast(entries_offset_bounds.data()) + 1,
 											 thrust::raw_pointer_cast(voxel_owner.data())});
 
-		thrust::device_vector<uint32_t> pair_voxel_indices;
-		thrust::device_vector<uint32_t> pair_prim_indices;
+		PooledVector<uint32_t> pair_voxel_indices;
+		PooledVector<uint32_t> pair_prim_indices;
 		detail::DispatchBuild(scene.primitive_type,
 							  mode,
 							  [&](auto prim, auto overlap)
@@ -1046,7 +1082,7 @@ namespace happyray
 		pair_prim_indices.resize(valid_pairs);
 		if (valid_pairs < total_initial_pairs)
 			pair_prim_indices.shrink_to_fit();
-		thrust::device_vector<uint32_t> voxel_cell_start(total_entries + 1, valid_pairs);
+		PooledVector<uint32_t> voxel_cell_start(total_entries + 1, valid_pairs);
 		thrust::for_each(policy,
 						 thrust::counting_iterator<uint32_t>(0),
 						 thrust::counting_iterator<uint32_t>(valid_pairs),
@@ -1058,7 +1094,7 @@ namespace happyray
 							   voxel_cell_start.rbegin(),
 							   thrust::minimum<uint32_t>());
 
-		thrust::device_vector<IrregularCell> cells(total_entries);
+		PooledVector<IrregularCell> cells(total_entries);
 		thrust::transform(policy,
 						  thrust::counting_iterator<uint32_t>(0),
 						  thrust::counting_iterator<uint32_t>(total_entries),
@@ -1067,10 +1103,10 @@ namespace happyray
 												 thrust::raw_pointer_cast(voxel_owner.data()),
 												 thrust::raw_pointer_cast(voxel_cell_start.data())});
 
-		thrust::device_vector<uint32_t> entries(total_entries);
+		PooledVector<uint32_t> entries(total_entries);
 		thrust::sequence(policy, entries.begin(), entries.end());
 
-		thrust::device_vector<uint32_t> prim_indices = std::move(pair_prim_indices);
+		PooledVector<uint32_t> prim_indices = std::move(pair_prim_indices);
 
 		// Phase B.
 		if (merge_alpha > 0.0f && num_top_cells > 0)
@@ -1082,7 +1118,7 @@ namespace happyray
 			for (int round = 0; round < max_rounds; ++round)
 			{
 				MergeRound(policy,
-						   impl_->merge_scratch,
+						   merge_scratch,
 						   0,
 						   infos,
 						   &cells,
@@ -1092,7 +1128,7 @@ namespace happyray
 						   global_shift,
 						   top_view.resolution);
 				MergeRound(policy,
-						   impl_->merge_scratch,
+						   merge_scratch,
 						   1,
 						   infos,
 						   &cells,
@@ -1102,7 +1138,7 @@ namespace happyray
 						   global_shift,
 						   top_view.resolution);
 				MergeRound(policy,
-						   impl_->merge_scratch,
+						   merge_scratch,
 						   2,
 						   infos,
 						   &cells,
@@ -1130,12 +1166,12 @@ namespace happyray
 				{
 					continue;
 				}
-				Reserve(&impl_->merge_scratch.expanded_cells, n);
-				impl_->merge_scratch.expanded_cells.resize(n);
+				Reserve(&merge_scratch.expanded_cells, n);
+				merge_scratch.expanded_cells.resize(n);
 				thrust::transform(policy,
 								  thrust::counting_iterator<uint32_t>(0),
 								  thrust::counting_iterator<uint32_t>(n),
-								  impl_->merge_scratch.expanded_cells.begin(),
+								  merge_scratch.expanded_cells.begin(),
 								  ExpandFunctor{thrust::raw_pointer_cast(cells.data()),
 												thrust::raw_pointer_cast(infos.data()),
 												thrust::raw_pointer_cast(entries.data()),
@@ -1143,7 +1179,7 @@ namespace happyray
 												axis,
 												global_shift,
 												top_view.resolution});
-				cells.swap(impl_->merge_scratch.expanded_cells);
+				cells.swap(merge_scratch.expanded_cells);
 			}
 		}
 
@@ -1153,6 +1189,7 @@ namespace happyray
 		impl_->entries		= std::move(entries);
 		impl_->cells		= std::move(cells);
 		impl_->prim_indices = std::move(prim_indices);
+		SynchronizeBuild();
 	}
 
 	IrregularGrid::~IrregularGrid() = default;

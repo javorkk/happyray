@@ -13,8 +13,8 @@ namespace happyray
 		detail::CellReferenceScratch	 scratch;
 		UniformGridView					 geometry;
 		uint32_t						 prim_reference_count = 0;
-		thrust::device_vector<CellRange> cell_ranges;
-		thrust::device_vector<uint32_t>	 prim_indices;
+		PooledVector<CellRange>			 cell_ranges;
+		PooledVector<uint32_t>			 prim_indices;
 
 		UniformGridView View() const
 		{
