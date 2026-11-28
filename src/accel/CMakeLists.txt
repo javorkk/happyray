@@ -4,10 +4,11 @@ add_library(happyray_accel STATIC
     irregular_grid.cpp
     sah_cost.cpp
     closest_point.cpp
+    knn.cpp
 )
 
 if(HAPPYRAY_THRUST_BACKEND STREQUAL "CUDA")
-    set_source_files_properties(uniform_grid.cpp two_level_grid.cpp irregular_grid.cpp sah_cost.cpp closest_point.cpp
+    set_source_files_properties(uniform_grid.cpp two_level_grid.cpp irregular_grid.cpp sah_cost.cpp closest_point.cpp knn.cpp
                                 PROPERTIES LANGUAGE CUDA)
     set_target_properties(happyray_accel PROPERTIES CUDA_STANDARD 17)
 endif()

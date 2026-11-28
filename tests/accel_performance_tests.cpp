@@ -24,6 +24,7 @@
 
 #include "../src/accel/closest_point.h"
 #include "../src/accel/intersect_common.h"
+#include "../src/accel/knn.h"
 #include "../src/accel/sah_cost.h"
 #include "../src/app/obj_loader.h"
 #include "../src/app/scene.h"
@@ -43,6 +44,9 @@ namespace
 	constexpr float kClosestPointLeafDensity	 = 0.6f;
 	// Prints per-query work counters before the throughput summary when working on closest point.
 	constexpr bool kPrintClosestPointDetails = false;
+	// Fewer k-nearest queries keep the k records per query within memory.
+	constexpr uint32_t kKNearestQueryCount = 64 * 1024;
+	constexpr uint32_t kKNearestKs[]	   = {8, 32};
 
 	template <typename T> T *Raw(thrust::device_vector<T> &values)
 	{
@@ -274,6 +278,103 @@ namespace
 			   std::fabs(a.distance - b.distance) <= 1e-5f * std::max(1.0f, b.distance);
 	}
 
+	// Throughput of k-nearest queries over the closest-point query sets; every grid must agree with
+	// the uniform grid rank by rank, and the uniform grid with brute force on a sample.
+	void RunKNearest(const FlatScene &flat, const SceneView &view, const BBox &bounds, AccelStructures accel)
+	{
+		const AccelType	  types[]	   = {AccelType::kUniformGrid, AccelType::kTwoLevelGrid, AccelType::kIrregularGrid};
+		const char *const grid_names[] = {"uniform", "two-level", "irregular"};
+		const char *const set_names[]  = {"near", "inside", "far"};
+		size_t			  mismatches   = 0;
+		for (uint32_t k : kKNearestKs)
+		{
+			double throughput[3][3] = {};
+			for (int set = 0; set < 3; ++set)
+			{
+				std::vector<Vec3f> host_queries = MakeClosestPointQueries(flat, bounds, set);
+				host_queries.resize(kKNearestQueryCount);
+				thrust::device_vector<Vec3f>			  queries(host_queries);
+				thrust::device_vector<ClosestPointRecord> records(size_t(kKNearestQueryCount) * k);
+				std::vector<ClosestPointRecord>			  reference;
+				for (int t = 0; t < 3; ++t)
+				{
+					accel.type = types[t];
+					FindKNearestBatch(view, accel, Raw(queries), kKNearestQueryCount, k, INFINITY, Raw(records));
+					Synchronize(Raw(records));
+					float runs[kClosestPointRuns];
+					for (float &run : runs)
+					{
+						const auto begin = std::chrono::steady_clock::now();
+						FindKNearestBatch(view, accel, Raw(queries), kKNearestQueryCount, k, INFINITY, Raw(records));
+						Synchronize(Raw(records));
+						run =
+							std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - begin).count();
+						if (!std::isfinite(run) || run <= 0)
+							throw std::runtime_error("Invalid measured duration");
+					}
+					std::sort(runs, runs + kClosestPointRuns);
+					throughput[set][t] = kKNearestQueryCount / (1000.0 * runs[kClosestPointRuns / 2]);
+
+					const thrust::host_vector<ClosestPointRecord> host_records = records;
+					if (t == 0)
+					{
+						reference.assign(host_records.begin(), host_records.end());
+						std::vector<ClosestPointRecord> expected(k);
+						for (uint32_t sample = 0; sample < 16; ++sample)
+						{
+							const uint32_t i = sample * (kKNearestQueryCount / 16);
+							FindKNearestBruteForce<Triangle>(flat.View(),
+															 host_queries[i],
+															 k,
+															 INFINITY,
+															 expected.data());
+							// Host and device round differently; near sliver triangles the error grows with
+							// the coordinates rather than the distance.
+							const float tolerance = 1e-5f * std::max(1.0f, Length(host_queries[i]));
+							for (uint32_t j = 0; j < k; ++j)
+							{
+								const ClosestPointRecord &got = reference[size_t(i) * k + j];
+								mismatches +=
+									got.prim == 0xffffffffu || std::fabs(got.distance - expected[j].distance) >
+																   tolerance + 1e-5f * expected[j].distance;
+							}
+						}
+					}
+					else
+						for (size_t i = 0; i < host_records.size(); ++i)
+							mismatches += !SameClosestPoint(host_records[i], reference[i]);
+				}
+			}
+			std::printf("\nk-nearest (k=%u, %u queries) throughput, Mq/s (speedup over uniform)\n%-7s",
+						k,
+						kKNearestQueryCount,
+						"Set");
+			for (const char *name : grid_names)
+				std::printf(" %20s", name);
+			std::printf("\n");
+			for (int set = 0; set < 3; ++set)
+			{
+				std::printf("%-7s", set_names[set]);
+				for (int t = 0; t < 3; ++t)
+				{
+					char cell[32];
+					std::snprintf(cell,
+								  sizeof(cell),
+								  "%.2f (%.2fx)",
+								  throughput[set][t],
+								  throughput[set][t] / throughput[set][0]);
+					std::printf(" %20s", cell);
+				}
+				std::printf("\n");
+			}
+		}
+		if (mismatches)
+		{
+			std::printf("k-nearest mismatches: %zu (grids vs uniform + 16 oracle queries/set)\n", mismatches);
+			throw std::runtime_error("k-nearest correctness check failed");
+		}
+	}
+
 	void RunClosestPoint(const FlatScene &flat, const SceneView &view, const BBox &bounds)
 	{
 		const UniformGrid	uniform(view);
@@ -467,6 +568,7 @@ namespace
 			std::printf("Closest-point mismatches: %zu (grids vs uniform + 64 oracle queries/set)\n", mismatches);
 			throw std::runtime_error("Closest-point correctness check failed");
 		}
+		RunKNearest(flat, view, bounds, accel);
 	}
 
 	void Run(const char *path)

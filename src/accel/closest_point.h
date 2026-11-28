@@ -433,6 +433,33 @@ namespace happyray
 			else
 				return grid.prim_indices;
 		}
+
+		// Calls `offer(prim)` for every primitive of the leaves within `bound()`, near to far.
+		template <typename GridView, typename BoundFn, typename OfferFn>
+		HAPPYRAY_HD inline void SearchGrid(const GridView		&grid,
+										   const Vec3f			&query,
+										   BoundFn			   &&bound,
+										   OfferFn			   &&offer,
+										   ClosestPointCounters *counters)
+		{
+			const uint32_t *prim_indices = LeafPrimIndices(grid);
+			VisitLeavesByDistance(
+				grid,
+				query,
+				bound,
+				[&](CellRange range)
+				{
+					if (counters && range.start != range.end)
+					{
+						++counters->leaves_visited;
+						counters->prims_tested += range.end - range.start;
+					}
+					for (uint32_t i = range.start; i < range.end; ++i)
+						offer(LoadRO(prim_indices + i));
+					return false;
+				},
+				counters);
+		}
 	} // namespace detail
 
 	// `counters`, if given, accumulates the search's work.
@@ -456,24 +483,12 @@ namespace happyray
 		}
 		else
 		{
-			const uint32_t *prim_indices = detail::LeafPrimIndices(grid);
-			ClosestPointHit hit			 = InitialClosestPointHit(max_distance);
-
-			detail::VisitLeavesByDistance(
+			ClosestPointHit hit = InitialClosestPointHit(max_distance);
+			detail::SearchGrid(
 				grid,
 				query,
 				[&]() { return hit.distance_squared; },
-				[&](CellRange range)
-				{
-					if (counters && range.start != range.end)
-					{
-						++counters->leaves_visited;
-						counters->prims_tested += range.end - range.start;
-					}
-					for (uint32_t i = range.start; i < range.end; ++i)
-						ClosestPointPrimitive<P>(scene, LoadRO(prim_indices + i), query, &hit);
-					return false;
-				},
+				[&](uint32_t prim) { ClosestPointPrimitive<P>(scene, prim, query, &hit); },
 				counters);
 			return ResolveClosestPoint<P>(scene, query, hit, out);
 		}

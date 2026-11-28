@@ -1,4 +1,5 @@
-// Closest-point queries through every grid and cell overlap mode must return brute force's answer.
+// Closest-point and k-nearest queries through every grid and cell overlap mode must return brute
+// force's answer.
 #if HAPPYRAY_THRUST_BACKEND_IS_TBB
 #define THRUST_HOST_SYSTEM THRUST_HOST_SYSTEM_CPP
 #define THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_TBB
@@ -15,6 +16,7 @@
 
 #include "../src/accel/closest_point.h"
 #include "../src/accel/irregular_grid.h"
+#include "../src/accel/knn.h"
 #include "../src/accel/two_level_grid.h"
 #include "../src/accel/uniform_grid.h"
 #include "../src/app/attractor_scene.h"
@@ -133,6 +135,55 @@ namespace
 			   (a.prim != b.prim || Length(a.position - b.position) <= 10.0f * tolerance);
 	}
 
+	struct KNearestResult
+	{
+		std::vector<ClosestPointRecord> records; // k per query.
+		std::vector<uint32_t>			found;
+	};
+
+	KNearestResult RunKNearest(const SceneView					  &scene,
+							   const AccelStructures			  &accel,
+							   const thrust::device_vector<Vec3f> &queries,
+							   uint32_t							   k,
+							   float							   max_distance)
+	{
+		thrust::device_vector<ClosestPointRecord> out(queries.size() * k);
+		thrust::device_vector<uint32_t>			  found(queries.size());
+		FindKNearestBatch(scene,
+						  accel,
+						  thrust::raw_pointer_cast(queries.data()),
+						  static_cast<uint32_t>(queries.size()),
+						  k,
+						  max_distance,
+						  thrust::raw_pointer_cast(out.data()),
+						  thrust::raw_pointer_cast(found.data()));
+		const thrust::host_vector<ClosestPointRecord> host_out	 = out;
+		const thrust::host_vector<uint32_t>			  host_found = found;
+		return {std::vector<ClosestPointRecord>(host_out.begin(), host_out.end()),
+				std::vector<uint32_t>(host_found.begin(), host_found.end())};
+	}
+
+	// Queries whose k-nearest answer differs from `reference` rank by rank, or that report a
+	// primitive twice, out of order, or with records past the found count.
+	uint32_t KNearestMismatches(const KNearestResult &got, const KNearestResult &reference, uint32_t k)
+	{
+		uint32_t mismatches = 0;
+		for (size_t q = 0; q < got.found.size(); ++q)
+		{
+			const ClosestPointRecord *a = got.records.data() + q * k, *b = reference.records.data() + q * k;
+			bool					  ok = got.found[q] == reference.found[q];
+			for (uint32_t i = 0; i < k && ok; ++i)
+			{
+				ok = SameRecord(a[i], b[i]) && (a[i].prim == 0xffffffffu) == (i >= got.found[q]);
+				for (uint32_t j = 0; j < i && ok; ++j)
+					ok = a[j].prim != a[i].prim || a[i].prim == 0xffffffffu;
+				ok = ok && (i == 0 || i >= got.found[q] || a[i - 1].distance <= a[i].distance);
+			}
+			mismatches += !ok;
+		}
+		return mismatches;
+	}
+
 	void CheckScene(const char *name, const FlatScene &flat, uint32_t query_count)
 	{
 		const DeviceScene					  scene(flat);
@@ -151,6 +202,14 @@ namespace
 		std::nth_element(distances.begin(), distances.begin() + distances.size() / 2, distances.end());
 		const float							  max_distance		= distances[distances.size() / 2];
 		const std::vector<ClosestPointRecord> bounded_reference = Run(scene.view, brute, queries, max_distance);
+		// k = 33 often finds fewer than k within the bound.
+		const uint32_t ks[] = {1, 8, 33};
+		KNearestResult knn_reference[3], knn_bounded_reference[3];
+		for (int i = 0; i < 3; ++i)
+		{
+			knn_reference[i]		 = RunKNearest(scene.view, brute, queries, ks[i], INFINITY);
+			knn_bounded_reference[i] = RunKNearest(scene.view, brute, queries, ks[i], max_distance);
+		}
 
 		const CellOverlapMode modes[] = {CellOverlapMode::kAabb, CellOverlapMode::kExact, CellOverlapMode::kHybrid};
 		for (CellOverlapMode mode : modes)
@@ -189,6 +248,22 @@ namespace
 					  std::string(name) + " " + type_names[t] + " " + CellOverlapModeName(mode) + ": " +
 						  std::to_string(mismatches) + " unbounded, " + std::to_string(bounded_mismatches) +
 						  " bounded mismatches of " + std::to_string(got.size()));
+				for (int i = 0; i < 3; ++i)
+				{
+					const KNearestResult knn			= RunKNearest(scene.view, accel, queries, ks[i], INFINITY);
+					const KNearestResult knn_bounded	= RunKNearest(scene.view, accel, queries, ks[i], max_distance);
+					uint32_t			 knn_mismatches = KNearestMismatches(knn, knn_reference[i], ks[i]);
+					const uint32_t		 knn_bounded_mismatches =
+						KNearestMismatches(knn_bounded, knn_bounded_reference[i], ks[i]);
+					if (ks[i] == 1)
+						for (size_t q = 0; q < got.size(); ++q)
+							knn_mismatches += !SameRecord(knn.records[q], got[q]);
+					Check(knn_mismatches == 0 && knn_bounded_mismatches == 0,
+						  std::string(name) + " " + type_names[t] + " " + CellOverlapModeName(mode) +
+							  " k=" + std::to_string(ks[i]) + ": " + std::to_string(knn_mismatches) + " unbounded, " +
+							  std::to_string(knn_bounded_mismatches) + " bounded mismatches of " +
+							  std::to_string(got.size()));
+				}
 			}
 		}
 		std::printf("%s: checked %u queries\n", name, query_count);
@@ -210,6 +285,71 @@ namespace
 		return flat;
 	}
 
+	// A lattice of points with unit spacing: queries at lattice cell centres are exactly equidistant
+	// from eight points, so every structure must break the ties by id exactly like brute force.
+	void CheckKNearestTies()
+	{
+		FlatScene flat;
+		flat.primitive_type = PrimitiveType::kPoint;
+		for (int z = 0; z < 6; ++z)
+			for (int y = 0; y < 6; ++y)
+				for (int x = 0; x < 6; ++x)
+					flat.points.push_back(Point(Vec3f(x, y, z)));
+		flat.material_ids.assign(flat.points.size(), 0u);
+		const DeviceScene  scene(flat);
+		std::vector<Vec3f> host_queries;
+		for (int z = -1; z < 6; ++z)
+			for (int y = -1; y < 6; ++y)
+				for (int x = -1; x < 6; ++x)
+					host_queries.push_back(Vec3f(x + 0.5f, y + 0.5f, z + 0.5f));
+		const thrust::device_vector<Vec3f> queries(host_queries.begin(), host_queries.end());
+
+		const UniformGrid	uniform(scene.view);
+		const TwoLevelGrid	two_level(scene.view);
+		const IrregularGrid irregular(scene.view);
+		AccelStructures		accel;
+		accel.uniform_grid		= uniform.View();
+		accel.two_level_grid	= two_level.ClosestPointView();
+		accel.irregular_grid	= irregular.View();
+		const AccelType types[] = {AccelType::kBruteForce,
+								   AccelType::kUniformGrid,
+								   AccelType::kTwoLevelGrid,
+								   AccelType::kIrregularGrid};
+		for (uint32_t k : {4u, 12u, 64u})
+		{
+			accel.type					   = AccelType::kBruteForce;
+			const KNearestResult reference = RunKNearest(scene.view, accel, queries, k, INFINITY);
+			for (AccelType type : types)
+			{
+				accel.type					= type;
+				const KNearestResult got	= RunKNearest(scene.view, accel, queries, k, INFINITY);
+				uint32_t			 errors = KNearestMismatches(got, reference, k);
+				for (size_t i = 0; i < got.records.size(); ++i)
+					errors += got.records[i].prim != reference.records[i].prim;
+				for (uint32_t found : got.found)
+					errors += found != k;
+				Check(errors == 0,
+					  "lattice ties k=" + std::to_string(k) + " accel " + std::to_string(static_cast<int>(type)) +
+						  ": " + std::to_string(errors) + " errors");
+			}
+		}
+
+		// Fewer primitives than k, and k = 0.
+		flat.points.resize(20);
+		flat.material_ids.resize(20);
+		const DeviceScene small(flat);
+		const UniformGrid small_grid(small.view);
+		AccelStructures	  small_accel;
+		small_accel.type				  = AccelType::kUniformGrid;
+		small_accel.uniform_grid		  = small_grid.View();
+		const KNearestResult all		  = RunKNearest(small.view, small_accel, queries, kMaxKNearest, INFINITY);
+		uint32_t			 short_errors = 0;
+		for (size_t q = 0; q < all.found.size(); ++q)
+			short_errors += all.found[q] != 20 || all.records[q * kMaxKNearest + 20].prim != 0xffffffffu;
+		Check(short_errors == 0, "k above the primitive count finds every primitive");
+		Check(RunKNearest(small.view, small_accel, queries, 0, INFINITY).found[0] == 0, "k = 0 finds nothing");
+	}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -224,6 +364,7 @@ int main(int argc, char **argv)
 	CheckScene("spheres", FlattenScene(MakeAttractorScene(PrimitiveType::kSphere, 4000)), 3000);
 	CheckScene("curves", FlattenScene(MakeAttractorScene(PrimitiveType::kBezierCurve, 4000)), 1500);
 	CheckScene("boxes", MakeBoxScene(4000), 3000);
+	CheckKNearestTies();
 
 	std::printf("Closest-point tests: %d failure(s)\n", g_failures);
 	return g_failures == 0 ? 0 : 1;
